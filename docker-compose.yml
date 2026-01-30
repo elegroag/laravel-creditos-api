@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: comfaca-nginx
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - php
+    networks:
+      - comfaca-network
+
+  php:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: comfaca-php
+    volumes:
+      - ./:/var/www/html
+    environment:
+      - DB_HOST=mongodb
+      - REDIS_HOST=redis
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - comfaca-network
+
+  mongodb:
+    image: mongo:7
+    container_name: comfaca-mongodb
+    ports:
+      - '27017:27017'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=secret
+      - MONGO_INITDB_DATABASE=comfaca_credito
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - comfaca-network
+
+  redis:
+    image: redis:alpine
+    container_name: comfaca-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - comfaca-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  comfaca-network:
+    driver: bridge
