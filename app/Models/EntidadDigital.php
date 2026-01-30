@@ -2,15 +2,20 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EntidadDigital extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
-    protected $connection = 'mongodb';
-    protected $collection = 'entidades_digitales';
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'entidad_digital';
 
     /**
      * The attributes that are mass assignable.
@@ -38,48 +43,49 @@ class EntidadDigital extends Model
     protected function casts(): array
     {
         return [
-            'documentos' => 'array',
-            'metadata' => 'array',
-            'validaciones' => 'array',
+            'documentos' => 'json',
+            'metadata' => 'json',
+            'validaciones' => 'json',
             'last_validation_at' => 'datetime',
             'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'estado' => 'string'
+            'updated_at' => 'datetime'
         ];
     }
 
     /**
-     * Get the MongoDB primary key.
+     * Get the user that owns the entidad digital.
      */
-    protected $primaryKey = '_id';
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'username', 'username');
+    }
 
     /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
+     * Scope to get entities by status.
      */
-    public $incrementing = false;
+    public function scopeByStatus($query, string $status)
+    {
+        return $query->where('estado', $status);
+    }
 
     /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
+     * Scope to get entities by identification type.
      */
-    protected $keyType = 'string';
+    public function scopeByIdType($query, string $idType)
+    {
+        return $query->where('tipo_identificacion', $idType);
+    }
 
     /**
-     * Estados posibles para la entidad digital
+     * Scope to get entities by identification number.
      */
-    const ESTADOS = [
-        'activa' => 'Activa',
-        'suspendida' => 'Suspendida',
-        'revocada' => 'Revocada',
-        'en_validacion' => 'En Validación',
-        'bloqueada' => 'Bloqueada'
-    ];
+    public function scopeByIdNumber($query, string $idNumber)
+    {
+        return $query->where('numero_identificacion', $idNumber);
+    }
 
     /**
-     * Find entidad digital by username.
+     * Find entity by username.
      */
     public static function findByUsername(string $username): ?self
     {
@@ -87,37 +93,94 @@ class EntidadDigital extends Model
     }
 
     /**
-     * Find entidad digital by document.
+     * Find entity by identification.
      */
-    public static function findByDocument(string $tipoIdentificacion, string $numeroIdentificacion): ?self
+    public static function findByIdentification(string $tipo, string $numero): ?self
     {
-        return static::where('tipo_identificacion', $tipoIdentificacion)
-            ->where('numero_identificacion', $numeroIdentificacion)
+        return static::where('tipo_identificacion', $tipo)
+            ->where('numero_identificacion', $numero)
             ->first();
     }
 
     /**
-     * Check if entidad exists by document.
+     * Check if entity is verified.
      */
-    public static function existsByDocument(string $tipoIdentificacion, string $numeroIdentificacion): bool
+    public function isVerified(): bool
     {
-        return static::where('tipo_identificacion', $tipoIdentificacion)
-            ->where('numero_identificacion', $numeroIdentificacion)
-            ->exists();
+        return $this->estado === 'VERIFICADO';
+    }
+
+    /**
+     * Check if entity is pending verification.
+     */
+    public function isPending(): bool
+    {
+        return $this->estado === 'PENDIENTE';
+    }
+
+    /**
+     * Check if entity is rejected.
+     */
+    public function isRejected(): bool
+    {
+        return $this->estado === 'RECHAZADO';
+    }
+
+    /**
+     * Get document paths.
+     */
+    public function getDocumentPaths(): array
+    {
+        return $this->documentos ?? [];
+    }
+
+    /**
+     * Get selfie path.
+     */
+    public function getSelfiePath(): ?string
+    {
+        return $this->selfie;
+    }
+
+    /**
+     * Check if has all required documents.
+     */
+    public function hasRequiredDocuments(): bool
+    {
+        $documentos = $this->getDocumentPaths();
+        return !empty($documentos['frente']) && !empty($documentos['reverso']) && !empty($this->selfie);
+    }
+
+    /**
+     * Add document path.
+     */
+    public function addDocument(string $type, string $path): void
+    {
+        $documentos = $this->documentos ?? [];
+        $documentos[$type] = $path;
+        $this->documentos = $documentos;
+        $this->save();
+    }
+
+    /**
+     * Add selfie path.
+     */
+    public function addSelfie(string $path): void
+    {
+        $this->selfie = $path;
+        $this->save();
     }
 
     /**
      * Add validation record.
      */
-    public function addValidation(string $tipoValidacion, string $resultado, array $detalles = []): void
+    public function addValidation(array $validationData): void
     {
         $validaciones = $this->validaciones ?? [];
-        $validaciones[] = [
-            'tipo' => $tipoValidacion, // "acceso", "firma", "verificacion"
-            'resultado' => $resultado, // "exitosa", "fallida"
+        $validaciones[] = array_merge($validationData, [
             'fecha' => now()->toISOString(),
-            'detalles' => $detalles
-        ];
+            'id' => uniqid()
+        ]);
 
         $this->validaciones = $validaciones;
         $this->last_validation_at = now();
@@ -125,146 +188,154 @@ class EntidadDigital extends Model
     }
 
     /**
-     * Get estado label.
-     */
-    public function getEstadoLabelAttribute(): string
-    {
-        return self::ESTADOS[$this->estado] ?? $this->estado;
-    }
-
-    /**
-     * Get document front URL.
-     */
-    public function getDocumentoFrenteUrlAttribute(): ?string
-    {
-        return $this->documentos['frente'] ?? null;
-    }
-
-    /**
-     * Get document back URL.
-     */
-    public function getDocumentoReversoUrlAttribute(): ?string
-    {
-        return $this->documentos['reverso'] ?? null;
-    }
-
-    /**
-     * Check if has both document sides.
-     */
-    public function hasCompleteDocuments(): bool
-    {
-        return !empty($this->documentos['frente']) && !empty($this->documentos['reverso']);
-    }
-
-    /**
-     * Check if has selfie.
-     */
-    public function hasSelfie(): bool
-    {
-        return !empty($this->selfie);
-    }
-
-    /**
-     * Check if is complete (documents + selfie).
-     */
-    public function isComplete(): bool
-    {
-        return $this->hasCompleteDocuments() && $this->hasSelfie();
-    }
-
-    /**
-     * Check if is active.
-     */
-    public function isActive(): bool
-    {
-        return $this->estado === 'activa';
-    }
-
-    /**
-     * Activate entidad.
-     */
-    public function activate(): void
-    {
-        $this->estado = 'activa';
-        $this->save();
-    }
-
-    /**
-     * Suspend entidad.
-     */
-    public function suspend(): void
-    {
-        $this->estado = 'suspendida';
-        $this->save();
-    }
-
-    /**
-     * Revoke entidad.
-     */
-    public function revoke(): void
-    {
-        $this->estado = 'revocada';
-        $this->save();
-    }
-
-    /**
-     * Get validation count.
-     */
-    public function getValidationCountAttribute(): int
-    {
-        return count($this->validaciones ?? []);
-    }
-
-    /**
-     * Get successful validations count.
-     */
-    public function getSuccessfulValidationsCountAttribute(): int
-    {
-        return collect($this->validaciones ?? [])
-            ->where('resultado', 'exitosa')
-            ->count();
-    }
-
-    /**
-     * Get failed validations count.
-     */
-    public function getFailedValidationsCountAttribute(): int
-    {
-        return collect($this->validaciones ?? [])
-            ->where('resultado', 'fallida')
-            ->count();
-    }
-
-    /**
      * Get latest validation.
      */
-    public function getLatestValidationAttribute(): ?array
+    public function getLatestValidation(): ?array
     {
         $validaciones = $this->validaciones ?? [];
         return empty($validaciones) ? null : end($validaciones);
     }
 
     /**
-     * Scope by estado.
+     * Get validation history.
      */
-    public function scopeByEstado($query, string $estado)
+    public function getValidationHistory(): array
     {
-        return $query->where('estado', $estado);
+        return $this->validaciones ?? [];
     }
 
     /**
-     * Scope active.
+     * Set metadata value.
      */
-    public function scopeActive($query)
+    public function setMetadata(string $key, mixed $value): void
     {
-        return $query->where('estado', 'activa');
+        $metadata = $this->metadata ?? [];
+        $metadata[$key] = $value;
+        $this->metadata = $metadata;
+        $this->save();
     }
 
     /**
-     * Get full identification.
+     * Get metadata value.
      */
-    public function getFullIdentificationAttribute(): string
+    public function getMetadata(string $key, mixed $default = null): mixed
     {
-        return $this->tipo_identificacion . ' ' . $this->numero_identificacion;
+        $metadata = $this->metadata ?? [];
+        return $metadata[$key] ?? $default;
+    }
+
+    /**
+     * Update status.
+     */
+    public function updateStatus(string $newStatus, ?string $reason = null): void
+    {
+        $this->estado = $newStatus;
+
+        if ($reason) {
+            $this->setMetadata('cambio_estado_razon', $reason);
+        }
+
+        $this->save();
+    }
+
+    /**
+     * Mark as verified.
+     */
+    public function markAsVerified(?string $verifiedBy = null): void
+    {
+        $this->updateStatus('VERIFICADO', $verifiedBy);
+        $this->addValidation([
+            'tipo' => 'verificacion',
+            'resultado' => 'aprobado',
+            'verificado_por' => $verifiedBy,
+            'observaciones' => 'Entidad verificada exitosamente'
+        ]);
+    }
+
+    /**
+     * Mark as rejected.
+     */
+    public function markAsRejected(string $reason, ?string $rejectedBy = null): void
+    {
+        $this->updateStatus('RECHAZADO', $reason);
+        $this->addValidation([
+            'tipo' => 'verificacion',
+            'resultado' => 'rechazado',
+            'verificado_por' => $rejectedBy,
+            'observaciones' => $reason
+        ]);
+    }
+
+    /**
+     * Get status with color.
+     */
+    public function getStatusWithColorAttribute(): array
+    {
+        $colors = [
+            'PENDIENTE' => '#F59E0B',
+            'VERIFICADO' => '#10B981',
+            'RECHAZADO' => '#EF4444',
+            'EXPIRADO' => '#6B7280'
+        ];
+
+        return [
+            'status' => $this->estado,
+            'color' => $colors[$this->estado] ?? '#6B7280'
+        ];
+    }
+
+    /**
+     * Transform for API response.
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'username' => $this->username,
+            'identificacion' => [
+                'tipo' => $this->tipo_identificacion,
+                'numero' => $this->numero_identificacion
+            ],
+            'documentos' => $this->getDocumentPaths(),
+            'selfie' => $this->getSelfiePath(),
+            'clave_firma_hash' => $this->clave_firma_hash,
+            'estado' => $this->getStatusWithColorAttribute(),
+            'metadata' => $this->metadata,
+            'validaciones' => $this->getValidationHistory(),
+            'ultima_validacion' => $this->getLatestValidation(),
+            'last_validation_at' => $this->last_validation_at?->toISOString(),
+            'tiene_documentos_completos' => $this->hasRequiredDocuments(),
+            'is_verified' => $this->isVerified(),
+            'is_pending' => $this->isPending(),
+            'is_rejected' => $this->isRejected(),
+            'user' => $this->user ? [
+                'id' => $this->user->id,
+                'username' => $this->user->username,
+                'full_name' => $this->user->full_name,
+                'email' => $this->user->email
+            ] : null,
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
+        ];
+    }
+
+    /**
+     * Get statistics for entities.
+     */
+    public static function getStatistics(): array
+    {
+        $total = static::count();
+        $verified = static::where('estado', 'VERIFICADO')->count();
+        $pending = static::where('estado', 'PENDIENTE')->count();
+        $rejected = static::where('estado', 'RECHAZADO')->count();
+
+        return [
+            'total' => $total,
+            'verified' => $verified,
+            'pending' => $pending,
+            'rejected' => $rejected,
+            'verification_rate' => $total > 0 ? round(($verified / $total) * 100, 2) : 0,
+            'rejection_rate' => $total > 0 ? round(($rejected / $total) * 100, 2) : 0
+        ];
     }
 }

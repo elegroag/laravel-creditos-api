@@ -7,7 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Auth\MustVerifyEmail;
 use Laravel\Sanctum\HasApiTokens;
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Hash;
 
@@ -15,8 +15,12 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
-    protected $connection = 'mongodb';
-    protected $collection = 'users';
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'usuarios';
 
     /**
      * The attributes that are mass assignable.
@@ -28,17 +32,14 @@ class User extends Authenticatable
         'email',
         'full_name',
         'phone',
-        'password',
+        'password_hash',
         'tipo_documento',
         'numero_documento',
         'nombres',
         'apellidos',
         'roles',
         'disabled',
-        'is_active',
-        'last_login',
-        'permissions',
-        'role_ids'
+        'last_login'
     ];
 
     /**
@@ -47,9 +48,8 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $hidden = [
-        'password',
-        'remember_token',
-        'password_hash'
+        'password_hash',
+        'remember_token'
     ];
 
     /**
@@ -61,44 +61,46 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'password_hash' => 'hashed',
             'disabled' => 'boolean',
-            'is_active' => 'boolean',
             'last_login' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
-            'role_ids' => 'array',
-            'roles' => 'array',
-            'permissions' => 'array'
+            'roles' => 'json'
         ];
     }
 
     /**
-     * Get the MongoDB primary key.
+     * Get the password for the user.
      */
-    protected $primaryKey = '_id';
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
 
     /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
+     * Set password attribute (hash it).
      */
-    public $incrementing = false;
-
-    /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
-     */
-    protected $keyType = 'string';
+    public function setPasswordAttribute(string $value): void
+    {
+        $this->attributes['password_hash'] = Hash::make($value);
+    }
 
     /**
      * Check if user has specific permission.
      */
     public function hasPermission(string $permission): bool
     {
-        return in_array($permission, $this->permissions ?? []);
+        $roles = $this->roles ?? [];
+
+        // Get permissions from roles table
+        $rolePermissions = Role::whereIn('nombre', $roles)
+            ->pluck('permisos')
+            ->flatMap(function ($permisos) {
+                return json_decode($permisos, true) ?? [];
+            })
+            ->toArray();
+
+        return in_array($permission, $rolePermissions);
     }
 
     /**
@@ -107,9 +109,10 @@ class User extends Authenticatable
     public function hasRole(string $roleName): bool
     {
         $systemRoles = ['user_trabajador', 'user_empresa', 'adviser', 'administrator'];
+        $userRoles = $this->roles ?? [];
 
         if (in_array($roleName, $systemRoles)) {
-            return in_array($roleName, $this->roles ?? []);
+            return in_array($roleName, $userRoles);
         }
 
         return false;
@@ -143,15 +146,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Set password attribute (hash it).
-     */
-    public function setPasswordAttribute(string $value): void
-    {
-        $this->attributes['password'] = Hash::make($value);
-        $this->attributes['password_hash'] = Hash::make($value);
-    }
-
-    /**
      * Get username in lowercase.
      */
     public function getUsernameAttribute(string $value): string
@@ -176,10 +170,58 @@ class User extends Authenticatable
     }
 
     /**
+     * Find user by email.
+     */
+    public static function findByEmail(string $email): ?self
+    {
+        return static::where('email', $email)->first();
+    }
+
+    /**
      * Find user by document number.
      */
     public static function findByDocumentNumber(string $documentNumber): ?self
     {
         return static::where('numero_documento', $documentNumber)->first();
+    }
+
+    /**
+     * Scope to get only active users.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('disabled', false);
+    }
+
+    /**
+     * Scope to get users by role.
+     */
+    public function scopeByRole($query, string $role)
+    {
+        return $query->whereJsonContains('roles', $role);
+    }
+
+    /**
+     * Get related solicitudes.
+     */
+    public function solicitudes()
+    {
+        return $this->hasMany(SolicitudCredito::class, 'owner_username', 'username');
+    }
+
+    /**
+     * Get related entidad digital.
+     */
+    public function entidadDigital()
+    {
+        return $this->hasOne(EntidadDigital::class, 'username', 'username');
+    }
+
+    /**
+     * Get related documentos postulantes.
+     */
+    public function documentosPostulantes()
+    {
+        return $this->hasMany(DocumentoPostulante::class, 'username', 'username');
     }
 }

@@ -2,12 +2,19 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class LineaInversion extends Model
 {
-    protected $connection = 'mongodb';
-    protected $collection = 'lineas_inversion';
+    use HasFactory;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'lineas_inversion';
 
     /**
      * The attributes that are mass assignable.
@@ -15,7 +22,6 @@ class LineaInversion extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'id',
         'linea_credito',
         'monto_maximo_pesos',
         'plazo_maximo',
@@ -34,252 +40,304 @@ class LineaInversion extends Model
     protected function casts(): array
     {
         return [
-            'id' => 'integer',
             'monto_maximo_pesos' => 'integer',
-            'plazo_maximo' => 'string',
-            'tasas_interes_anual' => 'array',
-            'requisitos' => 'array',
-            'categoria' => 'string',
-            'descripcion' => 'string',
-            'estado' => 'string',
+            'tasas_interes_anual' => 'json',
+            'requisitos' => 'json',
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
     }
 
     /**
-     * Get the MongoDB primary key.
+     * Get solicitudes that use this investment line.
      */
-    protected $primaryKey = 'id';
-
-    /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
-     */
-    protected $keyType = 'int';
-
-    /**
-     * Categorías posibles
-     */
-    const CATEGORIAS = [
-        'A' => 'Categoría A',
-        'B' => 'Categoría B', 
-        'C' => 'Categoría C'
-    ];
-
-    /**
-     * Estados posibles
-     */
-    const ESTADOS = [
-        'activa' => 'Activa',
-        'inactiva' => 'Inactiva',
-        'suspendida' => 'Suspendida'
-    ];
-
-    /**
-     * Find linea by ID.
-     */
-    public static function findById(int $id): ?self
+    public function solicitudes()
     {
-        return static::where('id', $id)->first();
+        return $this->hasMany(SolicitudCredito::class, 'linea_inversion_id');
     }
 
     /**
-     * Find by categoria.
+     * Scope to get active lines.
      */
-    public static function findByCategoria(string $categoria): array
+    public function scopeActive($query)
     {
-        return static::where('categoria', $categoria)->get()->all();
+        return $query->where('estado', 'ACTIVO');
     }
 
     /**
-     * Get active lines.
+     * Scope to get lines by category.
      */
-    public static function getActive(): \Illuminate\Database\Eloquent\Collection
-    {
-        return static::where('estado', 'activa')->get();
-    }
-
-    /**
-     * Get formatted monto maximo.
-     */
-    public function getMontoMaximoFormattedAttribute(): string
-    {
-        return '$' . number_format($this->monto_maximo_pesos, 0, ',', '.');
-    }
-
-    /**
-     * Get tasa interes for categoria.
-     */
-    public function getTasaInteresByCategoria(string $categoria): ?string
-    {
-        $tasas = $this->tasas_interes_anual ?? [];
-        
-        return match($categoria) {
-            'A' => $tasas['categoria_a'] ?? null,
-            'B' => $tasas['categoria_b'] ?? null,
-            'C' => $tasas['categoria_c'] ?? null,
-            default => null
-        };
-    }
-
-    /**
-     * Get tasa interes categoria A.
-     */
-    public function getTasaCategoriaAAttribute(): ?string
-    {
-        return $this->getTasaInteresByCategoria('A');
-    }
-
-    /**
-     * Get tasa interes categoria B.
-     */
-    public function getTasaCategoriaBAttribute(): ?string
-    {
-        return $this->getTasaInteresByCategoria('B');
-    }
-
-    /**
-     * Get tasa interes categoria C.
-     */
-    public function getTasaCategoriaCAttribute(): ?string
-    {
-        return $this->getTasaInteresByCategoria('C');
-    }
-
-    /**
-     * Get categoria label.
-     */
-    public function getCategoriaLabelAttribute(): string
-    {
-        return self::CATEGORIAS[$this->categoria] ?? $this->categoria;
-    }
-
-    /**
-     * Get estado label.
-     */
-    public function getEstadoLabelAttribute(): string
-    {
-        return self::ESTADOS[$this->estado] ?? $this->estado;
-    }
-
-    /**
-     * Scope by categoria.
-     */
-    public function scopeByCategoria($query, string $categoria)
+    public function scopeByCategory($query, string $categoria)
     {
         return $query->where('categoria', $categoria);
     }
 
     /**
-     * Scope active.
+     * Scope to get lines ordered by max amount.
      */
-    public function scopeActive($query)
+    public function scopeOrderByMaxAmount($query, $direction = 'desc')
     {
-        return $query->where('estado', 'activa');
+        return $query->orderBy('monto_maximo_pesos', $direction);
     }
 
     /**
-     * Check if linea is active.
+     * Find line by name.
      */
-    public function isActive(): bool
+    public static function findByName(string $name): ?self
     {
-        return $this->estado === 'activa';
+        return static::where('linea_credito', $name)->first();
     }
 
     /**
-     * Get requisitos as formatted list.
+     * Get formatted max amount.
      */
-    public function getRequisitosFormattedAttribute(): array
+    public function getMontoMaximoFormateadoAttribute(): string
+    {
+        return '$' . number_format($this->monto_maximo_pesos, 2, ',', '.');
+    }
+
+    /**
+     * Get interest rates as array.
+     */
+    public function getTasasArrayAttribute(): array
+    {
+        return $this->tasas_interes_anual ?? [];
+    }
+
+    /**
+     * Get interest rate for specific category.
+     */
+    public function getTasaInteres(string $categoria): ?float
+    {
+        $tasas = $this->tasas_array;
+        return $tasas[$categoria] ?? null;
+    }
+
+    /**
+     * Get requirements as array.
+     */
+    public function getRequisitosArrayAttribute(): array
     {
         return $this->requisitos ?? [];
     }
 
     /**
-     * Get all tasas as array.
+     * Check if line is active.
      */
-    public function getTasasInteresArrayAttribute(): array
+    public function isActive(): bool
     {
-        return [
-            'A' => $this->tasa_categoria_a,
-            'B' => $this->tasa_categoria_b,
-            'C' => $this->tasa_categoria_c
-        ];
+        return $this->estado === 'ACTIVO';
     }
 
     /**
-     * Create from array data.
+     * Check if line is inactive.
      */
-    public static function createFromArray(array $data): self
+    public function isInactive(): bool
     {
-        return static::create([
-            'id' => $data['id'],
-            'linea_credito' => $data['linea_credito'],
-            'monto_maximo_pesos' => $data['monto_maximo_pesos'],
-            'plazo_maximo' => $data['plazo_maximo'],
-            'tasas_interes_anual' => $data['tasas_interes_anual'],
-            'requisitos' => $data['requisitos'] ?? [],
-            'categoria' => $data['categoria'] ?? 'A',
-            'descripcion' => $data['descripcion'] ?? null,
-            'estado' => $data['estado'] ?? 'activa'
-        ]);
+        return $this->estado === 'INACTIVO';
     }
 
     /**
-     * Update from array data.
+     * Activate line.
      */
-    public function updateFromArray(array $data): bool
+    public function activate(): void
     {
-        $updateData = [];
-        
-        foreach (['linea_credito', 'monto_maximo_pesos', 'plazo_maximo', 'tasas_interes_anual', 'requisitos', 'categoria', 'descripcion', 'estado'] as $field) {
-            if (isset($data[$field])) {
-                $updateData[$field] = $data[$field];
-            }
-        }
-        
-        return $this->update($updateData);
+        $this->estado = 'ACTIVO';
+        $this->save();
     }
 
     /**
-     * Get max plazo in months.
+     * Deactivate line.
      */
-    public function getPlazoMaximoMesesAttribute(): int
+    public function deactivate(): void
     {
-        // Extract number from string like "24 meses" or "2 años"
-        $plazo = strtolower($this->plazo_maximo);
-        
-        if (strpos($plazo, 'mes') !== false) {
-            return (int) preg_replace('/[^0-9]/', '', $plazo);
-        } elseif (strpos($plazo, 'año') !== false) {
-            $years = (int) preg_replace('/[^0-9]/', '', $plazo);
-            return $years * 12;
-        }
-        
-        return 0;
+        $this->estado = 'INACTIVO';
+        $this->save();
     }
 
     /**
-     * Check if monto is within limit.
+     * Check if amount is within limit.
      */
-    public function isMontoWithinLimit(float $monto): bool
+    public function montoPermitido(float $monto): bool
     {
         return $monto <= $this->monto_maximo_pesos;
     }
 
     /**
-     * Check if plazo is within limit.
+     * Get available categories for interest rates.
      */
-    public function isPlazoWithinLimit(int $plazoMeses): bool
+    public function getCategoriasDisponibles(): array
     {
-        return $plazoMeses <= $this->plazo_maximo_meses;
+        return array_keys($this->tasas_array);
+    }
+
+    /**
+     * Get requirements count.
+     */
+    public function getCantidadRequisitosAttribute(): int
+    {
+        return count($this->requisitos_array);
+    }
+
+    /**
+     * Get solicitudes count for this line.
+     */
+    public function getCantidadSolicitudesAttribute(): int
+    {
+        return $this->solicitudes()->count();
+    }
+
+    /**
+     * Get approved solicitudes count.
+     */
+    public function getCantidadAprobadasAttribute(): int
+    {
+        return $this->solicitudes()
+            ->where('estado_codigo', 'APROBADO')
+            ->count();
+    }
+
+    /**
+     * Get total amount of approved credits.
+     */
+    public function getMontoTotalAprobadoAttribute(): float
+    {
+        return $this->solicitudes()
+            ->where('estado_codigo', 'APROBADO')
+            ->sum('monto_aprobado') ?? 0;
+    }
+
+    /**
+     * Get utilization percentage.
+     */
+    public function getPorcentajeUtilizacionAttribute(): float
+    {
+        $totalAprobado = $this->monto_total_aprobado;
+        if ($this->monto_maximo_pesos == 0) {
+            return 0;
+        }
+
+        return round(($totalAprobado / $this->monto_maximo_pesos) * 100, 2);
+    }
+
+    /**
+     * Get available amount.
+     */
+    public function getMontoDisponibleAttribute(): float
+    {
+        return max(0, $this->monto_maximo_pesos - $this->monto_total_aprobado);
+    }
+
+    /**
+     * Get formatted available amount.
+     */
+    public function getMontoDisponibleFormateadoAttribute(): string
+    {
+        return '$' . number_format($this->monto_disponible, 2, ',', '.');
+    }
+
+    /**
+     * Check if line has available credit.
+     */
+    public function tieneCreditoDisponible(): bool
+    {
+        return $this->monto_disponible > 0;
+    }
+
+    /**
+     * Transform for API response.
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'linea_credito' => $this->linea_credito,
+            'categoria' => $this->categoria,
+            'descripcion' => $this->descripcion,
+            'monto_maximo_pesos' => $this->monto_maximo_pesos,
+            'monto_maximo_formateado' => $this->monto_maximo_formateado,
+            'plazo_maximo' => $this->plazo_maximo,
+            'tasas_interes_anual' => $this->tasas_array,
+            'requisitos' => $this->requisitos_array,
+            'cantidad_requisitos' => $this->cantidad_requisitos,
+            'categorias_disponibles' => $this->getCategoriasDisponibles(),
+            'estado' => $this->estado,
+            'is_active' => $this->isActive(),
+            'estadisticas' => [
+                'cantidad_solicitudes' => $this->cantidad_solicitudes,
+                'cantidad_aprobadas' => $this->cantidad_aprobadas,
+                'monto_total_aprobado' => $this->monto_total_aprobado,
+                'monto_disponible' => $this->monto_disponible,
+                'monto_disponible_formateado' => $this->monto_disponible_formateado,
+                'porcentaje_utilizacion' => $this->porcentaje_utilizacion,
+                'tiene_credito_disponible' => $this->tieneCreditoDisponible()
+            ],
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
+        ];
+    }
+
+    /**
+     * Get all active lines for select.
+     */
+    public static function getForSelect(): array
+    {
+        return static::active()
+            ->orderBy('linea_credito')
+            ->get()
+            ->mapWithKeys(function ($linea) {
+                return [$linea->id => $linea->linea_credito];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get lines by category for API.
+     */
+    public static function getByCategoryForApi(string $categoria): array
+    {
+        return static::active()
+            ->byCategory($categoria)
+            ->orderBy('monto_maximo_pesos', 'desc')
+            ->get()
+            ->map(function ($linea) {
+                return [
+                    'id' => $linea->id,
+                    'linea_credito' => $linea->linea_credito,
+                    'monto_maximo_formateado' => $linea->monto_maximo_formateado,
+                    'plazo_maximo' => $linea->plazo_maximo,
+                    'cantidad_requisitos' => $linea->cantidad_requisitos,
+                    'tiene_credito_disponible' => $linea->tieneCreditoDisponible()
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get statistics summary for all lines.
+     */
+    public static function getEstadisticasGenerales(): array
+    {
+        $lineas = static::active()->get();
+
+        $totalLineas = $lineas->count();
+        $montoMaximoTotal = $lineas->sum('monto_maximo_pesos');
+        $montoAprobadoTotal = $lineas->sum(function ($linea) {
+            return $linea->monto_total_aprobado;
+        });
+        $solicitudesTotal = $lineas->sum(function ($linea) {
+            return $linea->cantidad_solicitudes;
+        });
+
+        return [
+            'total_lineas' => $totalLineas,
+            'monto_maximo_total' => $montoMaximoTotal,
+            'monto_aprobado_total' => $montoAprobadoTotal,
+            'monto_disponible_total' => $montoMaximoTotal - $montoAprobadoTotal,
+            'solicitudes_total' => $solicitudesTotal,
+            'porcentaje_utilizacion_general' => $montoMaximoTotal > 0
+                ? round(($montoAprobadoTotal / $montoMaximoTotal) * 100, 2)
+                : 0
+        ];
     }
 }

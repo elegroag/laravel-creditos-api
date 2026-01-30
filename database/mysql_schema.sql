@@ -125,15 +125,19 @@ CREATE TABLE lineas_inversion (
 -- =================================================================
 -- TABLA DE SECUENCIA DE NÚMEROS DE SOLICITUD (basado en numero_solicitudes.mongodb.js)
 -- =================================================================
-CREATE TABLE secuencia_solicitudes (
+CREATE TABLE numero_solicitudes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    anio INT NOT NULL,
-    ultimo_numero INT NOT NULL DEFAULT 0,
+    radicado VARCHAR(20) UNIQUE,
+    numeric_secuencia INT NOT NULL DEFAULT 0,
+    linea_credito VARCHAR(10) DEFAULT '03',
+    vigencia INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    UNIQUE KEY unique_anio (anio),
-    INDEX idx_secuencia_anio (anio)
+    UNIQUE KEY unique_radicado (radicado),
+    INDEX idx_secuencia_vigencia (vigencia),
+    INDEX idx_secuencia_linea (linea_credito),
+    INDEX idx_secuencia_numero (numeric_secuencia)
 );
 
 -- =================================================================
@@ -444,7 +448,8 @@ INSERT INTO empresas_convenio (nit, razon_social, fecha_convenio, fecha_vencimie
 (1221322333, 'Empresa de Prueba', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'Activo', '123456789', 'Representante Legal', '123456789', 'representante@empresa.com');
 
 -- Insertar Secuencia de Solicitudes para año actual
-INSERT INTO secuencia_solicitudes (anio, ultimo_numero) VALUES (YEAR(CURDATE()), 0);
+INSERT INTO numero_solicitudes (radicado, numeric_secuencia, linea_credito, vigencia) VALUES
+('000001-202501-03', 1, '03', YEAR(CURDATE()) * 100 + MONTH(CURDATE()));
 
 -- =================================================================
 -- VISTAS ÚTILES

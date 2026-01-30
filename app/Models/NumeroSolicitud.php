@@ -2,12 +2,19 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class NumeroSolicitud extends Model
 {
-    protected $connection = 'mongodb';
-    protected $collection = 'numero_solicitudes';
+    use HasFactory;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'numero_solicitudes';
 
     /**
      * The attributes that are mass assignable.
@@ -15,12 +22,10 @@ class NumeroSolicitud extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'sequence_value',
-        'year',
-        'prefix',
-        'last_used_at',
-        'created_at',
-        'updated_at'
+        'radicado',
+        'numeric_secuencia',
+        'linea_credito',
+        'vigencia'
     ];
 
     /**
@@ -31,280 +36,253 @@ class NumeroSolicitud extends Model
     protected function casts(): array
     {
         return [
-            'sequence_value' => 'integer',
-            'year' => 'integer',
-            'last_used_at' => 'datetime',
+            'numeric_secuencia' => 'integer',
+            'vigencia' => 'integer',
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
     }
 
     /**
-     * Get the MongoDB primary key.
+     * Get next sequence number.
      */
-    protected $primaryKey = '_id';
-
-    /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
-     */
-    protected $keyType = 'string';
-
-    /**
-     * Get or create sequence for current year.
-     */
-    public static function getCurrent(): self
+    public function getNextNumber(): int
     {
-        $currentYear = (int)date('Y');
-        
-        $sequence = self::where('year', $currentYear)->first();
-        
-        if (!$sequence) {
-            $sequence = self::create([
-                'sequence_value' => 1,
-                'year' => $currentYear,
-                'prefix' => 'SOL-' . $currentYear . '-',
-                'last_used_at' => now()
-            ]);
+        return $this->numeric_secuencia + 1;
+    }
+
+    /**
+     * Update sequence.
+     */
+    public function updateSequence(): void
+    {
+        $this->increment('numeric_secuencia');
+    }
+
+    /**
+     * Reset sequence for new year.
+     */
+    public function resetForNewYearSequence(): void
+    {
+        $this->numeric_secuencia = 0;
+        $this->save();
+    }
+
+    /**
+     * Get formatted sequence with prefix.
+     */
+    public function getFormattedSequenceAttribute(): string
+    {
+        $year = substr($this->vigencia, 0, 4);
+        $sequence = str_pad($this->numeric_secuencia + 1, 4, '0', STR_PAD_LEFT);
+        return "{$year}-{$sequence}";
+    }
+
+    /**
+     * Generate radicado format.
+     */
+    public function generateRadicado(string $lineaCredito = '03'): string
+    {
+        $secuencia = str_pad($this->numeric_secuencia, 6, '0', STR_PAD_LEFT);
+        $vigencia = $this->vigencia ?? (int) date('Ym');
+        return "{$secuencia}-{$vigencia}-{$lineaCredito}";
+    }
+
+    /**
+     * Get radicado attribute.
+     */
+    public function getRadicadoAttribute(): string
+    {
+        return $this->radicado ?? $this->generateRadicado($this->linea_credito ?? '03');
+    }
+
+    /**
+     * Set radicado and update related fields.
+     */
+    public function setRadicadoAttribute(string $radicado): void
+    {
+        $this->attributes['radicado'] = $radicado;
+
+        // Parse radicado format: 000001-202501-03
+        $parts = explode('-', $radicado);
+        if (count($parts) === 3) {
+            $this->numeric_secuencia = (int) $parts[0];
+            $this->vigencia = (int) $parts[1];
+            $this->linea_credito = $parts[2];
         }
-        
+    }
+
+    /**
+     * Update sequence and radicado.
+     */
+    public function updateSequenceWithRadicado(string $lineaCredito = '03'): void
+    {
+        $this->increment('numeric_secuencia');
+        $this->vigencia = (int) date('Ym');
+        $this->linea_credito = $lineaCredito;
+        $this->radicado = $this->generateRadicado($lineaCredito);
+        $this->save();
+    }
+
+    /**
+     * Create new sequence with radicado.
+     */
+    public static function createWithRadicado(string $lineaCredito = '03'): self
+    {
+        $sequence = static::create([
+            'numeric_secuencia' => 0,
+            'vigencia' => (int) date('Ym'),
+            'linea_credito' => $lineaCredito
+        ]);
+
+        $sequence->updateSequenceWithRadicado($lineaCredito);
+
         return $sequence;
     }
 
     /**
-     * Generate next solicitud number.
+     * Generate next radicado.
      */
-    public static function generateNextNumber(): string
+    public static function generateNextRadicado(string $lineaCredito = '03'): string
     {
-        $sequence = self::getCurrent();
-        
-        // Increment sequence
-        $sequence->increment('sequence_value');
-        $sequence->update(['last_used_at' => now()]);
-        
-        // Format: SOL-YYYY-NNNNNN
-        return $sequence->prefix . str_pad($sequence->sequence_value, 6, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Get current sequence value.
-     */
-    public static function getCurrentSequence(): int
-    {
-        return self::getCurrent()->sequence_value;
-    }
-
-    /**
-     * Reset sequence for year.
-     */
-    public static function resetForYear(int $year): void
-    {
-        self::updateOrCreate(
-            ['year' => $year],
+        $sequence = static::firstOrCreate(
+            [],
             [
-                'sequence_value' => 1,
-                'prefix' => 'SOL-' . $year . '-',
-                'last_used_at' => now()
+                'numeric_secuencia' => 0,
+                'vigencia' => (int) date('Ym'),
+                'linea_credito' => $lineaCredito
+            ]
+        );
+
+        $sequence->updateSequenceWithRadicado($lineaCredito);
+
+        return $sequence->radicado;
+    }
+
+    /**
+     * Find or create sequence for year.
+     */
+    public static function findOrCreateForYear(int $year): self
+    {
+        return static::firstOrCreate(
+            ['anio' => $year],
+            [
+                'ultimo_numero' => 0,
+                'numeric_secuencia' => 0,
+                'vigencia' => (int) date('Ym'),
+                'linea_credito' => '03'
             ]
         );
     }
 
     /**
-     * Get sequence by year.
+     * Get current sequence for year.
      */
-    public static function getByYear(int $year): ?self
+    public static function getCurrentSequence(int $year): ?self
     {
-        return self::where('year', $year)->first();
+        return static::where('anio', $year)->first();
     }
 
     /**
-     * Get formatted number.
+     * Generate next application number.
      */
-    public function getFormattedNumberAttribute(): string
+    public static function generateNextNumber(): string
     {
-        return $this->prefix . str_pad($this->sequence_value, 6, '0', STR_PAD_LEFT);
+        $year = now()->year;
+        $sequence = static::findOrCreateForYear($year);
+
+        $sequence->updateSequence();
+
+        return $sequence->formatted_sequence;
     }
 
     /**
-     * Get next number without incrementing.
+     * Reset all sequences for new year.
      */
-    public function getNextNumberAttribute(): string
+    public static function resetAllForNewYear(int $year): void
     {
-        return $this->prefix . str_pad($this->sequence_value + 1, 6, '0', STR_PAD_LEFT);
+        static::where('anio', $year)->update(['ultimo_numero' => 0]);
     }
 
     /**
-     * Get total numbers generated this year.
+     * Get current year sequences.
      */
-    public function getTotalGeneratedAttribute(): int
+    public static function getCurrentYearSequences(): \Illuminate\Database\Eloquent\Collection
     {
-        return $this->sequence_value;
+        return static::where('anio', now()->year)->get();
     }
 
     /**
-     * Get year label.
+     * Get sequence statistics.
      */
-    public function getYearLabelAttribute(): string
-    {
-        return $this->year;
-    }
-
-    /**
-     * Check if sequence is for current year.
-     */
-    public function isCurrentYear(): bool
-    {
-        return $this->year === (int)date('Y');
-    }
-
-    /**
-     * Get days since last used.
-     */
-    public function getDaysSinceLastUsedAttribute(): int
-    {
-        return $this->last_used_at ? now()->diffInDays($this->last_used_at) : 0;
-    }
-
-    /**
-     * Scope by year.
-     */
-    public function scopeByYear($query, int $year)
-    {
-        return $query->where('year', $year);
-    }
-
-    /**
-     * Scope current year.
-     */
-    public function scopeCurrentYear($query)
-    {
-        return $query->where('year', (int)date('Y'));
-    }
-
-    /**
-     * Get statistics for all years.
-     */
-    public static function getStatistics(): array
-    {
-        $sequences = self::orderBy('year', 'desc')->get();
-        
-        return $sequences->map(function ($sequence) {
-            return [
-                'year' => $sequence->year,
-                'total_generated' => $sequence->total_generated,
-                'last_number' => $sequence->formatted_number,
-                'last_used_at' => $sequence->last_used_at?->toISOString(),
-                'days_since_last_used' => $sequence->days_since_last_used,
-                'is_current_year' => $sequence->is_current_year
-            ];
-        })->toArray();
-    }
-
-    /**
-     * Validate if number format is correct.
-     */
-    public static function isValidNumberFormat(string $number): bool
-    {
-        // Expected format: SOL-YYYY-NNNNNN
-        return preg_match('/^SOL-\d{4}-\d{6}$/', $number);
-    }
-
-    /**
-     * Extract year from number.
-     */
-    public static function extractYearFromNumber(string $number): ?int
-    {
-        if (!self::isValidNumberFormat($number)) {
-            return null;
-        }
-        
-        $parts = explode('-', $number);
-        return (int)($parts[1] ?? null);
-    }
-
-    /**
-     * Extract sequence from number.
-     */
-    public static function extractSequenceFromNumber(string $number): ?int
-    {
-        if (!self::isValidNumberFormat($number)) {
-            return null;
-        }
-        
-        $parts = explode('-', $number);
-        return (int)($parts[2] ?? null);
-    }
-
-    /**
-     * Check if number exists.
-     */
-    public static function numberExists(string $number): bool
-    {
-        $year = self::extractYearFromNumber($number);
-        $sequence = self::extractSequenceFromNumber($number);
-        
-        if (!$year || !$sequence) {
-            return false;
-        }
-        
-        $yearSequence = self::getByYear($year);
-        
-        return $yearSequence && $sequence <= $yearSequence->sequence_value;
-    }
-
-    /**
-     * Get next available number for specific year.
-     */
-    public static function getNextForYear(int $year): string
-    {
-        $sequence = self::getByYear($year);
-        
-        if (!$sequence) {
-            self::resetForYear($year);
-            $sequence = self::getByYear($year);
-        }
-        
-        return $sequence->next_number;
-    }
-
-    /**
-     * Create backup of current sequence.
-     */
-    public function createBackup(): array
+    public function getStatistics(): array
     {
         return [
-            'sequence_value' => $this->sequence_value,
-            'year' => $this->year,
-            'prefix' => $this->prefix,
-            'last_used_at' => $this->last_used_at?->toISOString(),
-            'backup_date' => now()->toISOString()
+            'anio' => $this->anio,
+            'ultimo_numero' => $this->ultimo_numero,
+            'siguiente_numero' => $this->getNextNumber(),
+            'numero_formateado' => $this->formatted_sequence,
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
         ];
     }
 
     /**
-     * Restore from backup.
+     * Transform for API response.
      */
-    public function restoreFromBackup(array $backup): bool
+    public function toApiArray(): array
     {
-        try {
-            $this->update([
-                'sequence_value' => $backup['sequence_value'],
-                'year' => $backup['year'],
-                'prefix' => $backup['prefix'],
-                'last_used_at' => $backup['last_used_at']
-            ]);
-            
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
+        return [
+            'id' => $this->id,
+            'anio' => $this->anio,
+            'ultimo_numero' => $this->ultimo_numero,
+            'siguiente_numero' => $this->getNextNumber(),
+            'numero_formateado' => $this->formatted_sequence,
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
+        ];
+    }
+
+    /**
+     * Get all sequences for API.
+     */
+    public static function getAllForApi(): array
+    {
+        return static::orderBy('anio', 'desc')
+            ->get()
+            ->map(function ($sequence) {
+                return $sequence->toApiArray();
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get sequences by year for API.
+     */
+    public static function getByYearForApi(int $year): array
+    {
+        return static::where('anio', $year)
+            ->orderBy('anio', 'desc')
+            ->get()
+            ->map(function ($sequence) {
+                return $sequence->toApiArray();
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get sequence summary for year.
+     */
+    public static function getYearSummary(int $year): array
+    {
+        $sequence = static::getCurrentSequence($year);
+
+        return [
+            'anio' => $year,
+            'ultimo_numero' => $sequence ? $sequence->ultimo_numero : 0,
+            'siguiente_numero' => $sequence ? $sequence->getNextNumber() : 1,
+            'numero_actual_formateado' => $sequence ? $sequence->formatted_sequence : null,
+            'total_solicitudes_generadas' => $sequence ? $sequence->ultimo_numero : 0
+        ];
     }
 }

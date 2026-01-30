@@ -2,13 +2,19 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
-use App\Enums\EstadoSolicitud as EstadoSolicitudEnum;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class EstadoSolicitud extends Model
 {
-    protected $connection = 'mongodb';
-    protected $collection = 'estados_solicitud';
+    use HasFactory;
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'estados_solicitud';
 
     /**
      * The attributes that are mass assignable.
@@ -16,7 +22,7 @@ class EstadoSolicitud extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'id',
+        'codigo',
         'nombre',
         'descripcion',
         'orden',
@@ -34,152 +40,13 @@ class EstadoSolicitud extends Model
         return [
             'orden' => 'integer',
             'activo' => 'boolean',
-            'color' => 'string'
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime'
         ];
     }
 
     /**
-     * Get the MongoDB primary key.
-     */
-    protected $primaryKey = '_id';
-
-    /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * The "type" of the auto-incrementing ID.
-     *
-     * @var string
-     */
-    protected $keyType = 'string';
-
-    /**
-     * Find by id.
-     */
-    public static function findById(string $id): ?self
-    {
-        return static::where('id', $id)->first();
-    }
-
-    /**
-     * Find by nombre.
-     */
-    public static function findByNombre(string $nombre): ?self
-    {
-        return static::where('nombre', $nombre)->first();
-    }
-
-    /**
-     * Get active states ordered by orden.
-     */
-    public static function getActiveOrdered(): \Illuminate\Database\Eloquent\Collection
-    {
-        return static::where('activo', true)->orderBy('orden', 'asc')->get();
-    }
-
-    /**
-     * Get all states ordered by orden.
-     */
-    public static function getAllOrdered(): \Illuminate\Database\Eloquent\Collection
-    {
-        return static::orderBy('orden', 'asc')->get();
-    }
-
-    /**
-     * Get next state in order.
-     */
-    public function getNextState(): ?self
-    {
-        return static::where('orden', '>', $this->orden)
-                    ->where('activo', true)
-                    ->orderBy('orden', 'asc')
-                    ->first();
-    }
-
-    /**
-     * Get previous state in order.
-     */
-    public function getPreviousState(): ?self
-    {
-        return static::where('orden', '<', $this->orden)
-                    ->where('activo', true)
-                    ->orderBy('orden', 'desc')
-                    ->first();
-    }
-
-    /**
-     * Check if can transition to another state.
-     */
-    public function canTransitionTo(string $targetStateId): bool
-    {
-        try {
-            $currentStateEnum = EstadoSolicitudEnum::from($this->id);
-            $targetStateEnum = EstadoSolicitudEnum::from($targetStateId);
-            
-            return $currentStateEnum->canTransitionTo($targetStateEnum);
-        } catch (\ValueError $e) {
-            return false;
-        }
-    }
-
-    /**
-     * Get enum instance.
-     */
-    public function getEnum(): ?EstadoSolicitudEnum
-    {
-        try {
-            return EstadoSolicitudEnum::from($this->id);
-        } catch (\ValueError $e) {
-            return null;
-        }
-    }
-
-    /**
-     * Check if is initial state.
-     */
-    public function isInitialState(): bool
-    {
-        return $this->orden === 1;
-    }
-
-    /**
-     * Check if is final state.
-     */
-    public function isFinalState(): bool
-    {
-        return in_array($this->id, [
-            EstadoSolicitudEnum::FINALIZADO->value,
-            EstadoSolicitudEnum::RECHAZADO->value,
-            EstadoSolicitudEnum::DESISTE->value
-        ]);
-    }
-
-    /**
-     * Check if requires action.
-     */
-    public function requiresAction(): bool
-    {
-        return in_array($this->id, [
-            EstadoSolicitudEnum::REQUIRE_CORRECCION->value,
-            EstadoSolicitudEnum::PENDIENTE_FIRMADO->value,
-            EstadoSolicitudEnum::ENVIADO_VALIDACION->value
-        ]);
-    }
-
-    /**
-     * Check if is active.
-     */
-    public function isActive(): bool
-    {
-        return $this->activo === true;
-    }
-
-    /**
-     * Scope active.
+     * Scope to get only active states.
      */
     public function scopeActive($query)
     {
@@ -187,170 +54,172 @@ class EstadoSolicitud extends Model
     }
 
     /**
-     * Scope by orden.
+     * Scope to get states ordered by order.
      */
-    public function scopeByOrden($query, int $orden)
+    public function scopeOrdered($query)
     {
-        return $query->where('orden', $orden);
+        return $query->orderBy('orden');
     }
 
     /**
-     * Scope final states.
+     * Find state by code.
      */
-    public function scopeFinal($query)
+    public static function findByCode(string $code): ?self
     {
-        return $query->whereIn('id', [
-            EstadoSolicitudEnum::FINALIZADO->value,
-            EstadoSolicitudEnum::RECHAZADO->value,
-            EstadoSolicitudEnum::DESISTE->value
-        ]);
+        return static::where('codigo', $code)->first();
     }
 
     /**
-     * Activate state.
+     * Get solicitudes with this state.
      */
-    public function activate(): void
+    public function solicitudes()
     {
-        $this->activo = true;
-        $this->save();
+        return $this->hasMany(SolicitudCredito::class, 'estado_codigo', 'codigo');
     }
 
     /**
-     * Deactivate state.
+     * Get timeline entries with this state.
      */
-    public function deactivate(): void
+    public function timelineEntries()
     {
-        $this->activo = false;
-        $this->save();
+        return $this->hasMany(SolicitudTimeline::class, 'estado_codigo', 'codigo');
     }
 
     /**
-     * Get formatted color with #.
+     * Get initial state.
      */
-    public function getFormattedColorAttribute(): string
+    public static function getInitialState(): ?self
     {
-        $color = $this->color;
-        
-        // Ensure color starts with #
-        if (!str_starts_with($color, '#')) {
-            $color = '#' . $color;
+        return static::active()->orderBy('orden')->first();
+    }
+
+    /**
+     * Get final states.
+     */
+    public static function getFinalStates(): \Illuminate\Database\Eloquent\Collection
+    {
+        $finalStateCodes = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
+        return static::whereIn('codigo', $finalStateCodes)->active()->get();
+    }
+
+    /**
+     * Get active states.
+     */
+    public static function getActiveStates(): \Illuminate\Database\Eloquent\Collection
+    {
+        return static::active()->ordered()->get();
+    }
+
+    /**
+     * Check if this is an initial state.
+     */
+    public function isInitial(): bool
+    {
+        return $this->orden === 1;
+    }
+
+    /**
+     * Check if this is a final state.
+     */
+    public function isFinal(): bool
+    {
+        $finalStateCodes = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
+        return in_array($this->codigo, $finalStateCodes);
+    }
+
+    /**
+     * Check if this state requires action.
+     */
+    public function requiresAction(): bool
+    {
+        $actionStates = ['ENVIADO_VALIDACION', 'REQUIRE_CORRECCION'];
+        return in_array($this->codigo, $actionStates);
+    }
+
+    /**
+     * Check if this state is active in the flow.
+     */
+    public function isActive(): bool
+    {
+        $inactiveStates = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
+        return !in_array($this->codigo, $inactiveStates);
+    }
+
+    /**
+     * Get next possible states.
+     */
+    public function getNextStates(): \Illuminate\Database\Eloquent\Collection
+    {
+        return static::active()
+            ->where('orden', '>', $this->orden)
+            ->orderBy('orden')
+            ->get();
+    }
+
+    /**
+     * Get previous possible states.
+     */
+    public function getPreviousStates(): \Illuminate\Database\Eloquent\Collection
+    {
+        return static::active()
+            ->where('orden', '<', $this->orden)
+            ->orderBy('orden', 'desc')
+            ->get();
+    }
+
+    /**
+     * Check if can transition to another state.
+     */
+    public function canTransitionTo(self $targetState): bool
+    {
+        // Can always transition to the same state
+        if ($this->codigo === $targetState->codigo) {
+            return true;
         }
-        
-        return $color;
-    }
 
-    /**
-     * Get text color based on background.
-     */
-    public function getTextColorAttribute(): string
-    {
-        // Simple logic to determine if text should be white or black based on background
-        $color = $this->formatted_color;
-        
-        // Convert hex to RGB
-        $hex = str_replace('#', '', $color);
-        $r = hexdec(substr($hex, 0, 2));
-        $g = hexdec(substr($hex, 2, 2));
-        $b = hexdec(substr($hex, 4, 2));
-        
-        // Calculate luminance
-        $luminance = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-        
-        return $luminance > 0.5 ? 'black' : 'white';
-    }
-
-    /**
-     * Get state type category.
-     */
-    public function getCategoryAttribute(): string
-    {
-        return match($this->id) {
-            EstadoSolicitudEnum::POSTULADO->value => 'Inicial',
-            EstadoSolicitudEnum::DOCUMENTOS_CARGADOS->value => 'Proceso',
-            EstadoSolicitudEnum::ENVIADO_VALIDACION->value => 'Validación',
-            EstadoSolicitudEnum::PENDIENTE_FIRMADO->value => 'Firma',
-            EstadoSolicitudEnum::FIRMADO->value => 'Firma',
-            EstadoSolicitudEnum::ENVIADO_PENDIENTE_APROBACION->value => 'Aprobación',
-            EstadoSolicitudEnum::APROBADO->value => 'Aprobado',
-            EstadoSolicitudEnum::DESEMBOLSADO->value => 'Desembolso',
-            EstadoSolicitudEnum::FINALIZADO->value => 'Final',
-            EstadoSolicitudEnum::RECHAZADO->value => 'Rechazado',
-            EstadoSolicitudEnum::DESISTE->value => 'Cancelado',
-            EstadoSolicitudEnum::REQUIRE_CORRECCION->value => 'Corrección',
-            default => 'General'
-        };
-    }
-
-    /**
-     * Get transition states.
-     */
-    public function getTransitionStatesAttribute(): \Illuminate\Database\Eloquent\Collection
-    {
-        $enum = $this->getEnum();
-        
-        if (!$enum) {
-            return collect([]);
+        // Final states cannot transition to other states
+        if ($this->isFinal()) {
+            return false;
         }
-        
-        $targetStates = [];
-        
-        foreach (EstadoSolicitudEnum::cases() as $state) {
-            if ($enum->canTransitionTo($state)) {
-                $targetStates[] = $state->value;
-            }
-        }
-        
-        return static::whereIn('id', $targetStates)->active()->get();
+
+        // Can transition to any state with higher order
+        return $targetState->orden > $this->orden;
     }
 
     /**
-     * Initialize states from enum.
+     * Transform for API response.
      */
-    public static function initializeFromEnum(): void
+    public function toApiArray(): array
     {
-        foreach (EstadoSolicitudEnum::cases() as $estado) {
-            self::updateOrCreate(
-                ['id' => $estado->value],
-                [
-                    'nombre' => $estado->getLabel(),
-                    'descripcion' => $estado->getDescripcion(),
-                    'orden' => $estado->getOrden(),
-                    'color' => $estado->getColor(),
-                    'activo' => true
-                ]
-            );
-        }
-    }
-
-    /**
-     * Get states for select options.
-     */
-    public static function getForSelect(): array
-    {
-        return self::active()->orderBy('orden', 'asc')->get()->mapWithKeys(function ($estado) {
-            return [$estado->id => $estado->nombre];
-        })->toArray();
-    }
-
-    /**
-     * Get states with full data for API.
-     */
-    public static function getForApi(): array
-    {
-        return self::active()->orderBy('orden', 'asc')->get()->map(function ($estado) {
-            return [
-                'id' => $estado->id,
-                'nombre' => $estado->nombre,
-                'descripcion' => $estado->descripcion,
-                'orden' => $estado->orden,
-                'color' => $estado->formatted_color,
-                'text_color' => $estado->text_color,
-                'category' => $estado->category,
-                'is_initial' => $estado->is_initial_state,
-                'is_final' => $estado->is_final_state,
-                'requires_action' => $estado->requires_action,
-                'transitions' => $estado->transition_states->pluck('id')
-            ];
-        })->toArray();
+        return [
+            'id' => $this->id,
+            'codigo' => $this->codigo,
+            'nombre' => $this->nombre,
+            'descripcion' => $this->descripcion,
+            'orden' => $this->orden,
+            'color' => $this->color,
+            'activo' => $this->activo,
+            'is_initial' => $this->isInitial(),
+            'is_final' => $this->isFinal(),
+            'requires_action' => $this->requiresAction(),
+            'is_active' => $this->isActive(),
+            'next_states' => $this->getNextStates()->map(function ($state) {
+                return [
+                    'codigo' => $state->codigo,
+                    'nombre' => $state->nombre,
+                    'color' => $state->color
+                ];
+            }),
+            'previous_states' => $this->getPreviousStates()->map(function ($state) {
+                return [
+                    'codigo' => $state->codigo,
+                    'nombre' => $state->nombre,
+                    'color' => $state->color
+                ];
+            }),
+            'solicitudes_count' => $this->solicitudes()->count(),
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
+        ];
     }
 }
