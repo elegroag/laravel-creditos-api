@@ -1,0 +1,22 @@
+/* Importaciones de todos los archivos CSS */
+@import './global/variables.css';
+@import './global/animations.css';
+@import './global/component.css';
+@import './global/states.css';
+@import './vue-select.css';
+@import './admin-solicitudes.css';
+@import './data-table.css';
+@import './main.css';
+
+/* Comentarios para referencia de archivos disponibles */
+/*
+ * Archivos CSS disponibles:
+ * - variables.css: Variables CSS para Vue Select
+ * - animations.css: Animaciones y transiciones
+ * - component.css: Estilos base de componentes
+ * - states.css: Estados (disabled, RTL)
+ * - vue-select.css: Estilos completos de Vue Select
+ * - admin-solicitudes.css: Estilos para administración de solicitudes
+ * - data-table.css: Estilos para DataTables
+ * - main.css: Estilos principales de Comfaca
+ */

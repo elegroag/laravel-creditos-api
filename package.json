@@ -7,7 +7,11 @@
         "dev": "vite"
     },
     "devDependencies": {
+        "@tailwindcss/postcss": "^4.1.18",
         "@tailwindcss/vite": "^4.0.0",
+        "@types/node": "^25.1.0",
+        "@vitejs/plugin-vue": "^6.0.3",
+        "@vue/runtime-core": "^3.5.27",
         "axios": "^1.11.0",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^2.0.0",
@@ -15,11 +19,12 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "@inertiajs/core": "^2.3.13",
         "@inertiajs/vue3": "^2.3.12",
-        "@types/node": "^25.1.0",
         "autoprefixer": "^10.4.23",
         "pinia": "^3.0.4",
         "postcss": "^8.5.6",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vue": "^3.5.27"
     }
 }
