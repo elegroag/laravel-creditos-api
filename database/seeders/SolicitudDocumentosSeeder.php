@@ -62,7 +62,7 @@ class SolicitudDocumentosSeeder extends Seeder
         // Documentos básicos para todas las solicitudes
         $documentosBasicos = [
             [
-                'solicitud_id' => $solicitud->id,
+                'solicitud_id' => $solicitud->numero_solicitud,
                 'documento_uuid' => $this->generarUUID(),
                 'documento_requerido_id' => 'IDENTIFICACION',
                 'nombre_original' => 'cedula_ciudadania.pdf',
@@ -73,7 +73,7 @@ class SolicitudDocumentosSeeder extends Seeder
                 'activo' => true
             ],
             [
-                'solicitud_id' => $solicitud->id,
+                'solicitud_id' => $solicitud->numero_solicitud,
                 'documento_uuid' => $this->generarUUID(),
                 'documento_requerido_id' => 'COMPROBANTE_INGRESOS',
                 'nombre_original' => 'comprobante_ingresos_3meses.pdf',
@@ -91,7 +91,7 @@ class SolicitudDocumentosSeeder extends Seeder
         if (strpos($destino, 'vivienda') !== false) {
             $documentosVivienda = [
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'ESCRITURA_INMUEBLE',
                     'nombre_original' => 'escritura_publica.pdf',
@@ -102,7 +102,7 @@ class SolicitudDocumentosSeeder extends Seeder
                     'activo' => true
                 ],
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'AVALUO_INMUEBLE',
                     'nombre_original' => 'avaluo_comercial.pdf',
@@ -119,7 +119,7 @@ class SolicitudDocumentosSeeder extends Seeder
         if (strpos($destino, 'educacion') !== false || strpos($destino, 'educativo') !== false) {
             $documentosEducacion = [
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'CERTIFICADO_MATRICULA',
                     'nombre_original' => 'matricula_universidad.pdf',
@@ -130,7 +130,7 @@ class SolicitudDocumentosSeeder extends Seeder
                     'activo' => true
                 ],
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'HISTORIAL_ACADEMICO',
                     'nombre_original' => 'historial_academico.pdf',
@@ -147,7 +147,7 @@ class SolicitudDocumentosSeeder extends Seeder
         if (strpos($destino, 'vehiculo') !== false) {
             $documentosVehiculo = [
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'FACTURA_VEHICULO',
                     'nombre_original' => 'factura_compra_vehiculo.pdf',
@@ -158,7 +158,7 @@ class SolicitudDocumentosSeeder extends Seeder
                     'activo' => true
                 ],
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'SOAT_SEGURO',
                     'nombre_original' => 'soat_seguro.pdf',
@@ -175,7 +175,7 @@ class SolicitudDocumentosSeeder extends Seeder
         if (strpos($destino, 'capital') !== false || strpos($destino, 'empresa') !== false) {
             $documentosEmpresa = [
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'RUT_EMPRESA',
                     'nombre_original' => 'rut_actualizado.pdf',
@@ -186,7 +186,7 @@ class SolicitudDocumentosSeeder extends Seeder
                     'activo' => true
                 ],
                 [
-                    'solicitud_id' => $solicitud->id,
+                    'solicitud_id' => $solicitud->numero_solicitud,
                     'documento_uuid' => $this->generarUUID(),
                     'documento_requerido_id' => 'ESTADOS_FINANCIEROS',
                     'nombre_original' => 'estados_financieros_2anos.pdf',
@@ -203,7 +203,7 @@ class SolicitudDocumentosSeeder extends Seeder
         // Agregar referencias para todas las solicitudes
         $documentosReferencias = [
             [
-                'solicitud_id' => $solicitud->id,
+                'solicitud_id' => $solicitud->numero_solicitud,
                 'documento_uuid' => $this->generarUUID(),
                 'documento_requerido_id' => 'REFERENCIAS_PERSONALES',
                 'nombre_original' => 'formato_referencias.pdf',
@@ -227,11 +227,14 @@ class SolicitudDocumentosSeeder extends Seeder
     {
         return sprintf(
             '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
             mt_rand(0, 0xffff),
             mt_rand(0, 0x0fff) | 0x4000,
             mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff)
         );
     }
 }

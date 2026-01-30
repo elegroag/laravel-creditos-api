@@ -30,9 +30,9 @@ class EntidadDigitalSeeder extends Seeder
         $this->command->info('');
         $this->command->info('Resumen de entidades creadas:');
         $this->command->info('Total entidades: ' . EntidadDigital::count());
-        $this->command->info('Entidades activas: ' . EntidadDigital::active()->count());
-        $this->command->info('Entidades inactivas: ' . EntidadDigital::inactive()->count());
-        $this->command->info('Entidades bloqueadas: ' . EntidadDigital::blocked()->count());
+        $this->command->info('Entidades activas: ' . EntidadDigital::where('estado', 'activa')->count());
+        $this->command->info('Entidades inactivas: ' . EntidadDigital::where('estado', 'inactiva')->count());
+        $this->command->info('Entidades bloqueadas: ' . EntidadDigital::where('estado', 'bloqueada')->count());
         $this->command->info('');
         $this->command->info('Documentos por entidad:');
         $this->command->info('Promedio: 2-3 documentos por entidad');
@@ -49,7 +49,7 @@ class EntidadDigitalSeeder extends Seeder
     private function generarEntidadParaUsuario(User $user): array
     {
         $username = $user->username;
-        $roles = $user->roles ?? [];
+        $roles = json_decode($user->roles ?? '[]', true);
 
         // Datos base de identificación
         $baseData = [

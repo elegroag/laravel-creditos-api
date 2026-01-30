@@ -24,12 +24,12 @@ return new class extends Migration
             $table->json('validaciones')->nullable();
             $table->timestamp('last_validation_at')->nullable();
             $table->timestamps();
-            
+
             // Foreign key
-            $table->foreignId('username')->references('username', 'users')->onDelete('cascade');
-            
+            $table->foreign('username')->references('username')->on('users')->onDelete('cascade');
+
             // Índices
-            $table->index('username');
+            $table->index('tipo_identificacion');
             $table->index('numero_identificacion');
             $table->index('estado');
         });

@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('phone', 20)->nullable();
             $table->json('roles')->nullable();
             $table->boolean('disabled')->default(false);
+            $table->boolean('is_active')->default(true);
             $table->string('tipo_documento', 10)->nullable();
             $table->string('numero_documento', 20)->nullable();
             $table->string('nombres', 100)->nullable();
@@ -34,18 +35,8 @@ return new class extends Migration
             $table->index('email');
             $table->index('numero_documento');
             $table->index('disabled');
+            $table->index('is_active');
             $table->index('last_login');
-        });
-
-        // Tabla pivote para roles si se necesita relación many-to-many
-        Schema::create('user_roles', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
-            $table->timestamps();
-
-            // Evitar duplicados
-            $table->unique(['user_id', 'role_id']);
         });
     }
 
@@ -54,7 +45,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('user_roles');
         Schema::dropIfExists('users');
     }
 };

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign key
-            $table->foreign('solicitud_id')->references('numero_solicitud', 'solicitudes_credito')->onDelete('cascade');
+            $table->foreign('solicitud_id')->references('numero_solicitud')->on('solicitudes_credito')->onDelete('cascade');
 
             // Índices
             $table->index('solicitud_id');

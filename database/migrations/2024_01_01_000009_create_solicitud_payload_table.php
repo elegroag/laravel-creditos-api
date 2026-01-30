@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('solicitud_payload', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('solicitud_id');
+            $table->string('solicitud_id', 20); // Cambiar a string para coincidir con numero_solicitud
             $table->string('version', 20)->default('1.0');
             $table->json('encabezado')->nullable();
             $table->json('solicitud')->nullable();
@@ -28,13 +28,13 @@ return new class extends Migration
             $table->json('linea_credito')->nullable();
             $table->boolean('save_xml')->default(true);
             $table->timestamps();
-            
+
             // Foreign key
-            $table->foreignId('solicitud_id')->references('id', 'solicitudes_credito')->onDelete('cascade');
-            
+            $table->foreign('solicitud_id')->references('numero_solicitud')->on('solicitudes_credito')->onDelete('cascade');
+
             // Índices
             $table->index('solicitud_id');
-            $table->index('version');
+            $table->unique(['solicitud_id', 'version']);
         });
     }
 

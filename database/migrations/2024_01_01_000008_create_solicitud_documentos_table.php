@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('solicitud_documentos', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('solicitud_id');
+            $table->string('solicitud_id', 20); // Cambiar a string para coincidir con numero_solicitud
             $table->string('documento_uuid', 36)->unique();
             $table->string('documento_requerido_id', 100);
             $table->string('nombre_original', 255);
@@ -23,13 +23,12 @@ return new class extends Migration
             $table->string('ruta_archivo', 500)->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamps();
-            
+
             // Foreign key
-            $table->foreignId('solicitud_id')->references('id', 'solicitudes_credito')->onDelete('cascade');
-            
+            $table->foreign('solicitud_id')->references('numero_solicitud')->on('solicitudes_credito')->onDelete('cascade');
+
             // Índices
             $table->index('solicitud_id');
-            $table->index('documento_uuid');
             $table->index('documento_requerido_id');
             $table->index('activo');
         });

@@ -22,10 +22,10 @@ return new class extends Migration
             $table->string('ruta_archivo', 500)->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamps();
-            
+
             // Foreign key
-            $table->foreignId('username')->references('username', 'users')->onDelete('cascade');
-            
+            $table->foreign('username')->references('username')->on('users')->onDelete('cascade');
+
             // Índices
             $table->index('username');
             $table->index('tipo_documento');

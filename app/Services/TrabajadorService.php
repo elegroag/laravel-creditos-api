@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Trabajador;
 use App\Models\EmpresaConvenio;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use App\Exceptions\ValidationException;
@@ -70,7 +71,7 @@ class TrabajadorService extends BaseService
     {
         // First try to get from database
         $trabajador = Trabajador::findByCedula($cedula);
-        
+
         if ($trabajador) {
             // Optionally update from external API
             $this->updateFromExternalIfNeeded($trabajador);
@@ -79,7 +80,7 @@ class TrabajadorService extends BaseService
 
         // If not found, try external API
         $externalData = $this->getWorkerData($cedula);
-        
+
         if ($externalData) {
             return $this->createWorkerFromExternal($externalData);
         }
@@ -93,7 +94,7 @@ class TrabajadorService extends BaseService
     private function createWorkerFromExternal(array $externalData): Trabajador
     {
         $relevantData = $this->extractRelevantData($externalData);
-        
+
         $trabajador = Trabajador::create([
             'cedula' => $relevantData['cedula'],
             'tipo_documento' => $relevantData['tipo_documento'],
@@ -143,10 +144,10 @@ class TrabajadorService extends BaseService
         }
 
         $externalData = $this->getWorkerData($trabajador->cedula);
-        
+
         if ($externalData) {
             $trabajador->updateFromExternalData($externalData);
-            
+
             $this->log('Worker updated from external API', [
                 'cedula' => $trabajador->cedula,
                 'nombre' => $trabajador->full_name
@@ -208,7 +209,6 @@ class TrabajadorService extends BaseService
             ]);
 
             return $data['data'] ?? null;
-
         } catch (\Exception $e) {
             $this->logError('Exception getting worker data', [
                 'cedula' => $cedula,
@@ -224,7 +224,7 @@ class TrabajadorService extends BaseService
     public function getWorkerRelevantData(string $cedula): ?array
     {
         $trabajador = $this->getWorker($cedula);
-        
+
         if (!$trabajador) {
             return null;
         }
@@ -241,7 +241,7 @@ class TrabajadorService extends BaseService
 
         // Required fields validation
         $requiredFields = ['cedula', 'primer_nombre', 'primer_apellido', 'estado'];
-        
+
         foreach ($requiredFields as $field) {
             if (empty($workerData[$field])) {
                 $errors[$field] = "El campo {$field} es requerido";
@@ -281,16 +281,15 @@ class TrabajadorService extends BaseService
     {
         try {
             $fechaAfi = $this->parseDate($fechaAfiliacion);
-            
+
             if (!$fechaAfi) {
                 return 0;
             }
 
             $fechaActual = now();
             $diferencia = $fechaActual->diffInMonths($fechaAfi);
-            
-            return max(0, $diferencia);
 
+            return max(0, $diferencia);
         } catch (\Exception $e) {
             $this->logError('Error calculating service months', [
                 'fecha_afiliacion' => $fechaAfiliacion,
@@ -321,7 +320,7 @@ class TrabajadorService extends BaseService
     public function getWorkerEligibility(string $cedula): array
     {
         $trabajador = $this->getWorker($cedula);
-        
+
         if (!$trabajador) {
             return [
                 'eligible' => false,
@@ -331,7 +330,7 @@ class TrabajadorService extends BaseService
         }
 
         $eligibility = $trabajador->getEligibilityDetails();
-        
+
         return [
             'eligible' => $eligibility['eligible'],
             'reason' => $eligibility['eligible'] ? 'Trabajador elegible para crédito' : implode(', ', $eligibility['reasons']),
@@ -405,7 +404,6 @@ class TrabajadorService extends BaseService
                 $trabajador = $this->createWorkerFromExternal($worker);
                 return $trabajador->toApiArray();
             }, $externalWorkers);
-
         } catch (\Exception $e) {
             $this->logError('Exception searching workers externally', [
                 'criteria' => $criteria,
@@ -482,6 +480,91 @@ class TrabajadorService extends BaseService
         try {
             return \Carbon\Carbon::parse($date);
         } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Obtener datos del trabajador desde API externa (compatible con AuthController).
+     */
+    public function obtenerDatosTrabajador(string $numeroDocumento): ?array
+    {
+        try {
+            $response = Http::timeout($this->timeout)
+                ->post($this->externalApiUrl . "/company/informacion_trabajador", [
+                    'json' => ['cedtra' => $numeroDocumento]
+                ]);
+
+            if ($response->successful() && $response->json('success') && $response->json('data')) {
+                return $this->extractRelevantData($response->json('data'));
+            }
+
+            Log::warning("No se pudieron obtener datos del trabajador con documento: {$numeroDocumento}");
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error consultando datos del trabajador: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Obtener datos del usuario desde API externa SISU (compatible con AuthController).
+     */
+    public function obtenerDatosUsuarioSisu(User $user): ?array
+    {
+        try {
+            $response = Http::timeout($this->timeout)
+                ->get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username);
+
+            if ($response->successful() && $response->json('success') && $response->json('data')) {
+                $data = $response->json('data');
+
+                if ($data['estado'] === 'A') {
+                    return [
+                        'full_name' => $data['nombre'] ?? null,
+                        'email' => $data['email'] ?? null,
+                        'phone' => $data['celular'] ?? null,
+                        'codigo_funcionario' => $data['tipfun'] ?? null,
+                        'estado' => $data['estado'] ?? null,
+                        'tipo_funcionario' => $data['tipfun_detalle'] ?? null
+                    ];
+                } else {
+                    Log::warning("Asesor {$user->username} no está activo en SISU");
+                }
+            } else {
+                Log::warning("No se pudieron obtener datos del asesor {$user->username}");
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error consultando datos del asesor: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Obtener puntos de asesores por usuario desde API externa (compatible con AuthController).
+     */
+    public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
+    {
+        try {
+            $response = Http::timeout($this->timeout)
+                ->post($this->externalApiUrl . "/creditos/usuarios_creditos");
+
+            if ($response->successful() && $response->json('status') && $response->json('data')) {
+                $puntosAsesores = collect($response->json('data'))
+                    ->filter(function ($item) use ($user) {
+                        return (string) $item['numero_documento'] === (string) $user->numero_documento;
+                    })
+                    ->toArray();
+
+                Log::info("Se encontraron " . count($puntosAsesores) . " coincidencias para el documento {$user->numero_documento}");
+                return $puntosAsesores;
+            }
+
+            throw new ValidationException("El servicio externo no se encuentra disponible");
+        } catch (\Exception $e) {
+            Log::error("Error consultando asesores: " . $e->getMessage());
             return null;
         }
     }

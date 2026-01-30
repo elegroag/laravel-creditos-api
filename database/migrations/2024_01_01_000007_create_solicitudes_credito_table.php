@@ -25,14 +25,12 @@ return new class extends Migration
             $table->timestamps();
 
             // Foreign keys
-            $table->foreignId('owner_username')->references('username', 'users')->onDelete('cascade');
-            $table->foreign('estado_codigo')->references('codigo', 'estados_solicitud');
+            $table->foreign('owner_username')->references('username')->on('users')->onDelete('cascade');
+            $table->foreign('estado_codigo')->references('codigo')->on('estados_solicitud');
 
             // Índices
-            $table->index('numero_solicitud');
             $table->index('owner_username');
             $table->index('estado_codigo');
-            $table->index('monto_solicitado');
             $table->index('created_at');
         });
     }

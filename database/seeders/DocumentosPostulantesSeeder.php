@@ -23,7 +23,7 @@ class DocumentosPostulantesSeeder extends Seeder
         foreach ($users as $user) {
             // Generar documentos según el rol del usuario
             $documentos = $this->generarDocumentosParaUsuario($user);
-            
+
             foreach ($documentos as $documento) {
                 DocumentoPostulante::create($documento);
             }
@@ -33,7 +33,7 @@ class DocumentosPostulantesSeeder extends Seeder
         $this->command->info('');
         $this->command->info('Resumen de documentos creados:');
         $this->command->info('Total documentos: ' . DocumentoPostulante::count());
-        $this->command->info('Documentos activos: ' . DocumentoPostulante::active()->count());
+        $this->command->info('Documentos activos: ' . DocumentoPostulante::where('activo', true)->count());
         $this->command->info('Promedio por usuario: ' . round(DocumentoPostulante::count() / $users->count(), 1));
         $this->command->info('');
         $this->command->info('Tipos de documentos generados:');
@@ -50,8 +50,8 @@ class DocumentosPostulantesSeeder extends Seeder
     private function generarDocumentosParaUsuario(User $user): array
     {
         $username = $user->username;
-        $roles = $user->roles ?? [];
-        
+        $roles = json_decode($user->roles ?? '[]', true);
+
         $documentos = [];
 
         // Documentos base para todos los usuarios

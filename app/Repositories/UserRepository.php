@@ -16,7 +16,7 @@ class UserRepository extends BaseRepository
     /**
      * Find user by ID.
      */
-    public function findById(int $id)
+    public function findById($id)
     {
         return $this->model->find($id);
     }

@@ -23,11 +23,11 @@ return new class extends Migration
             $table->enum('estado', ['iniciada', 'completa', 'verificada', 'aprobada', 'rechazada'])->default('iniciada');
             $table->text('observaciones')->nullable();
             $table->timestamps();
-            
+
             // Foreign keys
-            $table->foreignId('username')->references('username', 'users')->onDelete('cascade');
-            $table->foreign('empresa_nit')->references('nit', 'empresas_convenio')->onDelete('set null');
-            
+            $table->foreign('username')->references('username')->on('users')->onDelete('cascade');
+            $table->foreign('empresa_nit')->references('nit')->on('empresas_convenio')->onDelete('set null');
+
             // Índices
             $table->index('username');
             $table->index('tipo_postulante');

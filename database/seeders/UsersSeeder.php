@@ -86,23 +86,9 @@ class UsersSeeder extends Seeder
                 'apellidos' => $userData['apellidos'],
                 'roles' => json_encode($userData['roles']),
                 'disabled' => $userData['disabled'],
+                'is_active' => $userData['is_active'] ?? true,
                 'email_verified_at' => now()
             ]);
-
-            // Crear relación en tabla pivote si existe
-            if (Schema::hasTable('user_roles')) {
-                foreach ($userData['roles'] as $roleName) {
-                    $role = Role::where('nombre', $roleName)->first();
-                    if ($role) {
-                        DB::table('user_roles')->insert([
-                            'user_id' => $user->id,
-                            'role_id' => $role->id,
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ]);
-                    }
-                }
-            }
         }
 
         $this->command->info('Usuarios creados exitosamente');

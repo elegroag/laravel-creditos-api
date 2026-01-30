@@ -13,19 +13,19 @@ return new class extends Migration
     {
         Schema::create('solicitud_timeline', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('solicitud_id');
+            $table->string('solicitud_id', 20); // Cambiar a string para coincidir con numero_solicitud
             $table->string('estado_codigo', 50);
             $table->timestamp('fecha')->useCurrent();
             $table->text('detalle')->nullable();
             $table->string('usuario_username', 100)->nullable();
             $table->boolean('automatico')->default(false);
             $table->timestamps();
-            
+
             // Foreign keys
-            $table->foreignId('solicitud_id')->references('id', 'solicitudes_credito')->onDelete('cascade');
-            $table->foreign('estado_codigo')->references('codigo', 'estados_solicitud');
-            $table->foreign('usuario_username')->references('username', 'users')->onDelete('set null');
-            
+            $table->foreign('solicitud_id')->references('numero_solicitud')->on('solicitudes_credito')->onDelete('cascade');
+            $table->foreign('estado_codigo')->references('codigo')->on('estados_solicitud');
+            $table->foreign('usuario_username')->references('username')->on('users')->onDelete('set null');
+
             // Índices
             $table->index('solicitud_id');
             $table->index('estado_codigo');

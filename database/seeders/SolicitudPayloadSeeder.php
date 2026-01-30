@@ -102,7 +102,7 @@ class SolicitudPayloadSeeder extends Seeder
         }
 
         return [
-            'solicitud_id' => $solicitud->id,
+            'solicitud_id' => $solicitud->numero_solicitud,
             'version' => '1.0',
             'encabezado' => [
                 'fecha_radicado' => $solicitud->created_at->format('Y-m-d H:i:s'),

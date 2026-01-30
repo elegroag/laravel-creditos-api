@@ -32,15 +32,12 @@ class PostulacionesSeeder extends Seeder
         $this->command->info('');
         $this->command->info('Resumen de postulaciones creadas:');
         $this->command->info('Total postulaciones: ' . Postulacion::count());
-        $this->command->info('Postulaciones de trabajadores: ' . Postulacion::workers()->count());
-        $this->command->info('Postulaciones de empresas: ' . Postulacion::companies()->count());
-        $this->command->info('');
-        $this->command->info('Estados de postulaciones:');
-        $this->command->info('Iniciadas: ' . Postulacion::byState('iniciada')->count());
-        $this->command->info('Completas: ' . Postulacion::byState('completa')->count());
-        $this->command->info('Verificadas: ' . Postulacion::byState('verificada')->count());
-        $this->command->info('Aprobadas: ' . Postulacion::byState('aprobada')->count());
-        $this->command->info('Rechazadas: ' . Postulacion::byState('rechazada')->count());
+        $this->command->info('Trabajadores: ' . Postulacion::where('tipo_postulante', 'trabajador')->count());
+        $this->command->info('Empresas: ' . Postulacion::where('tipo_postulante', 'empresa')->count());
+        $this->command->info('Iniciadas: ' . Postulacion::where('estado', 'iniciada')->count());
+        $this->command->info('Completas: ' . Postulacion::where('estado', 'completa')->count());
+        $this->command->info('Aprobadas: ' . Postulacion::where('estado', 'aprobada')->count());
+        $this->command->info('Rechazadas: ' . Postulacion::where('estado', 'rechazada')->count());
     }
 
     /**
@@ -49,8 +46,8 @@ class PostulacionesSeeder extends Seeder
     private function generarPostulacionParaUsuario(User $user, $empresas): array
     {
         $username = $user->username;
-        $roles = $user->roles ?? [];
-        
+        $roles = json_decode($user->roles ?? '[]', true);
+
         // Determinar tipo de postulante según rol
         if (in_array('user_empresa', $roles)) {
             return $this->generarPostulacionEmpresa($username, $empresas);
@@ -71,7 +68,7 @@ class PostulacionesSeeder extends Seeder
     private function generarPostulacionEmpresa(string $username, $empresas): array
     {
         $empresa = $empresas->random();
-        
+
         return [
             'username' => $username,
             'tipo_postulante' => 'empresa',
@@ -194,7 +191,7 @@ class PostulacionesSeeder extends Seeder
                         'cargo' => $this->generarCargo(),
                         'empresa' => $this->generarNombreEmpresa(),
                         'telefono' => $this->generarTelefono(),
-                        'email' => $this->generarEmail(),
+                        'email' => $this->generarEmail($username),
                         'tiempo_conocido' => rand(1, 10) . ' años'
                     ],
                     [
@@ -202,7 +199,7 @@ class PostulacionesSeeder extends Seeder
                         'cargo' => $this->generarCargo(),
                         'empresa' => $this->generarNombreEmpresa(),
                         'telefono' => $this->generarTelefono(),
-                        'email' => $this->generarEmail(),
+                        'email' => $this->generarEmail($username),
                         'tiempo_conocido' => rand(1, 8) . ' años'
                     ]
                 ]
@@ -401,7 +398,7 @@ class PostulacionesSeeder extends Seeder
         $estados = ['iniciada', 'completa', 'verificada', 'aprobada', 'rechazada'];
         $pesos = [10, 30, 25, 25, 10]; // Probabilidades
         $random = rand(1, 100);
-        
+
         $acumulado = 0;
         foreach ($estados as $index => $estado) {
             $acumulado += $pesos[$index];
@@ -409,7 +406,7 @@ class PostulacionesSeeder extends Seeder
                 return $estado;
             }
         }
-        
+
         return 'iniciada';
     }
 
@@ -429,7 +426,7 @@ class PostulacionesSeeder extends Seeder
                 'Referencias comerciales contactadas'
             ]
         ];
-        
+
         $obs = $observaciones[$tipo] ?? [];
         return implode(' | ', array_slice($obs, 0, rand(1, 3)));
     }
