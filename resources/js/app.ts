@@ -1,4 +1,4 @@
-import "../css/app.css";
+import "@/assets/css/index.css";
 import "./bootstrap";
 
 import { createApp, h } from "vue";

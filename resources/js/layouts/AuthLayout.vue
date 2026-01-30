@@ -3,10 +3,8 @@
         <!-- Contenedor principal responsive -->
         <div :class="[
             'w-full space-y-8 lg:space-y-10',
-            // Diferentes anchos máximos según la ruta
-            currentRoute.includes('adviser') ? 'max-w-md lg:max-w-lg xl:max-w-xl' :
-            currentRoute.includes('registro') ? 'max-w-4xl lg:max-w-5xl xl:max-w-6xl' :
-            'max-w-md lg:max-w-lg xl:max-w-xl'
+            // Usar el ancho pasado como prop o calcular según la ruta
+            maxWidthClass
         ]">
             <!-- Header responsive -->
             <div class="text-center">
@@ -14,7 +12,7 @@
                 <div class="mx-auto h-20 w-30 lg:h-32 lg:w-48 mb-8">
                     <img src="/assets/img/credito-social.png" alt="Comfaca Crédito" class="h-full w-full object-contain">
                 </div>
-                
+
                 <!-- Títulos responsive -->
                 <h1 class="text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 mb-2 lg:mb-3">
                     Comfaca Crédito
@@ -24,16 +22,16 @@
                 </p>
             </div>
 
-            <!-- Card responsive -->      
+            <!-- Card responsive -->
             <slot />
 
             <!-- Footer con información de Comfaca -->
             <div class="text-center space-y-4">
                 <div class="flex flex-col sm:flex-row items-center justify-center gap-3 text-sm lg:text-base">
                     <span class="text-gray-600">¿Necesitas más información?</span>
-                    <a 
-                        href="https://www.comfaca.com" 
-                        target="_blank" 
+                    <a
+                        href="https://www.comfaca.com"
+                        target="_blank"
                         rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 font-medium text-blue-600 hover:text-blue-500 transition-colors"
                     >
@@ -52,12 +50,37 @@
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 
+interface Props {
+    maxWidth?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    maxWidth: ''
+});
+
 // Obtener la ruta actual desde Inertia
 const page = usePage();
 
 // Computed para obtener la ruta actual
 const currentRoute = computed(() => {
     return page.props.url || '';
+});
+
+// Computed para determinar el ancho máximo
+const maxWidthClass = computed(() => {
+    // Si se pasa un maxWidth específico, usarlo
+    if (props.maxWidth) {
+        return props.maxWidth;
+    }
+
+    // Si no, calcular según la ruta (comportamiento por defecto)
+    if (currentRoute.value.includes('adviser')) {
+        return 'max-w-md lg:max-w-lg xl:max-w-xl';
+    } else if (currentRoute.value.includes('registro')) {
+        return 'max-w-5xl lg:max-w-6xl xl:max-w-7xl';
+    } else {
+        return 'max-w-md lg:max-w-lg xl:max-w-xl';
+    }
 });
 
 // Función para obtener el subtítulo según la ruta

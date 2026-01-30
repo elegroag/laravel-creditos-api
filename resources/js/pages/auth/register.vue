@@ -1,294 +1,236 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-4xl w-full space-y-8">
-      <div>
-        <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100">
-          <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-          </svg>
-        </div>
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Crear una cuenta
-        </h2>
-        <p class="mt-2 text-center text-sm text-gray-600">
-          Completa los pasos para registrarte en el sistema
-        </p>
-      </div>
+  <AuthLayout maxWidth="max-w-5xl lg:max-w-6xl xl:max-w-7xl">
+    <div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
+      <div class="bg-white shadow-xl rounded-2xl p-6 lg:p-8 xl:p-10 lg:col-span-4 lg:col-start-2">
+        <div class="space-y-6">
+          <div class="text-center">
+            <h1 class="text-2xl font-bold tracking-tight">Crear una cuenta</h1>
+            <p class="text-sm text-muted-foreground mt-1">
+              Completa los pasos para registrarte en el sistema.
+            </p>
+          </div>
 
-      <!-- Indicadores de paso -->
-      <div class="relative flex justify-between items-center px-4 py-2 max-w-md mx-auto">
-        <div class="absolute left-0 top-1/2 -z-10 h-0.5 w-full bg-gray-300"></div>
-        <div
-          v-for="i in 3"
-          :key="i"
-          :class="[
-            'relative flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-bold transition-colors',
-            pasoActual >= i
-              ? 'border-blue-600 bg-blue-600 text-white'
-              : 'border-gray-300 bg-white text-gray-500'
-          ]"
-        >
-          {{ i }}
-        </div>
-      </div>
-
-      <form @submit.prevent="handleSubmit" class="mt-8 space-y-6">
-        <!-- Mensaje de error -->
-        <div v-if="hasErrors" class="rounded-md bg-red-50 p-4">
-          <div class="flex">
-            <div class="shrink-0">
-              <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
+          <!-- Indicadores de paso -->
+          <div class="relative flex justify-between items-center px-4 py-2">
+            <div class="absolute left-0 top-1/2 -z-10 h-0.5 w-full bg-border" />
+            <div
+              v-for="i in 3"
+              :key="i"
+              :class="cn(
+                'relative flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-bold transition-colors',
+                pasoActual >= i ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground'
+              )"
+            >
+              {{ i }}
             </div>
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-red-800">Error de registro</h3>
-              <div class="mt-2 text-sm text-red-700">
-                <ul class="list-disc list-inside space-y-1">
+          </div>
+
+          <form @submit.prevent="handleSubmit" class="space-y-6">
+            <!-- Mensaje de error -->
+            <div v-if="hasErrors" class="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <div>
+                <h3 class="font-medium">Error de registro</h3>
+                <ul class="mt-1 space-y-1">
                   <li v-for="error in allErrors" :key="error">{{ error }}</li>
                 </ul>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- Paso 1: Identificación -->
-        <div v-if="pasoActual === 1" class="space-y-4">
-          <h3 class="text-lg font-medium text-gray-900">Información personal</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="tipo_documento" class="block text-sm font-medium text-gray-700">
-                Tipo de documento
-              </label>
-              <select
-                id="tipo_documento"
-                v-model="form.tipo_documento"
-                required
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            <!-- Paso 1: Identificación -->
+            <div v-if="pasoActual === 1" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <Label for="tipo_documento">Tipo de documento</Label>
+                  <select
+                    id="tipo_documento"
+                    v-model="form.tipo_documento"
+                    required
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="form.processing"
+                  >
+                    <option value="">Seleccione...</option>
+                    <option v-for="tipo in tiposDocumento" :key="tipo.value" :value="tipo.value">
+                      {{ tipo.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="numero_documento">Número de documento</Label>
+                  <Input
+                    id="numero_documento"
+                    v-model="form.numero_documento"
+                    required
+                    placeholder="1234567890"
+                    :disabled="form.processing"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="nombres">Nombres</Label>
+                  <Input
+                    id="nombres"
+                    v-model="form.nombres"
+                    required
+                    placeholder="Juan Carlos"
+                    :disabled="form.processing"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="apellidos">Apellidos</Label>
+                  <Input
+                    id="apellidos"
+                    v-model="form.apellidos"
+                    required
+                    placeholder="Pérez Gómez"
+                    :disabled="form.processing"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 2: Contacto -->
+            <div v-if="pasoActual === 2" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <Label for="email">Correo electrónico</Label>
+                  <Input
+                    id="email"
+                    v-model="form.email"
+                    type="email"
+                    required
+                    placeholder="usuario@ejemplo.com"
+                    :disabled="form.processing"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="telefono">Teléfono celular</Label>
+                  <Input
+                    id="telefono"
+                    v-model="form.telefono"
+                    type="tel"
+                    required
+                    placeholder="3001234567"
+                    :disabled="form.processing"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 3: Seguridad -->
+            <div v-if="pasoActual === 3" class="space-y-4">
+              <div class="space-y-2">
+                <Label for="username">Nombre de usuario</Label>
+                <Input
+                  id="username"
+                  v-model="form.username"
+                  required
+                  placeholder="pepe123"
+                  :disabled="form.processing"
+                />
+                <p class="text-[10px] text-muted-foreground">
+                  Este será tu nombre de usuario para iniciar sesión
+                </p>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <Label for="password">Contraseña</Label>
+                  <Input
+                    id="password"
+                    v-model="form.password"
+                    type="password"
+                    required
+                    minlength="8"
+                    placeholder="Mínimo 8 caracteres"
+                    :disabled="form.processing"
+                  />
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="confirmar_password">Confirmar contraseña</Label>
+                  <Input
+                    id="confirmar_password"
+                    v-model="form.confirmar_password"
+                    type="password"
+                    required
+                    minlength="8"
+                    placeholder="Repita su contraseña"
+                    :disabled="form.processing"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Botones de navegación -->
+            <div class="pt-4 flex gap-3">
+              <Button
+                v-if="pasoActual > 1"
+                type="button"
+                variant="outline"
+                class="flex-1"
+                @click="pasoAnterior"
                 :disabled="form.processing"
               >
-                <option value="">Seleccione...</option>
-                <option v-for="tipo in tiposDocumento" :key="tipo.value" :value="tipo.value">
-                  {{ tipo.label }}
-                </option>
-              </select>
-            </div>
+                Anterior
+              </Button>
 
-            <div>
-              <label for="numero_documento" class="block text-sm font-medium text-gray-700">
-                Número de documento
-              </label>
-              <input
-                id="numero_documento"
-                v-model="form.numero_documento"
-                type="text"
-                required
-                placeholder="1234567890"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
-            </div>
+              <Button
+                v-if="pasoActual < 3"
+                type="button"
+                class="flex-1"
+                :disabled="!canGoNext || form.processing"
+                @click="pasoSiguiente"
+              >
+                Siguiente
+              </Button>
 
-            <div>
-              <label for="nombres" class="block text-sm font-medium text-gray-700">
-                Nombres
-              </label>
-              <input
-                id="nombres"
-                v-model="form.nombres"
-                type="text"
-                required
-                placeholder="Juan Carlos"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
+              <Button
+                v-else
+                type="submit"
+                class="flex-1"
+                :disabled="!canSubmit || form.processing"
+              >
+                <svg v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                {{ form.processing ? 'Creando cuenta...' : 'Crear cuenta' }}
+              </Button>
             </div>
+          </form>
 
-            <div>
-              <label for="apellidos" class="block text-sm font-medium text-gray-700">
-                Apellidos
-              </label>
-              <input
-                id="apellidos"
-                v-model="form.apellidos"
-                type="text"
-                required
-                placeholder="Pérez Gómez"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
+          <div class="text-center text-sm">
+            <p class="text-muted-foreground">
+              ¿Ya tienes una cuenta?
+              <Link href="/login" class="font-medium text-primary underline underline-offset-4">
+                Inicia sesión
+              </Link>
+            </p>
+            <div class="mt-4">
+              <Link href="/" class="text-xs text-muted-foreground hover:text-primary transition-colors">
+                Volver al inicio
+              </Link>
             </div>
           </div>
-        </div>
-
-        <!-- Paso 2: Contacto -->
-        <div v-if="pasoActual === 2" class="space-y-4">
-          <h3 class="text-lg font-medium text-gray-900">Información de contacto</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="email" class="block text-sm font-medium text-gray-700">
-                Correo electrónico
-              </label>
-              <input
-                id="email"
-                v-model="form.email"
-                type="email"
-                required
-                placeholder="usuario@ejemplo.com"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
-            </div>
-
-            <div>
-              <label for="telefono" class="block text-sm font-medium text-gray-700">
-                Teléfono celular
-              </label>
-              <input
-                id="telefono"
-                v-model="form.telefono"
-                type="tel"
-                required
-                placeholder="3001234567"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- Paso 3: Seguridad -->
-        <div v-if="pasoActual === 3" class="space-y-4">
-          <h3 class="text-lg font-medium text-gray-900">Configuración de acceso</h3>
-          <div class="space-y-4">
-            <div>
-              <label for="username" class="block text-sm font-medium text-gray-700">
-                Nombre de usuario
-              </label>
-              <input
-                id="username"
-                v-model="form.username"
-                type="text"
-                required
-                placeholder="pepe123"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                :disabled="form.processing"
-              />
-              <p class="mt-1 text-xs text-gray-500">
-                Este será tu nombre de usuario para iniciar sesión
-              </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  v-model="form.password"
-                  type="password"
-                  required
-                  minlength="8"
-                  placeholder="Mínimo 8 caracteres"
-                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  :disabled="form.processing"
-                />
-              </div>
-
-              <div>
-                <label for="confirmar_password" class="block text-sm font-medium text-gray-700">
-                  Confirmar contraseña
-                </label>
-                <input
-                  id="confirmar_password"
-                  v-model="form.confirmar_password"
-                  type="password"
-                  required
-                  minlength="8"
-                  placeholder="Repita su contraseña"
-                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  :disabled="form.processing"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Botones de navegación -->
-        <div class="pt-4 flex gap-3">
-          <button
-            v-if="pasoActual > 1"
-            type="button"
-            class="flex-1 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            @click="pasoAnterior"
-            :disabled="form.processing"
-          >
-            Anterior
-          </button>
-
-          <button
-            v-if="pasoActual < 3"
-            type="button"
-            class="flex-1 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!canGoNext || form.processing"
-            @click="pasoSiguiente"
-          >
-            Siguiente
-          </button>
-
-          <button
-            v-else
-            type="submit"
-            class="flex-1 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!canSubmit || form.processing"
-          >
-            <svg
-              v-if="form.processing"
-              class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              ></circle>
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-            {{ form.processing ? 'Creando cuenta...' : 'Crear cuenta' }}
-          </button>
-        </div>
-      </form>
-
-      <div class="text-center">
-        <p class="text-sm text-gray-600">
-          ¿Ya tienes una cuenta?
-          <Link href="/login" class="font-medium text-blue-600 hover:text-blue-500">
-            Inicia sesión
-          </Link>
-        </p>
-        <div class="mt-4">
-          <Link href="/" class="text-xs text-gray-500 hover:text-gray-700 transition-colors">
-            Volver al inicio
-          </Link>
         </div>
       </div>
     </div>
-  </div>
+  </AuthLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Link, useForm } from '@inertiajs/vue3'
+import { ref, computed, watch } from 'vue';
+import { Link, useForm } from '@inertiajs/vue3';
+import { cn } from '@/lib/utils';
+import Button from '@/components/ui/Button.vue';
+import Input from '@/components/ui/Input.vue';
+import Label from '@/components/ui/Label.vue';
+import AuthLayout from '@/layouts/AuthLayout.vue';
 
 interface Props {
   username?: string
