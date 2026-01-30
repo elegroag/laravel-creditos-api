@@ -1,0 +1,889 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\UserService;
+use App\Services\ExternalApiService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
+
+class AdminUsuariosController extends Controller
+{
+    protected UserService $userService;
+    protected ExternalApiService $externalApiService;
+
+    public function __construct(UserService $userService, ExternalApiService $externalApiService)
+    {
+        $this->userService = $userService;
+        $this->externalApiService = $externalApiService;
+    }
+
+    /**
+     * Obtener lista de usuarios con paginación y filtros
+     * Query params:
+     * - page: número de página (default: 1)
+     * - limit: límite de resultados por página (default: 20)
+     * - rol: filtro por rol
+     * - estado: filtro por estado (active, inactive, suspended)
+     * - busqueda: búsqueda por nombre, email o documento
+     * - tipo_documento: filtro por tipo de documento
+     * - numero_documento: filtro por número de documento
+     */
+    public function obtenerUsuarios(Request $request): JsonResponse
+    {
+        try {
+            // Validar parámetros de paginación
+            $validator = Validator::make($request->all(), [
+                'page' => 'sometimes|integer|min:1',
+                'limit' => 'sometimes|integer|min:1|max:100',
+                'rol' => 'sometimes|string|max:50',
+                'estado' => 'sometimes|string|in:active,inactive,suspended',
+                'busqueda' => 'sometimes|string|max:100',
+                'tipo_documento' => 'sometimes|string|max:20',
+                'numero_documento' => 'sometimes|string|max:20'
+            ], [
+                'page.integer' => 'La página debe ser un número entero',
+                'page.min' => 'La página debe ser al menos 1',
+                'limit.integer' => 'El límite debe ser un número entero',
+                'limit.min' => 'El límite debe ser al menos 1',
+                'limit.max' => 'El límite no puede exceder 100',
+                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Parámetros inválidos',
+                    'details' => $validator->errors()
+                ], 400);
+            }
+
+            $params = $validator->validated();
+            $page = $params['page'] ?? 1;
+            $limit = $params['limit'] ?? 20;
+            $offset = ($page - 1) * $limit;
+
+            Log::info('Obteniendo lista de usuarios', [
+                'page' => $page,
+                'limit' => $limit,
+                'filters' => array_diff_key($params, ['page' => '', 'limit' => ''])
+            ]);
+
+            // Construir filtros
+            $query = User::query();
+
+            // Filtro por rol
+            if (!empty($params['rol'])) {
+                $query->where('roles', 'LIKE', '%' . $params['rol'] . '%');
+            }
+
+            // Filtro por estado
+            if (!empty($params['estado'])) {
+                $query->where('estado', $params['estado']);
+            }
+
+            // Filtro por tipo de documento
+            if (!empty($params['tipo_documento'])) {
+                $query->where('tipo_documento', $params['tipo_documento']);
+            }
+
+            // Filtro por número de documento
+            if (!empty($params['numero_documento'])) {
+                $query->where('numero_documento', $params['numero_documento']);
+            }
+
+            // Búsqueda por nombre, email o documento
+            if (!empty($params['busqueda'])) {
+                $busqueda = $params['busqueda'];
+                $query->where(function ($q) use ($busqueda) {
+                    $q->where('username', 'LIKE', '%' . $busqueda . '%')
+                      ->orWhere('email', 'LIKE', '%' . $busqueda . '%')
+                      ->orWhere('nombres', 'LIKE', '%' . $busqueda . '%')
+                      ->orWhere('apellidos', 'LIKE', '%' . $busqueda . '%')
+                      ->orWhere('numero_documento', 'LIKE', '%' . $busqueda . '%');
+                });
+            }
+
+            // Contar total
+            $total = $query->count();
+
+            // Obtener usuarios con paginación
+            $usuarios = $query->orderBy('created_at', 'desc')
+                              ->offset($offset)
+                              ->limit($limit)
+                              ->get();
+
+            // Formatear usuarios con datos de trabajador
+            $usuariosFormateados = [];
+            foreach ($usuarios as $usuario) {
+                $usuarioFormateado = $this->formatearUsuarioConTrabajador($usuario);
+                $usuariosFormateados[] = $usuarioFormateado;
+            }
+
+            // Generar respuesta de paginación
+            $totalPages = (int) ceil($total / $limit);
+
+            // Agregar conteos adicionales
+            $conteoRoles = $this->obtenerConteoRoles();
+            $conteoEstados = $this->obtenerConteoEstados();
+
+            $data = [
+                'usuarios' => $usuariosFormateados,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => $total,
+                    'total_pages' => $totalPages,
+                    'has_next' => $page < $totalPages,
+                    'has_prev' => $page > 1
+                ],
+                'conteo_roles' => $conteoRoles,
+                'conteo_estados' => $conteoEstados
+            ];
+
+            Log::info('Usuarios obtenidos exitosamente', [
+                'total' => $total,
+                'page' => $page
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'message' => 'Usuarios obtenidos exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener usuarios', [
+                'error' => $e->getMessage(),
+                'params' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al obtener usuarios',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener detalles de un usuario específico
+     */
+    public function obtenerUsuario(string $userId): JsonResponse
+    {
+        try {
+            // Validar UUID
+            if (!Str::isUuid($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ID de usuario inválido',
+                    'details' => []
+                ], 400);
+            }
+
+            Log::info('Obteniendo detalles de usuario', ['user_id' => $userId]);
+
+            // Buscar usuario
+            $usuario = User::find($userId);
+            
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Usuario no encontrado',
+                    'details' => []
+                ], 404);
+            }
+
+            // Formatear respuesta
+            $usuarioFormateado = [
+                'id' => $usuario->id,
+                'username' => $usuario->username,
+                'email' => $usuario->email,
+                'full_name' => $usuario->full_name,
+                'phone' => $usuario->phone,
+                'roles' => $usuario->roles ?? [],
+                'disabled' => $usuario->disabled ?? false,
+                'tipo_documento' => $usuario->tipo_documento,
+                'numero_documento' => $usuario->numero_documento,
+                'nombres' => $usuario->nombres,
+                'apellidos' => $usuario->apellidos,
+                'created_at' => $usuario->created_at?->toISOString(),
+                'updated_at' => $usuario->updated_at?->toISOString(),
+                'puntos_asesorias' => null,
+            ];
+
+            // Si es asesor, obtener puntos de asesorías
+            if (in_array('adviser', $usuario->roles ?? [])) {
+                $puntosAsesorias = $this->obtenerPuntosAsesorias($usuario->numero_documento);
+                if (!empty($puntosAsesorias)) {
+                    $usuarioFormateado['puntos_asesorias'] = $puntosAsesorias;
+                }
+            }
+
+            Log::info('Usuario obtenido exitosamente', [
+                'user_id' => $userId,
+                'username' => $usuario->username
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $usuarioFormateado,
+                'message' => 'Usuario obtenido exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener usuario', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al obtener usuario',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Crear un nuevo usuario
+     */
+    public function crearUsuario(Request $request): JsonResponse
+    {
+        try {
+            // Validar datos de entrada
+            $validator = Validator::make($request->all(), [
+                'username' => 'required|string|max:255|unique:users,username',
+                'email' => 'required|email|max:255|unique:users,email',
+                'password' => 'required|string|min:8',
+                'nombre' => 'required|string|max:100',
+                'apellido' => 'required|string|max:100',
+                'roles' => 'sometimes|array',
+                'disabled' => 'sometimes|boolean',
+                'tipo_documento' => 'sometimes|string|max:20',
+                'numero_documento' => 'sometimes|string|max:20',
+                'telefono' => 'sometimes|string|max:20'
+            ], [
+                'username.required' => 'El nombre de usuario es requerido',
+                'username.unique' => 'El nombre de usuario ya existe',
+                'email.required' => 'El email es requerido',
+                'email.email' => 'El email debe ser válido',
+                'email.unique' => 'El email ya está registrado',
+                'password.required' => 'La contraseña es requerida',
+                'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+                'nombre.required' => 'El nombre es requerido',
+                'apellido.required' => 'El apellido es requerido'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Datos inválidos',
+                    'details' => $validator->errors()
+                ], 400);
+            }
+
+            $data = $validator->validated();
+            
+            Log::info('Creando nuevo usuario', [
+                'username' => $data['username'],
+                'email' => $data['email']
+            ]);
+
+            // Validar si el usuario tiene rol de asesor
+            $puntosAsesorias = null;
+            if (isset($data['roles']) && in_array('adviser', $data['roles'])) {
+                $puntosAsesorias = $this->validarAsesorExterno($data['numero_documento'] ?? '');
+            }
+
+            // Crear usuario
+            $usuario = User::create([
+                'username' => $data['username'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'roles' => $data['roles'] ?? ['user_trabajador'],
+                'disabled' => $data['disabled'] ?? false,
+                'tipo_documento' => $data['tipo_documento'] ?? 'CC',
+                'numero_documento' => $data['numero_documento'] ?? '',
+                'nombres' => $data['nombre'],
+                'apellidos' => $data['apellido'],
+                'full_name' => $data['nombre'] . ' ' . $data['apellido'],
+                'phone' => $data['telefono'] ?? '',
+                'puntos_asesorias' => $puntosAsesorias,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now()
+            ]);
+
+            Log::info('Usuario creado exitosamente', [
+                'user_id' => $usuario->id,
+                'username' => $usuario->username
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => ['id' => $usuario->id],
+                'message' => 'Usuario creado exitosamente'
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('Error al crear usuario', [
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al crear usuario',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar un usuario existente
+     */
+    public function actualizarUsuario(Request $request, string $userId): JsonResponse
+    {
+        try {
+            // Validar UUID
+            if (!Str::isUuid($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ID de usuario inválido',
+                    'details' => []
+                ], 400);
+            }
+
+            // Validar datos de entrada
+            $validator = Validator::make($request->all(), [
+                'email' => 'sometimes|email|max:255|unique:users,email,' . $userId,
+                'username' => 'sometimes|string|max:255|unique:users,username,' . $userId,
+                'password' => 'sometimes|string|min:8',
+                'roles' => 'sometimes|array',
+                'estado' => 'sometimes|string|in:active,inactive,suspended',
+                'telefono' => 'sometimes|string|max:20',
+                'nombre' => 'sometimes|string|max:100',
+                'apellido' => 'sometimes|string|max:100',
+                'tipo_documento' => 'sometimes|string|max:20',
+                'numero_documento' => 'sometimes|string|max:20'
+            ], [
+                'email.email' => 'El email debe ser válido',
+                'email.unique' => 'El email ya está registrado',
+                'username.unique' => 'El nombre de usuario ya existe',
+                'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Datos inválidos',
+                    'details' => $validator->errors()
+                ], 400);
+            }
+
+            $data = $validator->validated();
+            
+            Log::info('Actualizando usuario', [
+                'user_id' => $userId,
+                'fields' => array_keys($data)
+            ]);
+
+            // Verificar que el usuario existe
+            $usuario = User::find($userId);
+            
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Usuario no encontrado',
+                    'details' => []
+                ], 404);
+            }
+
+            // Preparar actualización
+            $updateData = ['updated_at' => Carbon::now()];
+
+            // Campos actualizables
+            $camposUsuario = ['email', 'roles', 'estado'];
+            foreach ($camposUsuario as $campo) {
+                if (isset($data[$campo])) {
+                    $updateData[$campo] = $data[$campo];
+                }
+            }
+
+            // Actualizar username si se proporciona
+            if (isset($data['username'])) {
+                $updateData['username'] = $data['username'];
+            }
+
+            // Actualizar contraseña si se proporciona
+            if (isset($data['password']) && !empty($data['password'])) {
+                $updateData['password'] = Hash::make($data['password']);
+            }
+
+            // Actualizar datos personales
+            if (isset($data['nombre'])) {
+                $updateData['nombres'] = $data['nombre'];
+            }
+            if (isset($data['apellido'])) {
+                $updateData['apellidos'] = $data['apellido'];
+            }
+            if (isset($data['telefono'])) {
+                $updateData['phone'] = $data['telefono'];
+            }
+            if (isset($data['tipo_documento'])) {
+                $updateData['tipo_documento'] = $data['tipo_documento'];
+            }
+            if (isset($data['numero_documento'])) {
+                $updateData['numero_documento'] = $data['numero_documento'];
+            }
+
+            // Actualizar full_name si se cambió nombre o apellido
+            if (isset($data['nombre']) || isset($data['apellido'])) {
+                $nombres = $data['nombre'] ?? $usuario->nombres;
+                $apellidos = $data['apellido'] ?? $usuario->apellidos;
+                $updateData['full_name'] = trim($nombres . ' ' . $apellidos);
+            }
+
+            // Realizar actualización
+            $usuario->update($updateData);
+
+            Log::info('Usuario actualizado exitosamente', [
+                'user_id' => $userId,
+                'username' => $usuario->username
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario actualizado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar usuario', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al actualizar usuario',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar un usuario
+     */
+    public function eliminarUsuario(string $userId): JsonResponse
+    {
+        try {
+            // Validar UUID
+            if (!Str::isUuid($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ID de usuario inválido',
+                    'details' => []
+                ], 400);
+            }
+
+            Log::info('Eliminando usuario', ['user_id' => $userId]);
+
+            // Verificar que el usuario existe
+            $usuario = User::find($userId);
+            
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Usuario no encontrado',
+                    'details' => []
+                ], 404);
+            }
+
+            // Eliminar usuario
+            $usuario->delete();
+
+            Log::info('Usuario eliminado exitosamente', [
+                'user_id' => $userId,
+                'username' => $usuario->username
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario eliminado exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar usuario', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al eliminar usuario',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Cambiar el estado de un usuario (active/inactive)
+     */
+    public function cambiarEstadoUsuario(Request $request, string $userId): JsonResponse
+    {
+        try {
+            // Validar UUID
+            if (!Str::isUuid($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ID de usuario inválido',
+                    'details' => []
+                ], 400);
+            }
+
+            // Validar datos de entrada
+            $validator = Validator::make($request->all(), [
+                'estado' => 'required|string|in:active,inactive,suspended'
+            ], [
+                'estado.required' => 'El estado es requerido',
+                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Datos inválidos',
+                    'details' => $validator->errors()
+                ], 400);
+            }
+
+            $data = $validator->validated();
+            $nuevoEstado = $data['estado'];
+
+            Log::info('Cambiando estado de usuario', [
+                'user_id' => $userId,
+                'nuevo_estado' => $nuevoEstado
+            ]);
+
+            // Verificar que el usuario existe
+            $usuario = User::find($userId);
+            
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Usuario no encontrado',
+                    'details' => []
+                ], 404);
+            }
+
+            // Actualizar estado
+            $usuario->update([
+                'estado' => $nuevoEstado,
+                'updated_at' => Carbon::now()
+            ]);
+
+            Log::info('Estado de usuario cambiado exitosamente', [
+                'user_id' => $userId,
+                'nuevo_estado' => $nuevoEstado
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado del usuario cambiado a ' . $nuevoEstado . ' exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado del usuario', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al cambiar estado del usuario',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Exportar lista de usuarios a CSV
+     */
+    public function exportarUsuarios(Request $request): JsonResponse
+    {
+        try {
+            Log::info('Exportando usuarios a CSV');
+
+            // Obtener todos los usuarios (sin paginación para exportación)
+            $usuarios = User::orderBy('created_at', 'desc')->get();
+
+            // Formatear datos para CSV
+            $csvData = [];
+            $csvData[] = [
+                'ID', 'Username', 'Email', 'Nombres', 'Apellidos',
+                'Tipo Documento', 'Número Documento', 'Teléfono',
+                'Roles', 'Estado', 'Fecha Creación', 'Último Acceso'
+            ];
+
+            foreach ($usuarios as $usuario) {
+                $usuarioFormateado = $this->formatearUsuarioConTrabajador($usuario);
+                
+                $csvData[] = [
+                    $usuario->id,
+                    $usuario->username,
+                    $usuario->email,
+                    $usuarioFormateado['nombres'],
+                    $usuarioFormateado['apellidos'],
+                    $usuarioFormateado['tipo_documento'],
+                    $usuarioFormateado['numero_documento'],
+                    $usuarioFormateado['telefono'],
+                    implode(', ', $usuario->roles ?? []),
+                    $usuario->estado ?? 'active',
+                    $usuario->created_at?->toISOString(),
+                    $usuario->last_login?->toISOString() ?? ''
+                ];
+            }
+
+            // Generar CSV
+            $csvContent = $this->generarCSV($csvData);
+
+            Log::info('Usuarios exportados exitosamente', [
+                'total' => count($usuarios)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'csv_data' => $csvData,
+                    'filename' => 'usuarios_export.csv'
+                ],
+                'message' => 'Datos exportados exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al exportar usuarios', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error interno al exportar usuarios',
+                'details' => [
+                    'internal_error' => 'Error interno del servidor'
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Formatear usuario con datos de trabajador de API externa
+     */
+    private function formatearUsuarioConTrabajador(User $usuario): array
+    {
+        // Intentar obtener datos del trabajador desde API externa
+        $trabajador = $this->obtenerDatosTrabajador($usuario->numero_documento);
+
+        if ($trabajador) {
+            return [
+                'id' => $usuario->id,
+                'nombres' => trim(($trabajador['prinom'] ?? '') . ' ' . ($trabajador['segnom'] ?? '')),
+                'apellidos' => trim(($trabajador['priape'] ?? '') . ' ' . ($trabajador['segape'] ?? '')),
+                'email' => $usuario->email,
+                'username' => $usuario->username,
+                'tipo_documento' => $trabajador['coddoc'] ?? '',
+                'numero_documento' => $trabajador['cedtra'] ?? '',
+                'rol' => ($usuario->roles ?? ['user_trabajador'])[0],
+                'estado' => $usuario->estado ?? 'active',
+                'ultimo_acceso' => $usuario->last_login?->toISOString() ?? '',
+                'fecha_creacion' => $usuario->created_at?->toISOString(),
+                'telefono' => $trabajador['telefono'] ?? '',
+                'codigo_categoria' => $trabajador['codcat'] ?? '',
+                'empresa_nit' => $trabajador['nit'] ?? '',
+                'empresa_razon_social' => $trabajador['razsoc'] ?? '',
+            ];
+        } else {
+            return [
+                'id' => $usuario->id,
+                'nombres' => trim(($usuario->nombres ?? '') . ' ' . ($usuario->apellidos ?? '')),
+                'apellidos' => $usuario->apellidos ?? '',
+                'email' => $usuario->email,
+                'username' => $usuario->username,
+                'tipo_documento' => $usuario->tipo_documento ?? '',
+                'numero_documento' => $usuario->numero_documento ?? '',
+                'rol' => ($usuario->roles ?? ['user_trabajador'])[0],
+                'estado' => $usuario->estado ?? 'active',
+                'ultimo_acceso' => $usuario->last_login?->toISOString() ?? '',
+                'fecha_creacion' => $usuario->created_at?->toISOString(),
+                'telefono' => $usuario->phone ?? '',
+                'codigo_categoria' => 'D',
+                'empresa_nit' => '',
+                'empresa_razon_social' => '',
+            ];
+        }
+    }
+
+    /**
+     * Obtener datos del trabajador desde API externa
+     */
+    private function obtenerDatosTrabajador(string $cedtra): ?array
+    {
+        try {
+            $response = $this->externalApiService->post('company/informacion_trabajador', [
+                'cedtra' => $cedtra
+            ]);
+
+            if ($response['success'] && $response['data']) {
+                return $response['data'];
+            }
+
+            Log::warning('No se pudieron obtener datos del trabajador', [
+                'cedtra' => $cedtra,
+                'response' => $response
+            ]);
+
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener datos del trabajador', [
+                'cedtra' => $cedtra,
+                'error' => $e->getMessage()
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Obtener puntos de asesorías para un asesor
+     */
+    private function obtenerPuntosAsesorias(string $numeroDocumento): array
+    {
+        try {
+            $response = $this->externalApiService->get('creditos/usuarios_creditos');
+
+            if ($response['success'] && $response['data']) {
+                return array_filter($response['data'], function ($user) use ($numeroDocumento) {
+                    return ($user['estado'] ?? '') === 'A' && 
+                           (string)($user['numero_documento'] ?? '') === (string)$numeroDocumento;
+                });
+            }
+
+            return [];
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener puntos de asesorías', [
+                'numero_documento' => $numeroDocumento,
+                'error' => $e->getMessage()
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
+     * Validar asesor en API externa
+     */
+    private function validarAsesorExterno(string $numeroDocumento): array
+    {
+        try {
+            $response = $this->externalApiService->post('creditos/usuarios_creditos', []);
+
+            if ($response['status'] && $response['data']) {
+                $puntosAsesorias = array_filter($response['data'], function ($user) use ($numeroDocumento) {
+                    return (string)($user['numero_documento'] ?? '') === (string)$numeroDocumento;
+                });
+
+                if (empty($puntosAsesorias)) {
+                    throw new \Exception("No se encontró el usuario con número de documento {$numeroDocumento} en el sistema de créditos");
+                }
+
+                return $puntosAsesorias;
+            }
+
+            throw new \Exception('El servicio externo no se encuentra disponible');
+
+        } catch (\Exception $e) {
+            Log::error('Error al validar asesor externo', [
+                'numero_documento' => $numeroDocumento,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Obtener conteo de usuarios por rol
+     */
+    private function obtenerConteoRoles(): array
+    {
+        $conteo = [];
+        
+        $usuarios = User::all();
+        foreach ($usuarios as $usuario) {
+            $roles = $usuario->roles ?? [];
+            foreach ($roles as $rol) {
+                if (!isset($conteo[$rol])) {
+                    $conteo[$rol] = 0;
+                }
+                $conteo[$rol]++;
+            }
+        }
+
+        return $conteo;
+    }
+
+    /**
+     * Obtener conteo de usuarios por estado
+     */
+    private function obtenerConteoEstados(): array
+    {
+        return User::selectRaw('estado, COUNT(*) as count')
+                   ->groupBy('estado')
+                   ->pluck('count', 'estado')
+                   ->toArray();
+    }
+
+    /**
+     * Generar contenido CSV
+     */
+    private function generarCSV(array $data): string
+    {
+        $csv = '';
+        foreach ($data as $row) {
+            $csv .= implode(',', array_map(function ($field) {
+                return '"' . str_replace('"', '""', $field) . '"';
+            }, $row)) . "\n";
+        }
+        return $csv;
+    }
+}

@@ -329,7 +329,7 @@ class ConvenioService extends BaseService
     /**
      * Create or update agreement.
      */
-    public function createOrUpdate(array $data): EmpresaConvenio
+    public function createOrUpdate(array $criteria, array $data): EmpresaConvenio
     {
         try {
             $convenio = $this->repository->createConvenio($data);

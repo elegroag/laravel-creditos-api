@@ -8,9 +8,15 @@ use App\Models\Postulacion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
 
 class ConvenioRepository extends BaseRepository
 {
+    public function __construct(EmpresaConvenio $model)
+    {
+        parent::__construct($model);
+    }
+
     /**
      * Find convenio by NIT.
      */
