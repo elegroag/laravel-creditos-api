@@ -25,6 +25,8 @@ class Role extends Model
         'nombre',
         'descripcion',
         'permisos',
+        'color',
+        'orden',
         'activo'
     ];
 
@@ -37,6 +39,7 @@ class Role extends Model
     {
         return [
             'activo' => 'boolean',
+            'orden' => 'integer',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'permisos' => 'json'
@@ -54,9 +57,25 @@ class Role extends Model
     /**
      * Find role by name.
      */
-    public static function findByName(string $name): ?self
+    public static function findByNombre(string $nombre): ?self
     {
-        return static::where('nombre', $name)->first();
+        return static::where('nombre', $nombre)->first();
+    }
+
+    /**
+     * Check if role is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->activo;
+    }
+
+    /**
+     * Get users with this role.
+     */
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'user_roles', 'role_id', 'user_id');
     }
 
     /**
@@ -64,8 +83,7 @@ class Role extends Model
      */
     public function hasPermission(string $permission): bool
     {
-        $permissions = json_decode($this->permisos, true) ?? [];
-        return in_array($permission, $permissions);
+        return in_array($permission, $this->getPermissionsArray());
     }
 
     /**
@@ -73,7 +91,7 @@ class Role extends Model
      */
     public function addPermission(string $permission): void
     {
-        $permissions = json_decode($this->permisos, true) ?? [];
+        $permissions = $this->getPermissionsArray();
 
         if (!in_array($permission, $permissions)) {
             $permissions[] = $permission;
@@ -87,9 +105,9 @@ class Role extends Model
      */
     public function removePermission(string $permission): void
     {
-        $permissions = json_decode($this->permisos, true) ?? [];
-
+        $permissions = $this->getPermissionsArray();
         $key = array_search($permission, $permissions);
+
         if ($key !== false) {
             unset($permissions[$key]);
             $this->permisos = json_encode(array_values($permissions));
@@ -98,18 +116,31 @@ class Role extends Model
     }
 
     /**
-     * Get all permissions as array.
+     * Transform for API response.
      */
-    public function getPermissionsArray(): array
+    public function toApiArray(): array
     {
-        return json_decode($this->permisos, true) ?? [];
+        return [
+            'id' => $this->id,
+            'nombre' => $this->nombre,
+            'descripcion' => $this->descripcion,
+            'permisos' => $this->getPermissionsArray(),
+            'color' => $this->color,
+            'orden' => $this->orden,
+            'activo' => $this->activo,
+            'users_count' => $this->users()->count(),
+            'created_at' => $this->created_at->toISOString(),
+            'updated_at' => $this->updated_at->toISOString()
+        ];
     }
 
     /**
-     * Get users with this role.
+     * Get all active roles for API.
      */
-    public function users()
+    public static function getAllActiveForApi(): array
     {
-        return User::whereJsonContains('roles', $this->nombre);
+        return static::active()->ordered()->get()->map(function ($role) {
+            return $role->toApiArray();
+        })->toArray();
     }
 }

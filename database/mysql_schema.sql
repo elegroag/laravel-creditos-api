@@ -13,7 +13,7 @@ USE comfaca_credito_mysql;
 -- =================================================================
 -- TABLA DE USUARIOS (basado en users.mongodb.js)
 -- =================================================================
-CREATE TABLE usuarios (
+CREATE TABLE users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -129,7 +129,7 @@ CREATE TABLE numero_solicitudes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     radicado VARCHAR(20) UNIQUE,
     numeric_secuencia INT NOT NULL DEFAULT 0,
-    linea_credito VARCHAR(10) DEFAULT '03',
+    linea_credito CHAR(3) DEFAULT '03',
     vigencia INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -24,12 +24,13 @@ class DocumentoPostulante extends Model
      */
     protected $fillable = [
         'username',
-        'tipo_identificacion',
-        'numero_identificacion',
-        'documentos',
-        'selfie',
-        'ruta_archivos',
-        'metadata'
+        'tipo_documento',
+        'nombre_original',
+        'saved_filename',
+        'tipo_mime',
+        'tamano_bytes',
+        'ruta_archivo',
+        'activo'
     ];
 
     /**
@@ -45,7 +46,7 @@ class DocumentoPostulante extends Model
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'deleted_at' => 'datetime',
-            'ruta_archivos' => 'string'
+            'ruta_archivo' => 'string'
         ];
     }
 
@@ -71,8 +72,8 @@ class DocumentoPostulante extends Model
     public static function findByIdentification(string $tipoId, string $numeroId): ?self
     {
         return static::where('tipo_identificacion', $tipoId)
-                    ->where('numero_identificacion', $numeroId)
-                    ->first();
+            ->where('numero_identificacion', $numeroId)
+            ->first();
     }
 
     /**
@@ -98,13 +99,13 @@ class DocumentoPostulante extends Model
     {
         $requiredDocs = ['cedula', 'selfie', 'comprobante_domicilio'];
         $documentos = $this->documentos ?? [];
-        
+
         foreach ($requiredDocs as $doc) {
             if (!isset($documentos[$doc]) || empty($documentos[$doc])) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -114,13 +115,13 @@ class DocumentoPostulante extends Model
     public function addDocument(string $tipo, string $ruta, array $metadata = []): void
     {
         $documentos = $this->documentos ?? [];
-        
+
         $documentos[$tipo] = [
             'ruta' => $ruta,
             'fecha_subida' => now()->toISOString(),
             'metadata' => $metadata
         ];
-        
+
         $this->documentos = $documentos;
         $this->save();
     }
@@ -131,7 +132,7 @@ class DocumentoPostulante extends Model
     public function removeDocument(string $tipo): void
     {
         $documentos = $this->documentos ?? [];
-        
+
         if (isset($documentos[$tipo])) {
             unset($documentos[$tipo]);
             $this->documentos = $documentos;
@@ -145,7 +146,7 @@ class DocumentoPostulante extends Model
     public function getDocumentPath(string $tipo): ?string
     {
         $documentos = $this->documentos ?? [];
-        
+
         return $documentos[$tipo]['ruta'] ?? null;
     }
 
@@ -215,18 +216,18 @@ class DocumentoPostulante extends Model
     {
         $errors = [];
         $documentos = $this->documentos ?? [];
-        
+
         if (!$this->hasSelfie()) {
             $errors[] = 'Selfie es requerida';
         }
-        
+
         $requiredDocs = ['cedula', 'comprobante_domicilio'];
         foreach ($requiredDocs as $doc) {
             if (!isset($documentos[$doc]) || empty($documentos[$doc])) {
                 $errors[] = "Documento {$doc} es requerido";
             }
         }
-        
+
         return $errors;
     }
 
@@ -238,7 +239,7 @@ class DocumentoPostulante extends Model
         if ($this->hasRequiredDocuments() && $this->hasSelfie()) {
             return 'completo';
         }
-        
+
         return 'incompleto';
     }
 

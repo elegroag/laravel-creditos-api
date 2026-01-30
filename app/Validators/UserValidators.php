@@ -61,117 +61,78 @@ class UserValidators
     }
 
     /**
-     * Validar actualización de usuario.
+     * Validar datos de actualización.
      */
-    public static function validateUpdate(array $data, string $userId): \Illuminate\Validation\Validator
+    public static function validateUpdate(array $data, string $excludeId = null): \Illuminate\Validation\Validator
     {
-        return Validator::make($data, [
-            'email' => 'nullable|email|max:255|unique:users,email,' . $userId,
-            'full_name' => 'nullable|string|max:200',
-            'phone' => 'nullable|string|regex:/^\+?[0-9\s\-\(\)]{8,20}$/',
-            'roles' => 'nullable|array',
-            'roles.*' => 'string|in:user_trabajador,user_empresa,adviser,administrator',
-            'disabled' => 'nullable|boolean'
-        ], [
+        $rules = [
+            'tipo_documento' => 'sometimes|string|in:cedula,pasaporte,nit',
+            'numero_documento' => 'sometimes|string|max:20',
+            'nombres' => 'sometimes|string|max:100',
+            'apellidos' => 'sometimes|string|max:100',
+            'telefono' => 'nullable|string|regex:/^\+?[0-9\s\-\(\)]{8,20}$/',
+            'email' => [
+                'sometimes',
+                'email',
+                'max:255',
+                Rule::unique('users')->ignore($excludeId)
+            ],
+            'full_name' => 'sometimes|string|max:200',
+            'phone' => 'nullable|string|max:20'
+        ];
+
+        $messages = [
+            'tipo_documento.in' => 'El tipo de documento debe ser: cedula, pasaporte o nit',
+            'numero_documento.max' => 'El número de documento no puede exceder 20 caracteres',
+            'nombres.max' => 'Los nombres no pueden exceder 100 caracteres',
+            'apellidos.max' => 'Los apellidos no pueden exceder 100 caracteres',
+            'telefono.regex' => 'El formato del teléfono es inválido',
             'email.email' => 'El formato del correo electrónico es inválido',
             'email.unique' => 'Este correo electrónico ya está registrado',
             'full_name.max' => 'El nombre completo no puede exceder 200 caracteres',
-            'phone.regex' => 'El formato del teléfono es inválido',
-            'roles.array' => 'Los roles deben ser un arreglo',
-            'roles.*.in' => 'Los roles válidos son: user_trabajador, user_empresa, adviser, administrator'
-        ]);
+            'phone.max' => 'El teléfono no puede exceder 20 caracteres'
+        ];
+
+        return Validator::make($data, $rules, $messages);
     }
 
     /**
-     * Validar documento de identificación.
-     */
-    public static function validateIdentification(string $type, string $number): bool
-    {
-        return match($type) {
-            'cedula' => preg_match('/^[0-9]{6,12}$/', $number),
-            'pasaporte' => preg_match('/^[A-Z0-9]{6,20}$/', $number),
-            'nit' => preg_match('/^[0-9]{9,12}$/', $number),
-            default => false
-        };
-    }
-
-    /**
-     * Validar teléfono.
-     */
-    public static function validatePhone(string $phone): bool
-    {
-        $cleaned = preg_replace('/[^0-9+() -]/', '', $phone);
-        return preg_match('/^\+?[0-9\s\-\(\)]{8,20}$/', $cleaned);
-    }
-
-    /**
-     * Validar contraseña.
+     * Validar fuerza de contraseña.
      */
     public static function validatePassword(string $password): bool
     {
-        return strlen($password) >= 8 &&
-               preg_match('/[A-Z]/', $password) &&
-               preg_match('/[a-z]/', $password) &&
-               preg_match('/[0-9]/', $password);
+        // Al menos 8 caracteres, una mayúscula, una minúscula y un número
+        return preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/', $password);
     }
 
     /**
-     * Normalizar username.
-     */
-    public static function normalizeUsername(string $username): string
-    {
-        return strtolower(trim($username));
-    }
-
-    /**
-     * Generar username desde nombres y apellidos.
+     * Generar username a partir de nombres y apellidos.
      */
     public static function generateUsername(string $nombres, string $apellidos): string
     {
-        $nombreParts = explode(' ', trim($nombres));
-        $apellidoParts = explode(' ', trim($apellidos));
-        
-        $firstName = strtolower(self::removeAccents($nombreParts[0] ?? ''));
-        $firstSurname = strtolower(self::removeAccents($apellidoParts[0] ?? ''));
-        
-        $baseUsername = substr($firstName, 0, 1) . $firstSurname;
-        
-        // Si es muy corto, agregar más caracteres
-        if (strlen($baseUsername) < 3) {
-            $baseUsername = $firstName . substr($firstSurname, 0, 2);
+        // Limpiar y normalizar nombres
+        $nombresLimpios = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($nombres));
+        $apellidosLimpios = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($apellidos));
+
+        // Tomar primeras letras
+        $username = substr($nombresLimpios, 0, 3) . substr($apellidosLimpios, 0, 3);
+
+        // Si es muy corto, agregar números aleatorios
+        if (strlen($username) < 6) {
+            $username .= rand(100, 999);
         }
-        
-        return preg_replace('/[^a-z0-9]/', '', $baseUsername);
+
+        // Asegurar que no sea demasiado largo
+        $username = substr($username, 0, 20);
+
+        return $username;
     }
 
     /**
-     * Remover acentos de una cadena.
+     * Validar formato de username.
      */
-    private static function removeAccents(string $string): string
+    public static function validateUsernameFormat(string $username): bool
     {
-        $accents = [
-            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ã' => 'a',
-            'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
-            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
-            'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o', 'õ' => 'o',
-            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
-            'ñ' => 'n',
-            'Á' => 'A', 'À' => 'A', 'Ä' => 'A', 'Â' => 'A', 'Ã' => 'A',
-            'É' => 'E', 'È' => 'E', 'Ë' => 'E', 'Ê' => 'E',
-            'Í' => 'I', 'Ì' => 'I', 'Ï' => 'I', 'Î' => 'I',
-            'Ó' => 'O', 'Ò' => 'O', 'Ö' => 'O', 'Ô' => 'O', 'Õ' => 'O',
-            'Ú' => 'U', 'Ù' => 'U', 'Ü' => 'U', 'Û' => 'U',
-            'Ñ' => 'N'
-        ];
-        
-        return strtr($string, $accents);
-    }
-
-    /**
-     * Validar username.
-     */
-    public static function isValidUsername(string $username): bool
-    {
-        return preg_match('/^[a-z0-9_\.-]+$/', $username) && strlen($username) >= 3;
+        return preg_match('/^[a-z0-9_\.-]{3,50}$/', $username);
     }
 }

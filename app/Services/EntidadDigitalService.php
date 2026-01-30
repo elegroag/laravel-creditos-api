@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\EntidadDigital;
-use App\Repositories\BaseRepository;
+use App\Repositories\EntidadDigitalRepository;
 use App\Validators\SolicitudValidators;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -28,7 +28,7 @@ class EntidadDigitalService extends BaseService
 
         try {
             // Check if entidad already exists
-            $existing = EntidadDigital::findByDocument(
+            $existing = $this->repository->findByDocument(
                 $validated['tipo_identificacion'],
                 $validated['numero_identificacion']
             );
@@ -68,10 +68,9 @@ class EntidadDigitalService extends BaseService
             ];
 
             if ($existing) {
-                $existing->update($entidadData);
-                $entidad = $existing->fresh();
+                $entidad = $this->repository->update($existing->id, $entidadData) ? $this->repository->findById($existing->id) : null;
             } else {
-                $entidad = EntidadDigital::create($entidadData);
+                $entidad = $this->repository->create($entidadData);
             }
 
             $this->log('Entidad digital created/updated successfully', [
@@ -81,7 +80,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return $entidad;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -96,7 +94,7 @@ class EntidadDigitalService extends BaseService
     public function existsByDocument(string $tipoIdentificacion, string $numeroIdentificacion): bool
     {
         try {
-            return EntidadDigital::existsByDocument($tipoIdentificacion, $numeroIdentificacion);
+            return $this->repository->existsByDocument($tipoIdentificacion, $numeroIdentificacion);
         } catch (\Exception $e) {
             $this->logError('Error checking entidad existence', ['error' => $e->getMessage()]);
             return false;
@@ -109,7 +107,7 @@ class EntidadDigitalService extends BaseService
     public function getByUsername(string $username): ?EntidadDigital
     {
         try {
-            return EntidadDigital::findByUsername($username);
+            return $this->repository->findByUsername($username);
         } catch (\Exception $e) {
             $this->logError('Error getting entidad by username', ['username' => $username, 'error' => $e->getMessage()]);
             return null;
@@ -122,7 +120,7 @@ class EntidadDigitalService extends BaseService
     public function getByDocument(string $tipoIdentificacion, string $numeroIdentificacion): ?EntidadDigital
     {
         try {
-            return EntidadDigital::findByDocument($tipoIdentificacion, $numeroIdentificacion);
+            return $this->repository->findByDocument($tipoIdentificacion, $numeroIdentificacion);
         } catch (\Exception $e) {
             $this->logError('Error getting entidad by document', [
                 'tipo_identificacion' => $tipoIdentificacion,
@@ -145,7 +143,14 @@ class EntidadDigitalService extends BaseService
                 throw new ValidationException('Entidad digital no encontrada');
             }
 
-            $entidad->addValidation($tipoValidacion, $resultado, $detalles);
+            $validationData = [
+                'tipo' => $tipoValidacion,
+                'resultado' => $resultado,
+                'detalles' => $detalles,
+                'timestamp' => now()->toISOString()
+            ];
+
+            $this->repository->addValidation($entidad->id, $validationData);
 
             $this->log('Validation added to entidad', [
                 'username' => $username,
@@ -154,7 +159,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return true;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -192,8 +196,10 @@ class EntidadDigitalService extends BaseService
 
                     $savedDocuments[$tipo] = $path;
 
-                    // Update entidad document
-                    $entidad->addDocumento($tipo, $path);
+                    // Update entidad documents
+                    $currentDocumentos = $entidad->documentos ?? [];
+                    $currentDocumentos[$tipo] = $path;
+                    $this->repository->update($entidad->id, ['documentos' => $currentDocumentos]);
                 }
             }
 
@@ -203,7 +209,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return $savedDocuments;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -241,7 +246,7 @@ class EntidadDigitalService extends BaseService
             Storage::disk('public')->put($path, $decodedContent);
 
             // Update entidad selfie
-            $entidad->setSelfie($path);
+            $this->repository->update($entidad->id, ['selfie' => $path]);
 
             $this->log('Selfie saved for entidad', [
                 'username' => $username,
@@ -249,7 +254,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return $path;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -291,7 +295,6 @@ class EntidadDigitalService extends BaseService
                 'has_selfie' => $entidad->hasSelfie(),
                 'is_complete' => $entidad->isComplete()
             ];
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -330,7 +333,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return true;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -369,7 +371,6 @@ class EntidadDigitalService extends BaseService
             ]);
 
             return $qrCode;
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -388,30 +389,7 @@ class EntidadDigitalService extends BaseService
     public function getStatistics(): array
     {
         try {
-            $total = EntidadDigital::count();
-            $byEstado = EntidadDigital::raw(function ($collection) {
-                return $collection->aggregate([
-                    ['$group' => [
-                        '_id' => '$estado',
-                        'count' => ['$sum' => 1]
-                    ],
-                    ['$sort' => ['count' => -1]]
-                ]);
-            });
-
-            $complete = EntidadDigital::where(function ($query) {
-                $query->whereNotNull('documentos')->where('documentos', '!=', '[]')
-                      ->whereNotNull('selfie');
-            })->count();
-
-            return [
-                'total' => $total,
-                'complete' => $complete,
-                'incomplete' => $total - $complete,
-                'by_estado' => $byEstado->pluck('count', '_id')->toArray(),
-                'completion_rate' => $total > 0 ? round(($complete / $total) * 100, 2) : 0
-            ];
-
+            return $this->repository->getStatistics();
         } catch (\Exception $e) {
             $this->logError('Error getting entidad statistics', ['error' => $e->getMessage()]);
             return [

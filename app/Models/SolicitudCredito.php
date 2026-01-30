@@ -19,6 +19,13 @@ class SolicitudCredito extends Model
     protected $table = 'solicitudes_credito';
 
     /**
+     * The primary key associated with the table.
+     *
+     * @var string
+     */
+    protected $primaryKey = 'numero_solicitud';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
@@ -99,6 +106,30 @@ class SolicitudCredito extends Model
     public function solicitante()
     {
         return $this->hasOne(SolicitudSolicitante::class, 'solicitud_id');
+    }
+
+    /**
+     * Get the firmantes for the solicitud.
+     */
+    public function firmantes()
+    {
+        return $this->hasMany(FirmanteSolicitud::class, 'solicitud_id')->orderBy('orden');
+    }
+
+    /**
+     * Get the PDF generated for the solicitud.
+     */
+    public function pdfGenerado()
+    {
+        return $this->hasOne(PdfGenerado::class, 'solicitud_id');
+    }
+
+    /**
+     * Get the firmantes for the solicitud.
+     */
+    public function solicitudFirmantes()
+    {
+        return $this->hasMany(FirmanteSolicitud::class, 'solicitud_id')->orderBy('orden');
     }
 
     /**
@@ -257,12 +288,75 @@ class SolicitudCredito extends Model
     }
 
     /**
+     * Create solicitud with automatic number generation.
+     */
+    public static function createWithNumber(array $data): self
+    {
+        // Generate next solicitud number
+        $numeroSolicitud = NumeroSolicitud::generateNextNumber();
+
+        return static::create(array_merge($data, [
+            'numero_solicitud' => $numeroSolicitud
+        ]));
+    }
+
+    /**
+     * Update estado with validation and timeline.
+     */
+    public function updateEstadoValidado(string $nuevoEstado, string $detalle, ?string $usuario = null): void
+    {
+        $estadoActual = $this->estado_codigo;
+
+        if ($estadoActual === $nuevoEstado) {
+            return; // No change needed
+        }
+
+        // Validate state transition
+        $estadoActualModel = EstadoSolicitud::findByCode($estadoActual);
+        $nuevoEstadoModel = EstadoSolicitud::findByCode($nuevoEstado);
+
+        if (!$nuevoEstadoModel) {
+            throw new \Exception("Estado '{$nuevoEstado}' no es válido");
+        }
+
+        if ($estadoActualModel && !$estadoActualModel->canTransitionTo($nuevoEstadoModel)) {
+            throw new \Exception("No se puede transicionar del estado '{$estadoActual}' al '{$nuevoEstado}'");
+        }
+
+        // Update estado
+        $this->update(['estado_codigo' => $nuevoEstado]);
+
+        // Add timeline entry
+        $this->addTimelineEntry($nuevoEstado, $detalle, $usuario, false);
+    }
+
+    /**
+     * Get available transitions for current state.
+     */
+    public function getAvailableTransitionsAttribute(): array
+    {
+        $estadoActual = $this->estado;
+
+        if (!$estadoActual) {
+            return [];
+        }
+
+        return $estadoActual->getNextStates()->map(function ($estado) {
+            return [
+                'codigo' => $estado->codigo,
+                'nombre' => $estado->nombre,
+                'color' => $estado->color,
+                'requires_action' => $estado->requiresAction()
+            ];
+        })->toArray();
+    }
+
+    /**
      * Transform for API response.
      */
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
             'numero_solicitud' => $this->numero_solicitud,
             'owner_username' => $this->owner_username,
             'user' => $this->user?->only(['id', 'username', 'full_name', 'email']),
@@ -302,7 +396,7 @@ class SolicitudCredito extends Model
                 estados_solicitud.codigo,
                 estados_solicitud.nombre,
                 estados_solicitud.color,
-                COUNT(solicitudes_credito.id) as cantidad,
+                COUNT(solicitudes_credito.numero_solicitud) as cantidad,
                 COALESCE(SUM(solicitudes_credito.monto_solicitado), 0) as total_monto
             ')
             ->get();

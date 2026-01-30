@@ -16,7 +16,7 @@ class UserRepository extends BaseRepository
     /**
      * Find user by ID.
      */
-    public function findById(string $id)
+    public function findById(int $id)
     {
         return $this->model->find($id);
     }
@@ -51,7 +51,7 @@ class UserRepository extends BaseRepository
     /**
      * Update user and get updated record.
      */
-    public function updateAndGet(string $id, array $data): ?User
+    public function updateAndGet(int $id, array $data): ?User
     {
         $user = $this->findById($id);
 
@@ -86,7 +86,7 @@ class UserRepository extends BaseRepository
     /**
      * Update user password.
      */
-    public function updatePassword(string $userId, string $newPassword): bool
+    public function updatePassword(int $userId, string $newPassword): bool
     {
         $user = $this->findById($userId);
 
@@ -113,11 +113,13 @@ class UserRepository extends BaseRepository
         }
 
         if ($roles !== null) {
-            $query->whereIn('roles', $roles);
+            foreach ($roles as $role) {
+                $query->whereJsonContains('roles', $role);
+            }
         }
 
         return $query->orderBy('created_at', 'desc')
-            ->skip($skip)
+            ->offset($skip)
             ->limit($limit)
             ->get();
     }
@@ -134,7 +136,9 @@ class UserRepository extends BaseRepository
         }
 
         if ($roles !== null) {
-            $query->whereIn('roles', $roles);
+            foreach ($roles as $role) {
+                $query->whereJsonContains('roles', $role);
+            }
         }
 
         return $query->count();
@@ -143,7 +147,7 @@ class UserRepository extends BaseRepository
     /**
      * Disable user.
      */
-    public function disableUser(string $userId): bool
+    public function disableUser(int $userId): bool
     {
         return $this->update($userId, ['disabled' => true]);
     }
@@ -151,7 +155,7 @@ class UserRepository extends BaseRepository
     /**
      * Enable user.
      */
-    public function enableUser(string $userId): bool
+    public function enableUser(int $userId): bool
     {
         return $this->update($userId, ['disabled' => false]);
     }
@@ -161,7 +165,7 @@ class UserRepository extends BaseRepository
      */
     public function findByRole(string $role): ?User
     {
-        return $this->model->where('roles', $role)->first();
+        return $this->model->whereJsonContains('roles', $role)->first();
     }
 
     /**
@@ -169,18 +173,18 @@ class UserRepository extends BaseRepository
      */
     public function getByRole(string $role): Collection
     {
-        return $this->model->where('roles', $role)->get();
+        return $this->model->whereJsonContains('roles', $role)->get();
     }
 
     /**
      * Check if username exists.
      */
-    public function usernameExists(string $username, ?string $excludeId = null): bool
+    public function usernameExists(string $username, ?int $excludeId = null): bool
     {
         $query = $this->model->where('username', strtolower($username));
 
         if ($excludeId) {
-            $query->where('_id', '!=', $excludeId);
+            $query->where('id', '!=', $excludeId);
         }
 
         return $query->exists();
@@ -189,12 +193,12 @@ class UserRepository extends BaseRepository
     /**
      * Check if email exists.
      */
-    public function emailExists(string $email, ?string $excludeId = null): bool
+    public function emailExists(string $email, ?int $excludeId = null): bool
     {
         $query = $this->model->where('email', $email);
 
         if ($excludeId) {
-            $query->where('_id', '!=', $excludeId);
+            $query->where('id', '!=', $excludeId);
         }
 
         return $query->exists();
@@ -215,7 +219,7 @@ class UserRepository extends BaseRepository
      */
     public function getAdministrators(): Collection
     {
-        return $this->model->where('roles', 'administrator')
+        return $this->model->whereJsonContains('roles', 'administrator')
             ->where('disabled', false)
             ->get();
     }
@@ -225,7 +229,7 @@ class UserRepository extends BaseRepository
      */
     public function getAdvisers(): Collection
     {
-        return $this->model->where('roles', 'adviser')
+        return $this->model->whereJsonContains('roles', 'adviser')
             ->where('disabled', false)
             ->get();
     }
@@ -233,7 +237,7 @@ class UserRepository extends BaseRepository
     /**
      * Update last login.
      */
-    public function updateLastLogin(string $userId): bool
+    public function updateLastLogin(int $userId): bool
     {
         return $this->update($userId, ['last_login' => now()]);
     }
@@ -252,7 +256,9 @@ class UserRepository extends BaseRepository
         });
 
         if ($roles !== null) {
-            $query->whereIn('roles', $roles);
+            foreach ($roles as $role) {
+                $query->whereJsonContains('roles', $role);
+            }
         }
 
         return $query->where('disabled', false)->get();
@@ -267,22 +273,29 @@ class UserRepository extends BaseRepository
         $active = $this->model->where('disabled', false)->count();
         $disabled = $this->model->where('disabled', true)->count();
 
-        $byRole = $this->model->raw(function ($collection) {
-            return $collection->aggregate([
-                ['$unwind' => '$roles'],
-                ['$group' => [
-                    '_id' => '$roles',
-                    'count' => ['$sum' => 1]
-                ]],
-                ['$sort' => ['count' => -1]]
-            ]);
-        });
+        // Get role statistics using JSON operations
+        $byRole = [];
+
+        // Get all users with roles
+        $usersWithRoles = $this->model->whereNotNull('roles')->get();
+
+        foreach ($usersWithRoles as $user) {
+            $userRoles = $user->roles ?? [];
+            if (is_array($userRoles)) {
+                foreach ($userRoles as $role) {
+                    $byRole[$role] = ($byRole[$role] ?? 0) + 1;
+                }
+            }
+        }
+
+        // Sort by count descending
+        arsort($byRole);
 
         return [
             'total' => $total,
             'active' => $active,
             'disabled' => $disabled,
-            'by_role' => $byRole->pluck('count', '_id')->toArray()
+            'by_role' => $byRole
         ];
     }
 
@@ -297,7 +310,7 @@ class UserRepository extends BaseRepository
             return null;
         }
 
-        if (!Hash::check($password, $user->password)) {
+        if (!Hash::check($password, $user->password_hash)) {
             return null;
         }
 
@@ -327,13 +340,13 @@ class UserRepository extends BaseRepository
      */
     public function bulkUpdate(array $userIds, array $data): int
     {
-        return $this->model->whereIn('_id', $userIds)->update($data);
+        return $this->model->whereIn('id', $userIds)->update($data);
     }
 
     /**
      * Get user permissions.
      */
-    public function getUserPermissions(string $userId): array
+    public function getUserPermissions(int $userId): array
     {
         $user = $this->findById($userId);
 
@@ -341,6 +354,20 @@ class UserRepository extends BaseRepository
             return [];
         }
 
-        return $user->permissions ?? [];
+        // Get permissions from roles
+        $roles = $user->roles ?? [];
+        $permissions = [];
+
+        if (is_array($roles)) {
+            foreach ($roles as $role) {
+                $roleModel = \App\Models\Role::where('nombre', $role)->first();
+                if ($roleModel) {
+                    $rolePermissions = json_decode($roleModel->permisos, true) ?? [];
+                    $permissions = array_merge($permissions, $rolePermissions);
+                }
+            }
+        }
+
+        return array_unique($permissions);
     }
 }

@@ -20,7 +20,7 @@ class User extends Authenticatable
      *
      * @var string
      */
-    protected $table = 'usuarios';
+    protected $table = 'users';
 
     /**
      * The attributes that are mass assignable.
@@ -74,7 +74,7 @@ class User extends Authenticatable
      */
     public function getAuthPassword(): string
     {
-        return $this->password_hash;
+        return $this->password_hash ?? $this->password;
     }
 
     /**
@@ -83,6 +83,14 @@ class User extends Authenticatable
     public function setPasswordAttribute(string $value): void
     {
         $this->attributes['password_hash'] = Hash::make($value);
+    }
+
+    /**
+     * Get password attribute for compatibility.
+     */
+    public function getPasswordAttribute(): string
+    {
+        return $this->password_hash;
     }
 
     /**
@@ -215,6 +223,14 @@ class User extends Authenticatable
     public function entidadDigital()
     {
         return $this->hasOne(EntidadDigital::class, 'username', 'username');
+    }
+
+    /**
+     * Check if user is active.
+     */
+    public function getIsActiveAttribute(): bool
+    {
+        return !$this->disabled;
     }
 
     /**

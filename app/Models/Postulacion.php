@@ -23,12 +23,15 @@ class Postulacion extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'solicitante',
-        'monto_solicitado',
-        'plazo_meses',
-        'descripcion',
+        'username',
+        'tipo_postulante',
+        'empresa_nit',
+        'empresa_razon_social',
+        'datos_personales',
+        'datos_laborales',
+        'datos_financieros',
         'estado',
-        'timeline'
+        'observaciones'
     ];
 
     /**
@@ -39,15 +42,12 @@ class Postulacion extends Model
     protected function casts(): array
     {
         return [
-            'monto_solicitado' => 'decimal:2',
-            'plazo_meses' => 'integer',
-            'estado' => 'string',
-            'solicitante' => 'json',
-            'timeline' => 'json',
+            'datos_personales' => 'json',
+            'datos_laborales' => 'json',
+            'datos_financieros' => 'json',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-            'descripcion' => 'string'
+            'deleted_at' => 'datetime'
         ];
     }
 
@@ -244,11 +244,11 @@ class Postulacion extends Model
         $monthlyRate = 0.01;
         $months = $this->plazo_meses;
         $principal = $this->monto_solicitado;
-        
+
         if ($months > 0) {
             return $principal * ($monthlyRate * pow(1 + $monthlyRate, $months)) / (pow(1 + $monthlyRate, $months) - 1);
         }
-        
+
         return 0;
     }
 
@@ -372,11 +372,11 @@ class Postulacion extends Model
     public static function getStatisticsByEstado(): array
     {
         $stats = [];
-        
+
         foreach (array_keys(self::ESTADOS) as $estado) {
             $count = static::where('estado', $estado)->count();
             $totalMonto = static::where('estado', $estado)->sum('monto_solicitado');
-            
+
             $stats[$estado] = [
                 'estado' => $estado,
                 'label' => self::ESTADOS[$estado],
@@ -387,7 +387,7 @@ class Postulacion extends Model
                 'average_monto_formatted' => $count > 0 ? '$' . number_format($totalMonto / $count, 2, ',', '.') : '$0'
             ];
         }
-        
+
         return $stats;
     }
 }

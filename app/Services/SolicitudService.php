@@ -40,14 +40,14 @@ class SolicitudService extends BaseService
             // Create solicitud with automatic number generation
             $solicitud = SolicitudCredito::createWithNumber(array_merge($validated, [
                 'owner_username' => $ownerUsername,
-                'estado' => 'POSTULADO'
+                'estado_codigo' => 'POSTULADO'
             ]));
 
             // Add initial timeline event
-            $solicitud->addTimelineEvent('POSTULADO', 'Creación de solicitud', $ownerUsername);
+            $solicitud->addTimelineEntry('POSTULADO', 'Creación de solicitud', $ownerUsername);
 
             $this->log('Solicitud created successfully', [
-                'solicitud_id' => $solicitud->id,
+                'solicitud_id' => $solicitud->numero_solicitud,
                 'numero_solicitud' => $solicitud->numero_solicitud,
                 'owner_username' => $ownerUsername
             ]);
@@ -81,7 +81,7 @@ class SolicitudService extends BaseService
             $query = SolicitudCredito::where('owner_username', $ownerUsername);
 
             if ($estado) {
-                $query->where('estado', $estado);
+                $query->where('estado_codigo', $estado);
             }
 
             $solicitudes = $query->orderBy('created_at', 'desc')
@@ -90,7 +90,7 @@ class SolicitudService extends BaseService
                 ->get();
 
             $total = SolicitudCredito::where('owner_username', $ownerUsername)
-                ->when($estado, fn($q) => $q->where('estado', $estado))
+                ->when($estado, fn($q) => $q->where('estado_codigo', $estado))
                 ->count();
 
             return [
@@ -200,7 +200,7 @@ class SolicitudService extends BaseService
 
             // Apply filters
             if (isset($filters['estado'])) {
-                $query->where('estado', $filters['estado']);
+                $query->where('estado_codigo', $filters['estado']);
             }
 
             if (isset($filters['numero_solicitud'])) {
@@ -212,11 +212,15 @@ class SolicitudService extends BaseService
             }
 
             if (isset($filters['numero_documento'])) {
-                $query->where('solicitante.numero_identificacion', 'like', '%' . $filters['numero_documento'] . '%');
+                $query->whereHas('solicitante', function ($q) use ($filters) {
+                    $q->where('numero_documento', 'like', '%' . $filters['numero_documento'] . '%');
+                });
             }
 
             if (isset($filters['nombre_usuario'])) {
-                $query->where('solicitante.nombres_apellidos', 'like', '%' . $filters['nombre_usuario'] . '%');
+                $query->whereHas('solicitante', function ($q) use ($filters) {
+                    $q->whereRaw("CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')) like ?", ['%' . $filters['nombre_usuario'] . '%']);
+                });
             }
 
             // Apply sorting
@@ -256,20 +260,24 @@ class SolicitudService extends BaseService
             // Multiple estados filter
             if (isset($filters['estados']) && is_array($filters['estados'])) {
                 if (count($filters['estados']) === 1) {
-                    $query->where('estado', $filters['estados'][0]);
+                    $query->where('estado_codigo', $filters['estados'][0]);
                 } else {
-                    $query->whereIn('estado', $filters['estados']);
+                    $query->whereIn('estado_codigo', $filters['estados']);
                 }
             }
 
             // Document number filter
             if (isset($filters['numero_documento'])) {
-                $query->where('solicitante.numero_identificacion', 'like', '%' . $filters['numero_documento'] . '%');
+                $query->whereHas('solicitante', function ($q) use ($filters) {
+                    $q->where('numero_documento', 'like', '%' . $filters['numero_documento'] . '%');
+                });
             }
 
             // Name filter
             if (isset($filters['nombre_usuario'])) {
-                $query->where('solicitante.nombres_apellidos', 'like', '%' . $filters['nombre_usuario'] . '%');
+                $query->whereHas('solicitante', function ($q) use ($filters) {
+                    $q->whereRaw("CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')) like ?", ['%' . $filters['nombre_usuario'] . '%']);
+                });
             }
 
             // Owner filter
@@ -326,31 +334,25 @@ class SolicitudService extends BaseService
     {
         try {
             $total = SolicitudCredito::count();
-            $byEstado = SolicitudCredito::raw(function ($collection) {
-                return $collection->aggregate([
-                    ['$group' => [
-                        '_id' => '$estado',
-                        'count' => ['$sum' => 1]
-                    ]],
-                    ['$sort' => ['count' => -1]]
-                ]);
-            });
 
-            $byOwner = SolicitudCredito::raw(function ($collection) {
-                return $collection->aggregate([
-                    ['$group' => [
-                        '_id' => '$owner_username',
-                        'count' => ['$sum' => 1]
-                    ]],
-                    ['$sort' => ['count' => -1]],
-                    ['$limit' => 10]
-                ]);
-            });
+            $byEstado = SolicitudCredito::join('estados_solicitud', 'solicitudes_credito.estado_codigo', '=', 'estados_solicitud.codigo')
+                ->groupBy('estados_solicitud.codigo', 'estados_solicitud.nombre')
+                ->selectRaw('estados_solicitud.codigo as _id, COUNT(*) as count')
+                ->orderBy('count', 'desc')
+                ->pluck('count', '_id')
+                ->toArray();
+
+            $byOwner = SolicitudCredito::groupBy('owner_username')
+                ->selectRaw('owner_username as _id, COUNT(*) as count')
+                ->orderBy('count', 'desc')
+                ->limit(10)
+                ->pluck('count', '_id')
+                ->toArray();
 
             return [
                 'total' => $total,
-                'by_estado' => $byEstado->pluck('count', '_id')->toArray(),
-                'by_owner' => $byOwner->pluck('count', '_id')->toArray()
+                'by_estado' => $byEstado,
+                'by_owner' => $byOwner
             ];
         } catch (\Exception $e) {
             $this->logError('Error getting solicitud statistics', ['error' => $e->getMessage()]);
@@ -394,7 +396,16 @@ class SolicitudService extends BaseService
             }
 
             // Update solicitud with documents
-            $solicitud->update(['documentos' => array_merge($solicitud->documentos ?? [], $uploadedDocuments)]);
+            $documentosExistentes = $solicitud->documentos()->where('activo', true)->get()->keyBy('tipo_documento')->toArray();
+            $nuevosDocumentos = array_merge($documentosExistentes, $uploadedDocuments);
+
+            // Update existing documents and create new ones
+            foreach ($uploadedDocuments as $tipo => $documentoData) {
+                $solicitud->documentos()->updateOrCreate(
+                    ['tipo_documento' => $tipo],
+                    array_merge($documentoData, ['activo' => true])
+                );
+            }
 
             $this->log('Documents uploaded successfully', [
                 'solicitud_id' => $solicitudId,
@@ -460,8 +471,11 @@ class SolicitudService extends BaseService
      */
     public function transformForApi($solicitud): array
     {
+        $estado = $solicitud->estado;
+        $solicitante = $solicitud->solicitante;
+
         return [
-            'id' => $solicitud->id,
+            'id' => $solicitud->numero_solicitud,
             'numero_solicitud' => $solicitud->numero_solicitud,
             'owner_username' => $solicitud->owner_username,
             'monto_solicitado' => $solicitud->monto_solicitado,
@@ -472,25 +486,30 @@ class SolicitudService extends BaseService
             'tasa_interes' => $solicitud->tasa_interes,
             'destino_credito' => $solicitud->destino_credito,
             'descripcion' => $solicitud->descripcion,
-            'estado' => $solicitud->estado,
-            'estado_label' => $solicitud->estado_label,
-            'estado_color' => $solicitud->estado_color,
-            'estado_metadata' => $solicitud->estado_metadata,
-            'solicitante' => $solicitud->solicitante,
-            'solicitante_full_name' => $solicitud->solicitante_full_name,
-            'solicitante_email' => $solicitud->solicitante_email,
-            'solicitante_phone' => $solicitud->solicitante_phone,
-            'solicitante_document' => $solicitud->solicitante_document,
-            'documentos' => $solicitud->documentos,
-            'timeline' => $solicitud->timeline,
+            'estado' => $solicitud->estado_codigo,
+            'estado_label' => $estado?->nombre ?? $solicitud->estado_codigo,
+            'estado_color' => $estado?->color ?? '#6B7280',
+            'estado_metadata' => [
+                'codigo' => $solicitud->estado_codigo,
+                'nombre' => $estado?->nombre,
+                'color' => $estado?->color,
+                'orden' => $estado?->orden
+            ],
+            'solicitante' => $solicitante ? $solicitante->toApiArray() : null,
+            'solicitante_full_name' => $solicitante?->nombre_completo,
+            'solicitante_email' => $solicitante?->email,
+            'solicitante_phone' => $solicitante?->telefono,
+            'solicitante_document' => $solicitante?->numero_documento,
+            'documentos' => $solicitud->documentos()->where('activo', true)->get()->map(fn($doc) => $doc->toApiArray())->toArray(),
+            'timeline' => $solicitud->timeline()->with(['estado', 'usuario'])->orderBy('fecha', 'desc')->get()->map(fn($entry) => $entry->toApiArray())->toArray(),
             'xml_filename' => $solicitud->xml_filename,
-            'payload' => $solicitud->payload,
+            'payload' => $solicitud->payload ? $solicitud->payload->toApiArray() : null,
             'created_at' => $solicitud->created_at->toISOString(),
             'updated_at' => $solicitud->updated_at->toISOString(),
-            'requires_action' => $solicitud->requires_action(),
-            'is_final_state' => $solicitud->isFinalState(),
-            'is_active_state' => $solicitud->isActiveState(),
-            'can_be_modified' => $solicitud->canBeModified()
+            'requires_action' => $estado?->requiresAction() ?? false,
+            'is_final_state' => $estado?->isFinal() ?? false,
+            'is_active_state' => $estado?->isActive() ?? false,
+            'can_be_modified' => !($estado?->isFinal() ?? false)
         ];
     }
 

@@ -25,11 +25,12 @@ class SolicitudDocumento extends Model
     protected $fillable = [
         'solicitud_id',
         'documento_uuid',
-        'nombre_archivo',
-        'tipo_documento',
-        'ruta_archivo',
+        'documento_requerido_id',
+        'nombre_original',
+        'saved_filename',
+        'tipo_mime',
         'tamano_bytes',
-        'mime_type',
+        'ruta_archivo',
         'activo'
     ];
 
@@ -79,11 +80,11 @@ class SolicitudDocumento extends Model
     {
         $bytes = $this->tamano_bytes;
         $units = ['B', 'KB', 'MB', 'GB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
+
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
@@ -120,14 +121,14 @@ class SolicitudDocumento extends Model
         if ($this->isImage()) {
             return 'image';
         }
-        
+
         if ($this->isPdf()) {
             return 'pdf';
         }
-        
+
         $extension = strtolower($this->extension);
-        
-        return match($extension) {
+
+        return match ($extension) {
             'doc', 'docx' => 'word',
             'xls', 'xlsx' => 'excel',
             'ppt', 'pptx' => 'powerpoint',
@@ -156,7 +157,7 @@ class SolicitudDocumento extends Model
         if (!$this->isImage()) {
             return null;
         }
-        
+
         return route('solicitudes.documentos.preview', [
             'solicitud' => $this->solicitud_id,
             'documento' => $this->id

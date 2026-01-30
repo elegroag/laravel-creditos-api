@@ -23,7 +23,19 @@ class SolicitudPayload extends Model
      */
     protected $fillable = [
         'solicitud_id',
-        'datos_json'
+        'version',
+        'encabezado',
+        'solicitud',
+        'producto_solicitado',
+        'solicitante',
+        'informacion_laboral',
+        'ingresos_descuentos',
+        'informacion_economica',
+        'propiedades',
+        'deudas',
+        'referencias',
+        'linea_credito',
+        'save_xml'
     ];
 
     /**
@@ -34,7 +46,18 @@ class SolicitudPayload extends Model
     protected function casts(): array
     {
         return [
-            'datos_json' => 'json',
+            'encabezado' => 'json',
+            'solicitud' => 'json',
+            'producto_solicitado' => 'json',
+            'solicitante' => 'json',
+            'informacion_laboral' => 'json',
+            'ingresos_descuentos' => 'json',
+            'informacion_economica' => 'json',
+            'propiedades' => 'json',
+            'deudas' => 'json',
+            'referencias' => 'json',
+            'linea_credito' => 'json',
+            'save_xml' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
@@ -203,13 +226,13 @@ class SolicitudPayload extends Model
     {
         $solicitante = $this->getDatosSolicitante();
         $camposRequeridos = ['nombres', 'apellidos', 'tipo_documento', 'numero_documento', 'email', 'telefono'];
-        
+
         foreach ($camposRequeridos as $campo) {
             if (empty($solicitante[$campo])) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -220,7 +243,7 @@ class SolicitudPayload extends Model
     {
         $errores = [];
         $solicitante = $this->getDatosSolicitante();
-        
+
         // Validar campos obligatorios
         $camposObligatorios = [
             'nombres' => 'Nombres',
@@ -230,18 +253,18 @@ class SolicitudPayload extends Model
             'email' => 'Correo electrónico',
             'telefono' => 'Teléfono'
         ];
-        
+
         foreach ($camposObligatorios as $campo => $label) {
             if (empty($solicitante[$campo])) {
                 $errores[] = "El campo {$label} es obligatorio";
             }
         }
-        
+
         // Validar formato de email
         if (!empty($solicitante['email']) && !filter_var($solicitante['email'], FILTER_VALIDATE_EMAIL)) {
             $errores[] = "El correo electrónico no tiene un formato válido";
         }
-        
+
         return $errores;
     }
 
@@ -298,7 +321,7 @@ class SolicitudPayload extends Model
     public function getResumen(): array
     {
         $solicitante = $this->getDatosSolicitante();
-        
+
         return [
             'nombre_completo' => $this->getNombreCompleto(),
             'identificacion' => $this->getIdentificacion(),

@@ -2,12 +2,11 @@
 
 namespace App\Repositories;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\FacadesDB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
-use Illuminate\Support\Facades\DB;
 
 abstract class BaseRepository
 {
@@ -29,7 +28,7 @@ abstract class BaseRepository
     /**
      * Find a record by ID.
      */
-    public function findById(string $id)
+    public function findById($id)
     {
         return $this->model->find($id);
     }
@@ -67,7 +66,7 @@ abstract class BaseRepository
     /**
      * Update a record by ID.
      */
-    public function update(string $id, array $data): bool
+    public function update(int $id, array $data): bool
     {
         $record = $this->findById($id);
 
@@ -81,7 +80,7 @@ abstract class BaseRepository
     /**
      * Update a record and get the updated record.
      */
-    public function updateAndGet(string $id, array $data)
+    public function updateAndGet(int $id, array $data)
     {
         $record = $this->findById($id);
 
@@ -97,7 +96,7 @@ abstract class BaseRepository
     /**
      * Delete a record by ID (soft delete if enabled).
      */
-    public function delete(string $id): bool
+    public function delete(int $id): bool
     {
         $record = $this->findById($id);
 
@@ -111,7 +110,7 @@ abstract class BaseRepository
     /**
      * Force delete a record (permanent deletion).
      */
-    public function forceDelete(string $id): bool
+    public function forceDelete(int $id): bool
     {
         $record = $this->model->withTrashed()->find($id);
 
@@ -125,7 +124,7 @@ abstract class BaseRepository
     /**
      * Restore a soft-deleted record.
      */
-    public function restore(string $id): bool
+    public function restore(int $id): bool
     {
         $record = $this->model->withTrashed()->find($id);
 

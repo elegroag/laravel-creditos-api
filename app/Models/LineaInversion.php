@@ -40,7 +40,7 @@ class LineaInversion extends Model
     protected function casts(): array
     {
         return [
-            'monto_maximo_pesos' => 'integer',
+            'monto_maximo_pesos' => 'decimal:2',
             'tasas_interes_anual' => 'json',
             'requisitos' => 'json',
             'created_at' => 'datetime',
@@ -61,7 +61,7 @@ class LineaInversion extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('estado', 'ACTIVO');
+        return $query->where('estado', 'Activo');
     }
 
     /**
@@ -83,15 +83,15 @@ class LineaInversion extends Model
     /**
      * Find line by name.
      */
-    public static function findByName(string $name): ?self
+    public static function findByLinea(string $linea): ?self
     {
-        return static::where('linea_credito', $name)->first();
+        return static::where('linea_credito', $linea)->first();
     }
 
     /**
      * Get formatted max amount.
      */
-    public function getMontoMaximoFormateadoAttribute(): string
+    public function getMontoMaximoFormattedAttribute(): string
     {
         return '$' . number_format($this->monto_maximo_pesos, 2, ',', '.');
     }
@@ -99,7 +99,7 @@ class LineaInversion extends Model
     /**
      * Get interest rates as array.
      */
-    public function getTasasArrayAttribute(): array
+    public function getTasasArray(): array
     {
         return $this->tasas_interes_anual ?? [];
     }
@@ -110,13 +110,18 @@ class LineaInversion extends Model
     public function getTasaInteres(string $categoria): ?float
     {
         $tasas = $this->tasas_array;
-        return $tasas[$categoria] ?? null;
+        if (isset($tasas[$categoria])) {
+            // Remove % sign and convert to decimal
+            $rate = str_replace('%', '', $tasas[$categoria]);
+            return (float) $rate;
+        }
+        return null;
     }
 
     /**
      * Get requirements as array.
      */
-    public function getRequisitosArrayAttribute(): array
+    public function getRequisitosArray(): array
     {
         return $this->requisitos ?? [];
     }
@@ -126,7 +131,7 @@ class LineaInversion extends Model
      */
     public function isActive(): bool
     {
-        return $this->estado === 'ACTIVO';
+        return $this->estado === 'Activo';
     }
 
     /**
@@ -134,7 +139,7 @@ class LineaInversion extends Model
      */
     public function isInactive(): bool
     {
-        return $this->estado === 'INACTIVO';
+        return $this->estado === 'Inactivo';
     }
 
     /**
@@ -142,7 +147,7 @@ class LineaInversion extends Model
      */
     public function activate(): void
     {
-        $this->estado = 'ACTIVO';
+        $this->estado = 'Activo';
         $this->save();
     }
 
@@ -151,7 +156,7 @@ class LineaInversion extends Model
      */
     public function deactivate(): void
     {
-        $this->estado = 'INACTIVO';
+        $this->estado = 'Inactivo';
         $this->save();
     }
 

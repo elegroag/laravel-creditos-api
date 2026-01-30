@@ -74,7 +74,7 @@ class NumeroSolicitud extends Model
     public function getFormattedSequenceAttribute(): string
     {
         $year = substr($this->vigencia, 0, 4);
-        $sequence = str_pad($this->numeric_secuencia + 1, 4, '0', STR_PAD_LEFT);
+        $sequence = str_pad($this->numeric_secuencia, 4, '0', STR_PAD_LEFT);
         return "{$year}-{$sequence}";
     }
 
@@ -162,15 +162,13 @@ class NumeroSolicitud extends Model
     /**
      * Find or create sequence for year.
      */
-    public static function findOrCreateForYear(int $year): self
+    public static function findOrCreateForYear(int $year, string $lineaCredito = '03'): self
     {
         return static::firstOrCreate(
-            ['anio' => $year],
+            ['vigencia' => $year],
             [
-                'ultimo_numero' => 0,
                 'numeric_secuencia' => 0,
-                'vigencia' => (int) date('Ym'),
-                'linea_credito' => '03'
+                'linea_credito' => $lineaCredito
             ]
         );
     }
@@ -180,16 +178,16 @@ class NumeroSolicitud extends Model
      */
     public static function getCurrentSequence(int $year): ?self
     {
-        return static::where('anio', $year)->first();
+        return static::where('vigencia', $year)->first();
     }
 
     /**
      * Generate next application number.
      */
-    public static function generateNextNumber(): string
+    public static function generateNextNumber(string $lineaCredito = '03'): string
     {
         $year = now()->year;
-        $sequence = static::findOrCreateForYear($year);
+        $sequence = static::findOrCreateForYear($year, $lineaCredito);
 
         $sequence->updateSequence();
 
@@ -201,7 +199,7 @@ class NumeroSolicitud extends Model
      */
     public static function resetAllForNewYear(int $year): void
     {
-        static::where('anio', $year)->update(['ultimo_numero' => 0]);
+        static::where('vigencia', $year)->update(['numeric_secuencia' => 0]);
     }
 
     /**
@@ -209,7 +207,7 @@ class NumeroSolicitud extends Model
      */
     public static function getCurrentYearSequences(): \Illuminate\Database\Eloquent\Collection
     {
-        return static::where('anio', now()->year)->get();
+        return static::where('vigencia', now()->format('Ym'))->get();
     }
 
     /**
@@ -218,10 +216,11 @@ class NumeroSolicitud extends Model
     public function getStatistics(): array
     {
         return [
-            'anio' => $this->anio,
-            'ultimo_numero' => $this->ultimo_numero,
+            'vigencia' => $this->vigencia,
+            'numeric_secuencia' => $this->numeric_secuencia,
             'siguiente_numero' => $this->getNextNumber(),
             'numero_formateado' => $this->formatted_sequence,
+            'linea_credito' => $this->linea_credito,
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString()
         ];
@@ -234,8 +233,10 @@ class NumeroSolicitud extends Model
     {
         return [
             'id' => $this->id,
-            'anio' => $this->anio,
-            'ultimo_numero' => $this->ultimo_numero,
+            'radicado' => $this->radicado,
+            'numeric_secuencia' => $this->numeric_secuencia,
+            'linea_credito' => $this->linea_credito,
+            'vigencia' => $this->vigencia,
             'siguiente_numero' => $this->getNextNumber(),
             'numero_formateado' => $this->formatted_sequence,
             'created_at' => $this->created_at->toISOString(),
@@ -261,8 +262,8 @@ class NumeroSolicitud extends Model
      */
     public static function getByYearForApi(int $year): array
     {
-        return static::where('anio', $year)
-            ->orderBy('anio', 'desc')
+        return static::where('vigencia', $year)
+            ->orderBy('vigencia', 'desc')
             ->get()
             ->map(function ($sequence) {
                 return $sequence->toApiArray();
@@ -278,11 +279,11 @@ class NumeroSolicitud extends Model
         $sequence = static::getCurrentSequence($year);
 
         return [
-            'anio' => $year,
-            'ultimo_numero' => $sequence ? $sequence->ultimo_numero : 0,
+            'vigencia' => $year,
+            'ultimo_numero' => $sequence ? $sequence->numeric_secuencia : 0,
             'siguiente_numero' => $sequence ? $sequence->getNextNumber() : 1,
             'numero_actual_formateado' => $sequence ? $sequence->formatted_sequence : null,
-            'total_solicitudes_generadas' => $sequence ? $sequence->ultimo_numero : 0
+            'total_solicitudes_generadas' => $sequence ? $sequence->numeric_secuencia : 0
         ];
     }
 }

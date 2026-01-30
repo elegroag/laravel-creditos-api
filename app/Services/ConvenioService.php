@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\EmpresaConvenio;
-use App\Repositories\BaseRepository;
+use App\Repositories\ConvenioRepository;
 use App\Services\TrabajadorService;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -16,7 +16,7 @@ class ConvenioService extends BaseService
     private string $externalApiUrl;
     private int $timeout;
 
-    public function __construct(BaseRepository $convenioRepository, TrabajadorService $trabajadorService)
+    public function __construct(ConvenioRepository $convenioRepository, ?TrabajadorService $trabajadorService = null)
     {
         parent::__construct($convenioRepository);
         $this->trabajadorService = $trabajadorService ?: new TrabajadorService();
@@ -27,7 +27,7 @@ class ConvenioService extends BaseService
     /**
      * Validate worker eligibility for company credit.
      */
-    public function validarElegibilidadConvenio(string $cedulaTrabajador, string $nitEmpresa): array
+    public function validarElegibilidadConvenio(string $cedulaTrabajador, int $nitEmpresa): array
     {
         try {
             // 1. Get worker data
@@ -201,14 +201,18 @@ class ConvenioService extends BaseService
     /**
      * Find active agreement by company NIT.
      */
-    private function buscarConvenioPorNit(string $nit): ?EmpresaConvenio
+    private function buscarConvenioPorNit(int $nit): ?EmpresaConvenio
     {
         try {
-            $convenio = EmpresaConvenio::where('nit', $nit)
-                ->where('estado', 'Activo')
-                ->first();
+            $convenios = $this->repository->getActive();
 
-            return $convenio;
+            foreach ($convenios as $convenio) {
+                if ($convenio->nit === $nit) {
+                    return $convenio;
+                }
+            }
+
+            return null;
         } catch (\Exception $e) {
             $this->logError('Error finding agreement by NIT', [
                 'nit' => $nit,
@@ -291,12 +295,10 @@ class ConvenioService extends BaseService
     public function getActiveAgreements(): array
     {
         try {
-            $convenios = EmpresaConvenio::where('estado', 'Activo')
-                ->orderBy('razon_social')
-                ->get();
+            $convenios = $this->repository->getActive();
 
             return [
-                'convenios' => $convenios->toArray(),
+                'convenios' => $this->transformCollectionForApi($convenios),
                 'count' => $convenios->count()
             ];
         } catch (\Exception $e) {
@@ -311,10 +313,10 @@ class ConvenioService extends BaseService
     /**
      * Get agreement by NIT.
      */
-    public function getByNit(string $nit): ?EmpresaConvenio
+    public function getByNit(int $nit): ?EmpresaConvenio
     {
         try {
-            return EmpresaConvenio::where('nit', $nit)->first();
+            return $this->repository->findByNit($nit);
         } catch (\Exception $e) {
             $this->logError('Error getting agreement by NIT', [
                 'nit' => $nit,
@@ -330,10 +332,7 @@ class ConvenioService extends BaseService
     public function createOrUpdate(array $data): EmpresaConvenio
     {
         try {
-            $convenio = EmpresaConvenio::updateOrCreate(
-                ['nit' => $data['nit']],
-                $data
-            );
+            $convenio = $this->repository->createConvenio($data);
 
             $this->log('Agreement created/updated', [
                 'nit' => $data['nit'],
@@ -353,7 +352,7 @@ class ConvenioService extends BaseService
     /**
      * Deactivate agreement.
      */
-    public function deactivate(string $nit): bool
+    public function deactivate(int $nit): bool
     {
         try {
             $convenio = $this->getByNit($nit);
@@ -362,7 +361,7 @@ class ConvenioService extends BaseService
                 throw new ValidationException('Convenio no encontrado');
             }
 
-            $convenio->update(['estado' => 'Inactivo']);
+            $this->repository->deactivate($nit);
 
             $this->log('Agreement deactivated', ['nit' => $nit]);
 
@@ -384,36 +383,20 @@ class ConvenioService extends BaseService
     public function getStatistics(): array
     {
         try {
-            $total = EmpresaConvenio::count();
-            $activos = EmpresaConvenio::where('estado', 'Activo')->count();
-            $inactivos = $total - $activos;
-
-            $porVencer = EmpresaConvenio::where('estado', 'Activo')
-                ->where('fecha_vencimiento', '>', now())
-                ->where('fecha_vencimiento', '<=', now()->addDays(30))
-                ->count();
-
-            $vencidos = EmpresaConvenio::where('estado', 'Activo')
-                ->where('fecha_vencimiento', '<', now())
-                ->count();
-
-            return [
-                'total' => $total,
-                'activos' => $activos,
-                'inactivos' => $inactivos,
-                'por_vencer' => $porVencer,
-                'vencidos' => $vencidos,
-                'tasa_activacion' => $total > 0 ? round(($activos / $total) * 100, 2) : 0
-            ];
+            return $this->repository->getStatistics();
         } catch (\Exception $e) {
             $this->logError('Error getting agreement statistics', ['error' => $e->getMessage()]);
             return [
                 'total' => 0,
-                'activos' => 0,
-                'inactivos' => 0,
-                'por_vencer' => 0,
-                'vencidos' => 0,
-                'tasa_activacion' => 0
+                'active' => 0,
+                'expired' => 0,
+                'expiring_soon' => 0,
+                'by_status' => [],
+                'by_city' => [],
+                'by_department' => [],
+                'by_sector' => [],
+                'active_percentage' => 0,
+                'expired_percentage' => 0
             ];
         }
     }
@@ -424,28 +407,13 @@ class ConvenioService extends BaseService
     public function search(array $criteria): array
     {
         try {
-            $query = EmpresaConvenio::query();
+            $term = $criteria['term'] ?? '';
+            $filters = $criteria['filters'] ?? [];
 
-            if (isset($criteria['razon_social'])) {
-                $query->where('razon_social', 'like', '%' . $criteria['razon_social'] . '%');
-            }
-
-            if (isset($criteria['nit'])) {
-                $query->where('nit', 'like', '%' . $criteria['nit'] . '%');
-            }
-
-            if (isset($criteria['estado'])) {
-                $query->where('estado', $criteria['estado']);
-            }
-
-            if (isset($criteria['representante_nombre'])) {
-                $query->where('representante_nombre', 'like', '%' . $criteria['representante_nombre'] . '%');
-            }
-
-            $convenios = $query->orderBy('razon_social')->get();
+            $convenios = $this->repository->searchConvenios($term, $filters);
 
             return [
-                'convenios' => $convenios->toArray(),
+                'convenios' => $this->transformCollectionForApi($convenios),
                 'count' => $convenios->count(),
                 'criteria' => $criteria
             ];
@@ -459,6 +427,189 @@ class ConvenioService extends BaseService
                 'count' => 0,
                 'criteria' => $criteria
             ];
+        }
+    }
+
+    /**
+     * Get agreements with pagination.
+     */
+    public function getPaginated(int $perPage = 15, array $filters = []): array
+    {
+        try {
+            return $this->repository->getPaginated($perPage, $filters);
+        } catch (\Exception $e) {
+            $this->logError('Error getting paginated agreements', [
+                'per_page' => $perPage,
+                'filters' => $filters,
+                'error' => $e->getMessage()
+            ]);
+            return [
+                'data' => [],
+                'current_page' => 1,
+                'per_page' => $perPage,
+                'total' => 0,
+                'last_page' => 1
+            ];
+        }
+    }
+
+    /**
+     * Get dashboard data.
+     */
+    public function getDashboardData(): array
+    {
+        try {
+            return $this->repository->getDashboardData();
+        } catch (\Exception $e) {
+            $this->logError('Error getting dashboard data', ['error' => $e->getMessage()]);
+            return [
+                'total' => 0,
+                'activos' => 0,
+                'vencidos' => 0,
+                'por_vencer' => 0,
+                'creados_hoy' => 0,
+                'creados_ayer' => 0,
+                'vencen_proximos_30_dias' => 0,
+                'porcentaje_activos' => 0,
+                'ciudades_unicas' => 0,
+                'departamentos_unicos' => 0,
+                'sectores_economicos_unicos' => 0
+            ];
+        }
+    }
+
+    /**
+     * Get unique cities.
+     */
+    public function getUniqueCities(): array
+    {
+        try {
+            return $this->repository->getUniqueCities()->toArray();
+        } catch (\Exception $e) {
+            $this->logError('Error getting unique cities', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Get unique departments.
+     */
+    public function getUniqueDepartments(): array
+    {
+        try {
+            return $this->repository->getUniqueDepartments()->toArray();
+        } catch (\Exception $e) {
+            $this->logError('Error getting unique departments', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Get unique economic sectors.
+     */
+    public function getUniqueSectoresEconomicos(): array
+    {
+        try {
+            return $this->repository->getUniqueSectoresEconomicos()->toArray();
+        } catch (\Exception $e) {
+            $this->logError('Error getting unique economic sectors', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Get unique company types.
+     */
+    public function getUniqueTiposEmpresa(): array
+    {
+        try {
+            return $this->repository->getUniqueTiposEmpresa()->toArray();
+        } catch (\Exception $e) {
+            $this->logError('Error getting unique company types', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Export agreements to array format.
+     */
+    public function exportToArray(array $filters = []): array
+    {
+        try {
+            return $this->repository->exportToArray($filters);
+        } catch (\Exception $e) {
+            $this->logError('Error exporting agreements', [
+                'filters' => $filters,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Bulk update agreements status.
+     */
+    public function bulkUpdateStatus(array $nits, string $status): int
+    {
+        try {
+            return $this->repository->bulkUpdateStatus($nits, $status);
+        } catch (\Exception $e) {
+            $this->logError('Error bulk updating agreements status', [
+                'nits' => $nits,
+                'status' => $status,
+                'error' => $e->getMessage()
+            ]);
+            return 0;
+        }
+    }
+
+    /**
+     * Get agreements that need renewal notification.
+     */
+    public function getForRenewalNotification(int $daysBefore = 30): array
+    {
+        try {
+            return $this->repository->getForRenewalNotification($daysBefore)
+                ->map(fn($convenio) => $this->transformForApi($convenio))
+                ->toArray();
+        } catch (\Exception $e) {
+            $this->logError('Error getting agreements for renewal notification', [
+                'days_before' => $daysBefore,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Soft delete agreement.
+     */
+    public function softDeleteConvenio(int $nit): bool
+    {
+        try {
+            return $this->repository->softDeleteConvenio($nit);
+        } catch (\Exception $e) {
+            $this->logError('Error soft deleting agreement', [
+                'nit' => $nit,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Restore soft deleted agreement.
+     */
+    public function restoreConvenio(int $nit): bool
+    {
+        try {
+            return $this->repository->restoreConvenio($nit);
+        } catch (\Exception $e) {
+            $this->logError('Error restoring agreement', [
+                'nit' => $nit,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
     }
 }

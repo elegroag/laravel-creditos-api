@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Trabajador;
+use App\Models\EmpresaConvenio;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use App\Exceptions\ValidationException;
 
-class TrabajadorService
+class TrabajadorService extends BaseService
 {
     private string $externalApiUrl;
     private int $timeout;
@@ -62,6 +64,116 @@ class TrabajadorService
     }
 
     /**
+     * Get worker from database or external API.
+     */
+    public function getWorker(string $cedula): ?Trabajador
+    {
+        // First try to get from database
+        $trabajador = Trabajador::findByCedula($cedula);
+        
+        if ($trabajador) {
+            // Optionally update from external API
+            $this->updateFromExternalIfNeeded($trabajador);
+            return $trabajador;
+        }
+
+        // If not found, try external API
+        $externalData = $this->getWorkerData($cedula);
+        
+        if ($externalData) {
+            return $this->createWorkerFromExternal($externalData);
+        }
+
+        return null;
+    }
+
+    /**
+     * Create worker from external API data.
+     */
+    private function createWorkerFromExternal(array $externalData): Trabajador
+    {
+        $relevantData = $this->extractRelevantData($externalData);
+        
+        $trabajador = Trabajador::create([
+            'cedula' => $relevantData['cedula'],
+            'tipo_documento' => $relevantData['tipo_documento'],
+            'primer_nombre' => $relevantData['primer_nombre'],
+            'segundo_nombre' => $relevantData['segundo_nombre'],
+            'primer_apellido' => $relevantData['primer_apellido'],
+            'segundo_apellido' => $relevantData['segundo_apellido'],
+            'direccion' => $relevantData['direccion'],
+            'ciudad_codigo' => $relevantData['ciudad_codigo'],
+            'telefono' => $relevantData['telefono'],
+            'email' => $relevantData['email'],
+            'salario' => $relevantData['salario'],
+            'fecha_salario' => $this->parseDate($relevantData['fecha_salario']),
+            'sexo' => $relevantData['sexo'],
+            'estado_civil' => $relevantData['estado_civil'],
+            'fecha_nacimiento' => $this->parseDate($relevantData['fecha_nacimiento']),
+            'ciudad_nacimiento' => $relevantData['ciudad_nacimiento'],
+            'nivel_educativo' => $relevantData['nivel_educativo'],
+            'codigo_categoria' => $relevantData['codigo_categoria'],
+            'estado' => $relevantData['estado'],
+            'fecha_afiliacion' => $this->parseDate($relevantData['fecha_afiliacion']),
+            'cargo' => $relevantData['cargo'],
+            'empresa_nit' => $relevantData['empresa']['nit'] ?? null
+        ]);
+
+        // Create or update company
+        if (isset($relevantData['empresa']['nit'])) {
+            $this->createOrUpdateCompany($relevantData['empresa']);
+        }
+
+        $this->log('Worker created from external API', [
+            'cedula' => $relevantData['cedula'],
+            'nombre' => $trabajador->full_name
+        ]);
+
+        return $trabajador;
+    }
+
+    /**
+     * Update worker from external API if needed.
+     */
+    private function updateFromExternalIfNeeded(Trabajador $trabajador): void
+    {
+        // Update if data is older than 24 hours
+        if ($trabajador->updated_at->diffInHours(now()) < 24) {
+            return;
+        }
+
+        $externalData = $this->getWorkerData($trabajador->cedula);
+        
+        if ($externalData) {
+            $trabajador->updateFromExternalData($externalData);
+            
+            $this->log('Worker updated from external API', [
+                'cedula' => $trabajador->cedula,
+                'nombre' => $trabajador->full_name
+            ]);
+        }
+    }
+
+    /**
+     * Create or update company from external data.
+     */
+    private function createOrUpdateCompany(array $companyData): void
+    {
+        EmpresaConvenio::updateOrCreate(
+            ['nit' => $companyData['nit']],
+            [
+                'razon_social' => $companyData['razon_social'],
+                'direccion' => $companyData['direccion'],
+                'telefono' => $companyData['telefono'],
+                'ciudad' => $companyData['ciudad_codigo'],
+                'representante_documento' => $companyData['representante_cedula'],
+                'representante_nombre' => $companyData['representante_legal'],
+                'estado' => $companyData['estado'] ?? 'Activo'
+            ]
+        );
+    }
+
+    /**
      * Get worker data from external API.
      */
     public function getWorkerData(string $cedula): ?array
@@ -111,13 +223,13 @@ class TrabajadorService
      */
     public function getWorkerRelevantData(string $cedula): ?array
     {
-        $fullData = $this->getWorkerData($cedula);
+        $trabajador = $this->getWorker($cedula);
         
-        if (!$fullData) {
+        if (!$trabajador) {
             return null;
         }
 
-        return $this->extractRelevantData($fullData);
+        return $trabajador->toApiArray();
     }
 
     /**
@@ -204,13 +316,13 @@ class TrabajadorService
     }
 
     /**
-     * Get worker eligibility for credit.
+     * Get worker eligibility for credit using database.
      */
     public function getWorkerEligibility(string $cedula): array
     {
-        $workerData = $this->getWorkerRelevantData($cedula);
+        $trabajador = $this->getWorker($cedula);
         
-        if (!$workerData) {
+        if (!$trabajador) {
             return [
                 'eligible' => false,
                 'reason' => 'Trabajador no encontrado',
@@ -218,42 +330,55 @@ class TrabajadorService
             ];
         }
 
-        $validation = $this->validateWorkerData($workerData);
+        $eligibility = $trabajador->getEligibilityDetails();
         
-        if (!$validation['valid']) {
-            return [
-                'eligible' => false,
-                'reason' => 'Datos del trabajador inválidos',
-                'errors' => $validation['errors'],
-                'worker_data' => $workerData
-            ];
-        }
-
-        // Check service time (minimum 6 months)
-        $serviceMonths = $this->calculateServiceMonths($workerData['fecha_afiliacion'] ?? '');
-        
-        if ($serviceMonths < 6) {
-            return [
-                'eligible' => false,
-                'reason' => 'Tiempo de servicio insuficiente',
-                'service_months' => $serviceMonths,
-                'required_months' => 6,
-                'worker_data' => $workerData
-            ];
-        }
-
         return [
-            'eligible' => true,
-            'reason' => 'Trabajador elegible para crédito',
-            'service_months' => $serviceMonths,
-            'worker_data' => $workerData
+            'eligible' => $eligibility['eligible'],
+            'reason' => $eligibility['eligible'] ? 'Trabajador elegible para crédito' : implode(', ', $eligibility['reasons']),
+            'service_months' => $eligibility['service_months'],
+            'required_months' => $eligibility['required_months'],
+            'worker_data' => $trabajador->toApiArray()
         ];
     }
 
     /**
-     * Search workers by criteria.
+     * Search workers using database with external API fallback.
      */
     public function searchWorkers(array $criteria): array
+    {
+        // Try database first
+        $query = Trabajador::query();
+
+        if (isset($criteria['cedula'])) {
+            $query->byDocument($criteria['cedula']);
+        }
+
+        if (isset($criteria['nombre'])) {
+            $query->byName($criteria['nombre']);
+        }
+
+        if (isset($criteria['empresa_nit'])) {
+            $query->byCompany($criteria['empresa_nit']);
+        }
+
+        if (isset($criteria['estado'])) {
+            $query->where('estado', $criteria['estado']);
+        }
+
+        $workers = $query->with('empresa')->get();
+
+        // If no results and external search is enabled, try external API
+        if ($workers->isEmpty() && !empty($criteria['external_search'])) {
+            return $this->searchWorkersExternal($criteria);
+        }
+
+        return $workers->map(fn($worker) => $worker->toApiArray())->toArray();
+    }
+
+    /**
+     * Search workers using external API.
+     */
+    private function searchWorkersExternal(array $criteria): array
     {
         try {
             $response = Http::timeout($this->timeout)
@@ -273,15 +398,16 @@ class TrabajadorService
                 return [];
             }
 
-            $workers = $data['data'] ?? [];
+            $externalWorkers = $data['data'] ?? [];
 
-            // Extract relevant data for each worker
+            // Store in database and return
             return array_map(function ($worker) {
-                return $this->extractRelevantData($worker);
-            }, $workers);
+                $trabajador = $this->createWorkerFromExternal($worker);
+                return $trabajador->toApiArray();
+            }, $externalWorkers);
 
         } catch (\Exception $e) {
-            $this->logError('Exception searching workers', [
+            $this->logError('Exception searching workers externally', [
                 'criteria' => $criteria,
                 'error' => $e->getMessage()
             ]);
@@ -290,33 +416,12 @@ class TrabajadorService
     }
 
     /**
-     * Get worker statistics.
+     * Get worker statistics from database.
      */
     public function getWorkerStatistics(): array
     {
         try {
-            $response = Http::timeout($this->timeout)
-                ->get("{$this->externalApiUrl}/company/estadisticas_trabajadores");
-
-            if (!$response->successful()) {
-                return [
-                    'total' => 0,
-                    'activos' => 0,
-                    'inactivos' => 0,
-                    'por_categoria' => []
-                ];
-            }
-
-            $data = $response->json();
-
-            return [
-                'total' => $data['total'] ?? 0,
-                'activos' => $data['activos'] ?? 0,
-                'inactivos' => $data['inactivos'] ?? 0,
-                'por_categoria' => $data['por_categoria'] ?? [],
-                'por_empresa' => $data['por_empresa'] ?? []
-            ];
-
+            return Trabajador::getStatistics();
         } catch (\Exception $e) {
             $this->logError('Exception getting worker statistics', [
                 'error' => $e->getMessage()
@@ -325,7 +430,8 @@ class TrabajadorService
                 'total' => 0,
                 'activos' => 0,
                 'inactivos' => 0,
-                'por_categoria' => []
+                'por_categoria' => [],
+                'por_empresa' => []
             ];
         }
     }
@@ -351,8 +457,12 @@ class TrabajadorService
     /**
      * Parse date from various formats.
      */
-    private function parseDate(string $date): ?\Carbon\Carbon
+    private function parseDate(?string $date): ?\Carbon\Carbon
     {
+        if (!$date) {
+            return null;
+        }
+
         $formats = [
             'Y-m-d',
             'Y/m/d',
@@ -369,33 +479,10 @@ class TrabajadorService
             }
         }
 
-        // Try ISO format as last resort
         try {
             return \Carbon\Carbon::parse($date);
         } catch (\Exception $e) {
             return null;
         }
-    }
-
-    /**
-     * Log error with context.
-     */
-    private function logError(string $message, array $context = []): void
-    {
-        Log::error("TrabajadorService: {$message}", array_merge([
-            'service' => static::class,
-            'timestamp' => now()->toISOString()
-        ], $context));
-    }
-
-    /**
-     * Log info with context.
-     */
-    private function log(string $message, array $context = []): void
-    {
-        Log::info("TrabajadorService: {$message}", array_merge([
-            'service' => static::class,
-            'timestamp' => now()->toISOString()
-        ], $context));
     }
 }

@@ -34,12 +34,12 @@ class UserService extends BaseService
         $validated = $validator->validated();
 
         // Check if username already exists
-        if ($this->userRepository->usernameExists($validated['username'])) {
+        if (User::findByUsername($validated['username'])) {
             throw new ValidationException('El nombre de usuario ya está en uso');
         }
 
         // Check if email already exists
-        if ($this->userRepository->emailExists($validated['email'])) {
+        if (User::findByEmail($validated['email'])) {
             throw new ValidationException('El correo electrónico ya está en uso');
         }
 
@@ -53,7 +53,7 @@ class UserService extends BaseService
             }
 
             // Create user with hashed password
-            $user = $this->userRepository->createWithPassword($validated, $validated['password']);
+            $user = User::create($validated);
 
             $this->log('User created successfully', [
                 'user_id' => $user->id,
@@ -73,7 +73,7 @@ class UserService extends BaseService
     public function getById(string $id): ?User
     {
         try {
-            return $this->userRepository->findById($id);
+            return User::find($id);
         } catch (\Exception $e) {
             $this->logError('Error getting user by ID', ['id' => $id, 'error' => $e->getMessage()]);
             return null;
@@ -86,7 +86,7 @@ class UserService extends BaseService
     public function getByUsername(string $username): ?User
     {
         try {
-            return $this->userRepository->findByUsername($username);
+            return User::findByUsername($username);
         } catch (\Exception $e) {
             $this->logError('Error getting user by username', ['username' => $username, 'error' => $e->getMessage()]);
             return null;
@@ -99,7 +99,7 @@ class UserService extends BaseService
     public function getByEmail(string $email): ?User
     {
         try {
-            return $this->userRepository->findByEmail($email);
+            return User::findByEmail($email);
         } catch (\Exception $e) {
             $this->logError('Error getting user by email', ['email' => $email, 'error' => $e->getMessage()]);
             return null;
@@ -112,7 +112,10 @@ class UserService extends BaseService
     public function getByUsernameOrEmail(string $identifier): ?User
     {
         try {
-            return $this->userRepository->findByUsernameOrEmail($identifier);
+            return User::where(function ($query) use ($identifier) {
+                $query->where('username', strtolower($identifier))
+                    ->orWhere('email', $identifier);
+            })->first();
         } catch (\Exception $e) {
             $this->logError('Error getting user by username or email', ['identifier' => $identifier, 'error' => $e->getMessage()]);
             return null;
@@ -138,13 +141,14 @@ class UserService extends BaseService
 
         // Check if email is being updated and already exists
         if (isset($validated['email']) && $validated['email'] !== $user->email) {
-            if ($this->userRepository->emailExists($validated['email'], $id)) {
+            if (User::where('email', $validated['email'])->where('id', '!=', $id)->exists()) {
                 throw new ValidationException('El correo electrónico ya está en uso');
             }
         }
 
         try {
-            $updated = $this->userRepository->updateAndGet($id, $validated);
+            $user->update($validated);
+            $updated = $user->fresh();
 
             if (!$updated) {
                 throw new \Exception('No se pudo actualizar el usuario');
@@ -168,10 +172,10 @@ class UserService extends BaseService
     public function delete(string $id): bool
     {
         // Ensure user exists
-        $this->ensureExists($id, 'Usuario');
+        $user = $this->ensureExists($id, 'Usuario');
 
         try {
-            $result = $this->userRepository->delete($id);
+            $result = $user->delete();
 
             if ($result) {
                 $this->log('User deleted successfully', ['user_id' => $id]);
@@ -190,8 +194,24 @@ class UserService extends BaseService
     public function list(int $skip = 0, int $limit = 50, ?bool $disabled = null, ?array $roles = null): array
     {
         try {
-            $users = $this->userRepository->listUsers($skip, $limit, $disabled, $roles);
-            $total = $this->userRepository->countUsers($disabled, $roles);
+            $query = User::query();
+
+            if ($disabled !== null) {
+                $query->where('disabled', $disabled);
+            }
+
+            if ($roles !== null) {
+                foreach ($roles as $role) {
+                    $query->whereJsonContains('roles', $role);
+                }
+            }
+
+            $users = $query->orderBy('created_at', 'desc')
+                ->offset($skip)
+                ->limit($limit)
+                ->get();
+
+            $total = $query->count();
 
             return [
                 'users' => $users->toArray(),
@@ -214,19 +234,21 @@ class UserService extends BaseService
     public function authenticate(string $identifier, string $password): ?User
     {
         try {
-            $user = $this->userRepository->verifyCredentials($identifier, $password);
+            $user = $this->getByUsernameOrEmail($identifier);
 
-            if ($user) {
+            if ($user && !$user->disabled && $user->is_active && Hash::check($password, $user->password_hash)) {
                 // Update last login
-                $this->userRepository->updateLastLogin($user->id);
+                $user->update(['last_login' => now()]);
 
                 $this->log('User authenticated successfully', [
                     'user_id' => $user->id,
                     'identifier' => $identifier
                 ]);
+
+                return $user;
             }
 
-            return $user;
+            return null;
         } catch (\Exception $e) {
             $this->logError('Error authenticating user', ['identifier' => $identifier, 'error' => $e->getMessage()]);
             return null;
@@ -256,7 +278,7 @@ class UserService extends BaseService
         }
 
         try {
-            $result = $this->userRepository->updatePassword($id, $newPassword);
+            $result = $user->update(['password' => Hash::make($newPassword)]);
 
             if ($result) {
                 $this->log('Password changed successfully', ['user_id' => $id]);
@@ -275,10 +297,10 @@ class UserService extends BaseService
     public function enableUser(string $id): bool
     {
         // Ensure user exists
-        $this->ensureExists($id, 'Usuario');
+        $user = $this->ensureExists($id, 'Usuario');
 
         try {
-            $result = $this->userRepository->enableUser($id);
+            $result = $user->update(['disabled' => false]);
 
             if ($result) {
                 $this->log('User enabled successfully', ['user_id' => $id]);
@@ -297,10 +319,10 @@ class UserService extends BaseService
     public function disableUser(string $id): bool
     {
         // Ensure user exists
-        $this->ensureExists($id, 'Usuario');
+        $user = $this->ensureExists($id, 'Usuario');
 
         try {
-            $result = $this->userRepository->disableUser($id);
+            $result = $user->update(['disabled' => true]);
 
             if ($result) {
                 $this->log('User disabled successfully', ['user_id' => $id]);
@@ -319,7 +341,34 @@ class UserService extends BaseService
     public function getStatistics(): array
     {
         try {
-            return $this->userRepository->getStatistics();
+            $total = User::count();
+            $active = User::where('disabled', false)->count();
+            $disabled = User::where('disabled', true)->count();
+
+            // Get role statistics using JSON operations
+            $byRole = [];
+
+            // Get all users with roles
+            $usersWithRoles = User::whereNotNull('roles')->get();
+
+            foreach ($usersWithRoles as $user) {
+                $userRoles = $user->roles ?? [];
+                if (is_array($userRoles)) {
+                    foreach ($userRoles as $role) {
+                        $byRole[$role] = ($byRole[$role] ?? 0) + 1;
+                    }
+                }
+            }
+
+            // Sort by count descending
+            arsort($byRole);
+
+            return [
+                'total' => $total,
+                'active' => $active,
+                'disabled' => $disabled,
+                'by_role' => $byRole
+            ];
         } catch (\Exception $e) {
             $this->logError('Error getting user statistics', ['error' => $e->getMessage()]);
             return [
@@ -337,7 +386,21 @@ class UserService extends BaseService
     public function search(string $term, ?array $roles = null): array
     {
         try {
-            $users = $this->userRepository->searchUsers($term, $roles);
+            $query = User::where(function ($q) use ($term) {
+                $q->where('username', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhere('full_name', 'like', "%{$term}%")
+                    ->orWhere('nombres', 'like', "%{$term}%")
+                    ->orWhere('apellidos', 'like', "%{$term}%");
+            });
+
+            if ($roles !== null) {
+                foreach ($roles as $role) {
+                    $query->whereJsonContains('roles', $role);
+                }
+            }
+
+            $users = $query->where('disabled', false)->get();
 
             return [
                 'users' => $users->toArray(),
@@ -358,7 +421,7 @@ class UserService extends BaseService
     public function getByRole(string $role): array
     {
         try {
-            $users = $this->userRepository->getByRole($role);
+            $users = User::whereJsonContains('roles', $role)->get();
 
             return [
                 'users' => $users->toArray(),
@@ -381,7 +444,9 @@ class UserService extends BaseService
     public function getActive(): array
     {
         try {
-            $users = $this->userRepository->getActive();
+            $users = User::where('disabled', false)
+                ->where('is_active', true)
+                ->get();
 
             return [
                 'users' => $users->toArray(),
@@ -402,7 +467,9 @@ class UserService extends BaseService
     public function getAdministrators(): array
     {
         try {
-            $users = $this->userRepository->getAdministrators();
+            $users = User::whereJsonContains('roles', 'administrator')
+                ->where('disabled', false)
+                ->get();
 
             return [
                 'users' => $users->toArray(),
@@ -423,7 +490,9 @@ class UserService extends BaseService
     public function getAdvisers(): array
     {
         try {
-            $users = $this->userRepository->getAdvisers();
+            $users = User::whereJsonContains('roles', 'adviser')
+                ->where('disabled', false)
+                ->get();
 
             return [
                 'users' => $users->toArray(),

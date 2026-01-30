@@ -3,9 +3,8 @@
 namespace App\Services;
 
 use App\Models\LineaInversion;
-use App\Repositories\BaseRepository;
+use App\Repositories\LineaInversionRepository;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 
 class LineaInversionService extends BaseService
 {
@@ -15,13 +14,12 @@ class LineaInversionService extends BaseService
     public function getAll(): array
     {
         try {
-            $lineas = LineaInversion::orderBy('id', 'asc')->get();
+            $lineas = $this->repository->getActive();
 
             return [
-                'lineas' => $lineas->toArray(),
+                'lineas' => $this->transformCollectionForApi($lineas),
                 'count' => $lineas->count()
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting all investment lines', ['error' => $e->getMessage()]);
             return [
@@ -37,7 +35,7 @@ class LineaInversionService extends BaseService
     public function getById(int $id): ?LineaInversion
     {
         try {
-            return LineaInversion::findById($id);
+            return $this->repository->findById($id);
         } catch (\Exception $e) {
             $this->logError('Error getting investment line by ID', ['id' => $id, 'error' => $e->getMessage()]);
             return null;
@@ -50,17 +48,13 @@ class LineaInversionService extends BaseService
     public function getByCategoria(string $categoria): array
     {
         try {
-            $lineas = LineaInversion::where('categoria', $categoria)
-                                     ->orWhere('categoria', null)
-                                     ->orderBy('id', 'asc')
-                                     ->get();
+            $lineas = $this->repository->getByCategoria($categoria);
 
             return [
-                'lineas' => $lineas->toArray(),
+                'lineas' => $this->transformCollectionForApi($lineas),
                 'count' => $lineas->count(),
                 'categoria' => $categoria
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting investment lines by category', ['categoria' => $categoria, 'error' => $e->getMessage()]);
             return [
@@ -83,7 +77,6 @@ class LineaInversionService extends BaseService
                 'lineas' => $lineas->toArray(),
                 'count' => $lineas->count()
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting active investment lines', ['error' => $e->getMessage()]);
             return [
@@ -131,7 +124,6 @@ class LineaInversionService extends BaseService
             }
 
             return $linea;
-
         } catch (\Exception $e) {
             $this->logError('Error creating/updating investment line', ['error' => $e->getMessage()]);
             throw new \Exception('Error al crear/actualizar línea de inversión: ' . $e->getMessage());
@@ -158,7 +150,6 @@ class LineaInversionService extends BaseService
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             $this->logError('Error deleting investment line', ['id' => $id, 'error' => $e->getMessage()]);
             throw new \Exception('Error al eliminar línea de inversión: ' . $e->getMessage());
@@ -301,7 +292,6 @@ class LineaInversionService extends BaseService
             ]);
 
             return true;
-
         } catch (\Exception $e) {
             $this->logError('Error initializing investment lines', ['error' => $e->getMessage()]);
             return false;
@@ -314,36 +304,7 @@ class LineaInversionService extends BaseService
     public function getStatistics(): array
     {
         try {
-            $total = LineaInversion::count();
-            $byCategoria = LineaInversion::raw(function ($collection) {
-                return $collection->aggregate([
-                    ['$group' => [
-                        '_id' => '$categoria',
-                        'count' => ['$sum' => 1],
-                        'total_monto' => ['$sum' => '$monto_maximo_pesos']
-                    ],
-                    ['$sort' => ['count' => -1]]
-                ]);
-            });
-
-            $byEstado = LineaInversion::raw(function ($collection) {
-                return $collection->aggregate([
-                    ['$group' => [
-                        '_id' => '$estado',
-                        'count' => ['$sum' => 1]
-                    ],
-                    ['$sort' => ['count' => -1]]
-                ]);
-            });
-
-            return [
-                'total' => $total,
-                'by_categoria' => $byCategoria->toArray(),
-                'by_estado' => $byEstado->toArray(),
-                'active_count' => LineaInversion::active()->count(),
-                'inactive_count' => LineaInversion::where('estado', '!=', 'activa')->count()
-            ];
-
+            return $this->repository->getStatistics();
         } catch (\Exception $e) {
             $this->logError('Error getting investment line statistics', ['error' => $e->getMessage()]);
             return [
@@ -362,16 +323,9 @@ class LineaInversionService extends BaseService
     public function isMontoWithinLimit(int $lineaId, float $monto): bool
     {
         try {
-            $linea = $this->getById($lineaId);
-
-            if (!$linea) {
-                return false;
-            }
-
-            return $linea->isMontoWithinLimit($monto);
-
+            return $this->repository->isMontoWithinLimit($lineaId, $monto);
         } catch (\Exception $e) {
-            $this->logError('Error checking amount limits', ['linea_id' => $lineaId, 'monto' => $monto, 'error' => $e->getMessage()]);
+            $this->logError('Error checking monto limits', ['linea_id' => $lineaId, 'monto' => $monto, 'error' => $e->getMessage()]);
             return false;
         }
     }
@@ -389,7 +343,6 @@ class LineaInversionService extends BaseService
             }
 
             return $linea->isPlazoWithinLimit($plazoMeses);
-
         } catch (\Exception $e) {
             $this->logError('Error checking plazo limits', ['linea_id' => $lineaId, 'plazo' => $plazoMeses, 'error' => $e->getMessage()]);
             return false;
@@ -409,7 +362,6 @@ class LineaInversionService extends BaseService
             }
 
             return $linea->getTasaInteresByCategoria($categoria);
-
         } catch (\Exception $e) {
             $this->logError('Error getting interest rate', ['linea_id' => $lineaId, 'categoria' => $categoria, 'error' => $e->getMessage()]);
             return null;
@@ -423,7 +375,7 @@ class LineaInversionService extends BaseService
     {
         try {
             $query = LineaInversion::where('linea_credito', 'like', "%{$term}%")
-                                     ->orWhere('descripcion', 'like', "%{$term}%");
+                ->orWhere('descripcion', 'like', "%{$term}%");
 
             if ($categoria) {
                 $query->where('categoria', $categoria);
@@ -437,7 +389,6 @@ class LineaInversionService extends BaseService
                 'search_term' => $term,
                 'categoria' => $categoria
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error searching investment lines', ['term' => $term, 'categoria' => $categoria, 'error' => $e->getMessage()]);
             return [
@@ -484,6 +435,6 @@ class LineaInversionService extends BaseService
      */
     public function transformCollectionForApi($lineas): array
     {
-        return $lineas->map(fn ($linea) => $this->transformForApi($linea))->toArray();
+        return $lineas->map(fn($linea) => $this->transformForApi($linea))->toArray();
     }
 }

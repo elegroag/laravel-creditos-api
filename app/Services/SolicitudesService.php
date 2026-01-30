@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\SolicitudCredito;
-use App\Repositories\BaseRepository;
+use App\Repositories\SolicitudRepository;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -14,7 +14,7 @@ class SolicitudesService extends BaseService
 {
     private string $storageDir;
 
-    public function __construct(BaseRepository $solicitudRepository)
+    public function __construct(SolicitudRepository $solicitudRepository)
     {
         parent::__construct($solicitudRepository);
         $this->storageDir = 'solicitudes';
@@ -34,19 +34,19 @@ class SolicitudesService extends BaseService
 
             // Prepare directory
             $solicitudDir = "{$this->storageDir}/{$solicitudId}";
-            
+
             // Generate unique filename
             $documentoId = Str::uuid()->toString();
             $safeFilename = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
             $extension = $file->getClientOriginalExtension();
             $uniqueFilename = "{$documentoId}_{$safeFilename}.{$extension}";
-            
+
             // Store file
             $path = $file->storeAs($solicitudDir, $uniqueFilename, 'public');
-            
+
             // Get file size
             $fileSize = $file->getSize();
-            
+
             // Create document record
             $nuevoDocumento = [
                 'id' => $documentoId,
@@ -57,15 +57,14 @@ class SolicitudesService extends BaseService
                 'tamano_bytes' => $fileSize,
                 'created_at' => now()->toISOString()
             ];
-            
+
             $this->log('Document saved successfully', [
                 'solicitud_id' => $solicitudId,
                 'documento_id' => $documentoId,
                 'filename' => $uniqueFilename
             ]);
-            
-            return $nuevoDocumento;
 
+            return $nuevoDocumento;
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -84,26 +83,25 @@ class SolicitudesService extends BaseService
     {
         try {
             $filePath = "{$this->storageDir}/{$solicitudId}/{$savedFilename}";
-            
+
             if (Storage::disk('public')->exists($filePath)) {
                 Storage::disk('public')->delete($filePath);
-                
+
                 $this->log('Document file deleted', [
                     'solicitud_id' => $solicitudId,
                     'filename' => $savedFilename
                 ]);
             }
-            
+
             // Check if directory is empty and remove it
             $directory = "{$this->storageDir}/{$solicitudId}";
             $files = Storage::disk('public')->files($directory);
-            
+
             if (empty($files)) {
                 Storage::disk('public')->deleteDirectory($directory);
             }
-            
-            return true;
 
+            return true;
         } catch (\Exception $e) {
             $this->logError('Error deleting document file', [
                 'solicitud_id' => $solicitudId,
@@ -121,14 +119,14 @@ class SolicitudesService extends BaseService
     {
         try {
             $filePath = "{$this->storageDir}/{$solicitudId}/{$savedFilename}";
-            
+
             if (!Storage::disk('public')->exists($filePath)) {
                 throw new ValidationException('Archivo no encontrado');
             }
-            
+
             $fullPath = Storage::disk('public')->path($filePath);
             $mimeType = Storage::disk('public')->mimeType($filePath);
-            
+
             return [
                 'path' => $fullPath,
                 'filename' => $savedFilename,
@@ -136,7 +134,6 @@ class SolicitudesService extends BaseService
                 'size' => Storage::disk('public')->size($filePath),
                 'url' => Storage::disk('public')->url($filePath)
             ];
-
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -155,10 +152,10 @@ class SolicitudesService extends BaseService
     public function serializeForFrontend(SolicitudCredito $solicitud): array
     {
         $payload = $solicitud->payload ?? [];
-        
+
         // Extract línea de crédito from payload
         $lineaCredito = $payload['linea_credito'] ?? [];
-        
+
         // If no línea de crédito data, build from solicitud data
         if (empty($lineaCredito)) {
             $solicitudData = $payload['solicitud'] ?? [];
@@ -183,7 +180,7 @@ class SolicitudesService extends BaseService
                 'documentos' => []
             ];
         }
-        
+
         return [
             'id' => $solicitud->id,
             'estado' => $solicitud->estado ?? 'Postulado',
@@ -209,15 +206,9 @@ class SolicitudesService extends BaseService
     public function getSolicitudesByUser(string $username, int $skip = 0, int $limit = 50): array
     {
         try {
-            $solicitudes = SolicitudCredito::where('owner_username', $username)
-                                        ->orderBy('created_at', 'desc')
-                                        ->skip($skip)
-                                        ->limit($limit)
-                                        ->get();
+            $solicitudes = $this->repository->getByUserPaginated($username, $limit, ['skip' => $skip]);
 
-            $total = SolicitudCredito::where('owner_username', $username)->count();
-
-            $serializedSolicitudes = $solicitudes->map(function ($solicitud) {
+            $serializedSolicitudes = $solicitudes->getCollection()->map(function ($solicitud) {
                 return $this->serializeForFrontend($solicitud);
             })->toArray();
 
@@ -226,11 +217,10 @@ class SolicitudesService extends BaseService
                 'pagination' => [
                     'skip' => $skip,
                     'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
+                    'total' => $solicitudes->total(),
+                    'has_more' => ($skip + $limit) < $solicitudes->total()
                 ]
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting solicitudes by user', [
                 'username' => $username,
@@ -265,9 +255,9 @@ class SolicitudesService extends BaseService
             }
 
             $solicitudes = $query->orderBy('created_at', 'desc')
-                                ->skip($skip)
-                                ->limit($limit)
-                                ->get();
+                ->skip($skip)
+                ->limit($limit)
+                ->get();
 
             $total = $query->count();
 
@@ -284,7 +274,6 @@ class SolicitudesService extends BaseService
                     'has_more' => ($skip + $limit) < $total
                 ]
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting all solicitudes', ['error' => $e->getMessage()]);
             return [
@@ -302,7 +291,7 @@ class SolicitudesService extends BaseService
         try {
             $totalSolicitudes = SolicitudCredito::count();
             $solicitudesConDocumentos = SolicitudCredito::where('documentos', '!=', '')->count();
-            
+
             $documentosPorEstado = SolicitudCredito::raw(function ($collection) {
                 return $collection->aggregate([
                     ['$group' => [
@@ -324,12 +313,11 @@ class SolicitudesService extends BaseService
                 'total_solicitudes' => $totalSolicitudes,
                 'solicitudes_con_documentos' => $solicitudesConDocumentos,
                 'solicitudes_sin_documentos' => $totalSolicitudes - $solicitudesConDocumentos,
-                'porcentaje_con_documentos' => $totalSolicitudes > 0 
-                    ? round(($solicitudesConDocumentos / $totalSolicitudes) * 100, 2) 
+                'porcentaje_con_documentos' => $totalSolicitudes > 0
+                    ? round(($solicitudesConDocumentos / $totalSolicitudes) * 100, 2)
                     : 0,
                 'documentos_por_estado' => $documentosPorEstado->toArray()
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting document statistics', ['error' => $e->getMessage()]);
             return [
@@ -358,10 +346,10 @@ class SolicitudesService extends BaseService
                 foreach ($solicitud->documentos ?? [] as $documento) {
                     $size = $documento['tamano_bytes'] ?? 0;
                     $mimeType = $documento['tipo_mime'] ?? 'unknown';
-                    
+
                     $totalSize += $size;
                     $totalFiles++;
-                    
+
                     // Group by file type
                     if (!isset($fileTypes[$mimeType])) {
                         $fileTypes[$mimeType] = [
@@ -369,7 +357,7 @@ class SolicitudesService extends BaseService
                             'size' => 0
                         ];
                     }
-                    
+
                     $fileTypes[$mimeType]['count']++;
                     $fileTypes[$mimeType]['size'] += $size;
                 }
@@ -382,7 +370,6 @@ class SolicitudesService extends BaseService
                 'file_types' => $fileTypes,
                 'average_file_size' => $totalFiles > 0 ? round($totalSize / $totalFiles) : 0
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error getting storage statistics', ['error' => $e->getMessage()]);
             return [
@@ -406,19 +393,19 @@ class SolicitudesService extends BaseService
 
             foreach ($directories as $directory) {
                 $solicitudId = basename($directory);
-                
+
                 // Check if solicitud exists
                 $solicitud = SolicitudCredito::find($solicitudId);
-                
+
                 if (!$solicitud) {
                     // Delete entire directory
                     $files = Storage::disk('public')->files($directory);
-                    
+
                     foreach ($files as $file) {
                         Storage::disk('public')->delete($file);
                         $cleanedFiles[] = $file;
                     }
-                    
+
                     Storage::disk('public')->deleteDirectory($directory);
                 }
             }
@@ -431,7 +418,6 @@ class SolicitudesService extends BaseService
                 'cleaned_files' => $cleanedFiles,
                 'count' => count($cleanedFiles)
             ];
-
         } catch (\Exception $e) {
             $this->logError('Error cleaning up orphaned files', ['error' => $e->getMessage()]);
             return [
@@ -447,11 +433,11 @@ class SolicitudesService extends BaseService
     private function formatBytes(int $bytes, int $precision = 2): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
+
         return round($bytes, $precision) . ' ' . $units[$i];
     }
 
@@ -465,11 +451,10 @@ class SolicitudesService extends BaseService
             SolicitudCredito::createIndex(['owner_username' => 1, 'created_at' => -1]);
             SolicitudCredito::createIndex(['estado' => 1]);
             SolicitudCredito::createIndex(['numero_solicitud' => 1]);
-            
-            $this->log('MongoDB indexes ensured for solicitudes');
-            
-            return true;
 
+            $this->log('MongoDB indexes ensured for solicitudes');
+
+            return true;
         } catch (\Exception $e) {
             $this->logError('Error ensuring MongoDB indexes', ['error' => $e->getMessage()]);
             return false;
