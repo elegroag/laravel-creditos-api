@@ -1,3 +1,5 @@
+import type { route as routeFn } from 'ziggy-js';
+
 // Tipos globales para la aplicación
 declare global {
     interface Window {
@@ -15,6 +17,8 @@ declare global {
         readonly env: ImportMetaEnv;
         glob: any;
     }
+
+    const route: typeof routeFn;
 }
 
 // Tipos para Inertia.js
@@ -62,4 +66,8 @@ declare module "@inertiajs/core" {
         };
         errorValueType: string[];
     }
+}
+
+export interface AnyObject {
+    [key: string]: any;
 }

@@ -56,10 +56,24 @@ export const useApi = () => {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                // Manejar errores de validación (422) y otros errores
+                const errorData = await response.json().catch(() => ({}))
+
+                // Si es un error de validación, lanzar con formato especial
+                if (response.status === 422 && errorData.errors) {
+                    const validationError = new Error('Validation failed')
+                        ; (validationError as any).validationErrors = errorData.errors
+                        ; (validationError as any).message = errorData.message || 'Validation failed'
+                    throw validationError
+                }
+
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
             }
 
             return await response.json()
+        } catch (error) {
+            // Propagar errores de validación y otros errores
+            throw error
         } finally {
             loading.value = false
         }
@@ -91,10 +105,24 @@ export const useApi = () => {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                // Manejar errores de validación (422) y otros errores
+                const errorData = await response.json().catch(() => ({}))
+
+                // Si es un error de validación, lanzar con formato especial
+                if (response.status === 422 && errorData.errors) {
+                    const validationError = new Error('Validation failed')
+                        ; (validationError as any).validationErrors = errorData.errors
+                        ; (validationError as any).message = errorData.message || 'Validation failed'
+                    throw validationError
+                }
+
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
             }
 
             return await response.json()
+        } catch (error) {
+            // Propagar errores de validación y otros errores
+            throw error
         } finally {
             loading.value = false
         }
@@ -133,10 +161,24 @@ export const useApi = () => {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                // Manejar errores de validación (422) y otros errores
+                const errorData = await response.json().catch(() => ({}))
+
+                // Si es un error de validación, lanzar con formato especial
+                if (response.status === 422 && errorData.errors) {
+                    const validationError = new Error('Validation failed')
+                        ; (validationError as any).validationErrors = errorData.errors
+                        ; (validationError as any).message = errorData.message || 'Validation failed'
+                    throw validationError
+                }
+
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
             }
 
             return await response.json()
+        } catch (error) {
+            // Propagar errores de validación y otros errores
+            throw error
         } finally {
             loading.value = false
         }
@@ -173,10 +215,24 @@ export const useApi = () => {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                // Manejar errores de validación (422) y otros errores
+                const errorData = await response.json().catch(() => ({}))
+
+                // Si es un error de validación, lanzar con formato especial
+                if (response.status === 422 && errorData.errors) {
+                    const validationError = new Error('Validation failed')
+                        ; (validationError as any).validationErrors = errorData.errors
+                        ; (validationError as any).message = errorData.message || 'Validation failed'
+                    throw validationError
+                }
+
+                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
             }
 
             return await response.json()
+        } catch (error) {
+            // Propagar errores de validación y otros errores
+            throw error
         } finally {
             loading.value = false
         }
@@ -196,6 +252,7 @@ export const useApi = () => {
         },
         clearSessionData: () => {
             sessionData.value = null
-        }
+        },
+        getAuthHeader,
     }
 }

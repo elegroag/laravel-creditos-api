@@ -153,10 +153,10 @@
                 </div>
 
                 <div class="space-y-2">
-                  <Label for="confirmar_password">Confirmar contraseña</Label>
+                  <Label for="password_confirmation">Confirmar contraseña</Label>
                   <Input
-                    id="confirmar_password"
-                    v-model="form.confirmar_password"
+                    id="password_confirmation"
+                    v-model="form.password_confirmation"
                     type="password"
                     required
                     minlength="8"
@@ -224,157 +224,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3';
 import { cn } from '@/lib/utils';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import { useRegistro } from '@/composables/auth/useRegister';
 
 interface Props {
   username?: string
   redirect?: string
-}
-
-interface TipoDocumento {
-  value: string
-  label: string
-}
-
-interface FormData {
-  tipo_documento: string
-  numero_documento: string
-  nombres: string
-  apellidos: string
-  telefono: string
-  email: string
-  username: string
-  password: string
-  confirmar_password: string
+  tipo_documentos?: []|any
 }
 
 const props = defineProps<Props>()
 
-const pasoActual = ref<number>(1)
-
-const form = useForm<FormData>({
-  tipo_documento: 'CC',
-  numero_documento: '',
-  nombres: '',
-  apellidos: '',
-  telefono: '',
-  email: '',
-  username: '',
-  password: '',
-  confirmar_password: '',
-})
-
-const tiposDocumento: TipoDocumento[] = [
-  { value: 'CC', label: 'Cédula de Ciudadanía' },
-  { value: 'CE', label: 'Cédula de Extranjería' },
-  { value: 'PASAPORTE', label: 'Pasaporte' },
-  { value: 'NIT', label: 'NIT' }
-]
-
-// Validaciones para cada paso
-const validarPaso1 = computed((): boolean => {
-  return Boolean(
-    form.tipo_documento &&
-    form.numero_documento &&
-    form.nombres &&
-    form.apellidos
-  )
-})
-
-const validarPaso2 = computed((): boolean => {
-  return Boolean(
-    form.email &&
-    form.telefono
-  )
-})
-
-const validarPaso3 = computed((): boolean => {
-  return Boolean(
-    form.username &&
-    form.password &&
-    form.confirmar_password &&
-    form.password.length >= 8 &&
-    form.password === form.confirmar_password
-  )
-})
-
-const canGoNext = computed((): boolean => {
-  if (pasoActual.value === 1) return validarPaso1.value
-  if (pasoActual.value === 2) return validarPaso2.value
-  return false
-})
-
-const canSubmit = computed((): boolean => {
-  return validarPaso3.value
-})
-
-const hasErrors = computed((): boolean => {
-  return Object.keys(form.errors).length > 0
-})
-
-const allErrors = computed((): string[] => {
-  const errors: string[] = []
-
-  if (form.errors.email) errors.push(form.errors.email as string)
-  if (form.errors.username) errors.push(form.errors.username as string)
-  if (form.errors.numero_documento) errors.push(form.errors.numero_documento as string)
-  if (form.errors.password) errors.push(form.errors.password as string)
-  if (form.errors.tipo_documento) errors.push(form.errors.tipo_documento as string)
-  if (form.errors.nombres) errors.push(form.errors.nombres as string)
-  if (form.errors.apellidos) errors.push(form.errors.apellidos as string)
-  if (form.errors.telefono) errors.push(form.errors.telefono as string)
-
-  return errors
-})
-
-// Generar username por defecto
-watch([() => form.nombres, () => form.apellidos], ([nombres, apellidos]) => {
-  if (nombres && apellidos && !form.username) {
-    const nombrePart = nombres.trim().replace(/\s/g, '').substring(0, 4).toLowerCase()
-    const apellidoPart = apellidos.trim().replace(/\s/g, '').substring(0, 3).toLowerCase()
-    form.username = `${nombrePart}${apellidoPart}`
-  }
-})
-
-const pasoSiguiente = (): void => {
-  if (pasoActual.value < 3) {
-    pasoActual.value++
-  }
-}
-
-const pasoAnterior = (): void => {
-  if (pasoActual.value > 1) {
-    pasoActual.value--
-  }
-}
-
-const handleSubmit = (): void => {
-  if (pasoActual.value === 3) {
-    if (form.password !== form.confirmar_password) {
-      form.setError('confirmar_password', 'Las contraseñas no coinciden')
-      return
-    }
-
-    // Eliminar confirmar_password antes de enviar
-    const { confirmar_password, ...datosRegistro } = form
-
-    form.post('/register', {
-      onSuccess: () => {
-        // Redirección automática por Inertia
-      },
-      onError: () => {
-        // Manejar errores de validación - Inertia maneja automáticamente
-      },
-      onFinish: () => {
-        form.reset('password', 'confirmar_password')
-      },
-    })
-  }
-}
+// Usar el composable de registro
+const {
+  form,
+  pasoActual,
+  tiposDocumento,
+  canGoNext,
+  canSubmit,
+  hasErrors,
+  allErrors,
+  pasoSiguiente,
+  pasoAnterior,
+  handleSubmit
+} = useRegistro(props.tipo_documentos as Record<string, string>)
 </script>

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'external_api' => [
+        'url' => env('EXTERNAL_API_BASE_URL', 'https://api.example.com'),
+        'auth_type' => env('EXTERNAL_API_TYPE', 'Basic'),
+        'user' => env('EXTERNAL_API_USER'),
+        'password' => env('EXTERNAL_API_PASSWORD'),
+        'timeout' => env('EXTERNAL_API_TIMEOUT', 30),
+    ],
+
 ];

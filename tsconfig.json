@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "ES2020",
+        "target": "ESNext",
         "useDefineForClassFields": true,
         "lib": [
             "ES2020",
@@ -15,7 +15,6 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
-        "jsx": "preserve",
         /* Linting */
         "strict": true,
         "noUnusedLocals": true,
@@ -31,14 +30,22 @@
         "paths": {
             "@/*": [
                 "./resources/js/*"
+            ],
+            "~/*": [
+                "./resources/js/*"
+            ],
+            "~~/*": [
+                "./resources/*"
+            ],
+            "@@/*": [
+                "./resources/*"
+            ],
+            "ziggy-js": [
+                "./vendor/tightenco/ziggy"
             ]
         },
         "types": [
             "node"
-        ],
-        "typeRoots": [
-            "./node_modules/@types",
-            "./resources/js/types"
         ]
     },
     "include": [

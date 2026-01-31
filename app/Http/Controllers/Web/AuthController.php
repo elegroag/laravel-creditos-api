@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -26,6 +27,19 @@ class AuthController extends Controller
             'canResetPassword' => false,
             'status' => session('status'),
         ]);
+    }
+
+    /**
+     * Mostrar la página de login para asesores
+     */
+    public function showAdviserLoginForm(): Response
+    {
+        // Si el usuario ya está autenticado, redirigir al inicio
+        if (Auth::check()) {
+            return Inertia::location(route('inicio'));
+        }
+
+        return Inertia::render('auth/adviser');
     }
 
     /**
@@ -98,7 +112,7 @@ class AuthController extends Controller
         }
 
         // Si la autenticación falla, verificar si el usuario existe para redirigir a registro
-        $user = \App\Models\User::where('username', $request->username)->first();
+        $user = User::where('username', $request->username)->first();
 
         if (!$user) {
             // Usuario no encontrado, redirigir a registro
@@ -143,7 +157,7 @@ class AuthController extends Controller
         ]);
 
         try {
-            $user = \App\Models\User::create([
+            $user = User::create([
                 'tipo_documento' => $validated['tipo_documento'],
                 'numero_documento' => $validated['numero_documento'],
                 'nombres' => $validated['nombres'],
@@ -183,6 +197,7 @@ class AuthController extends Controller
         return Inertia::render('auth/register', [
             'username' => session('username'),
             'redirect' => session('redirect'),
+            'tipo_documentos' => tipo_documentos_array(),
         ]);
     }
 

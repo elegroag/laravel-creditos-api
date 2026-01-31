@@ -1,9 +1,9 @@
 import { ref, computed } from 'vue';
 import { useSession } from '@/composables/useSession';
 import { useApi } from '@/composables/useApi';
-import type { 
-    SolicitudResumen, 
-    EstadoSolicitud, 
+import type {
+    SolicitudResumen,
+    EstadoSolicitud,
     EstadoSolicitudData,
     DashboardStats,
     ActividadReciente,
@@ -13,8 +13,8 @@ import type {
 } from '@/types/inicio';
 
 export function useInicio() {
-    const { user, isAuthenticated } = useSession();
-    const { getJson } = useApi();
+    const { isAuthenticated } = useSession();
+    const { getJson, putJson } = useApi();
 
     // Estado de solicitudes
     const solicitudes = ref<SolicitudResumen[]>([]);
@@ -36,7 +36,7 @@ export function useInicio() {
     const actividadReciente = ref<ActividadReciente[]>([]);
     const notificaciones = ref<Notificacion[]>([]);
     const loadingActivity = ref(false);
-    const activityError = res('');
+    const activityError = ref('');
 
     // Quick actions
     const quickActions = ref<QuickAction[]>([]);
@@ -47,31 +47,31 @@ export function useInicio() {
     const financieroError = ref('');
 
     // Utilidades de formateo
-    const fmtMoney = (value: unknown) => {
+    const fmtMoney = (value: unknown): string => {
         const n = typeof value === 'number' ? value : Number(value);
         const v = Number.isFinite(n) ? n : 0;
         return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
     };
 
-    const fmtDate = (value: unknown) => {
+    const fmtDate = (value: unknown): string => {
         if (typeof value !== 'string' || !value) return '-';
         const d = new Date(value);
         if (Number.isNaN(d.getTime())) return '-';
         return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(d);
     };
 
-    const fmtDateTime = (value: unknown) => {
+    const fmtDateTime = (value: unknown): string => {
         if (typeof value !== 'string' || !value) return '-';
         const d = new Date(value);
         if (Number.isNaN(d.getTime())) return '-';
-        return new Intl.DateTimeFormat('es-CO', { 
-            dateStyle: 'medium', 
-            timeStyle: 'short' 
+        return new Intl.DateTimeFormat('es-CO', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
         }).format(d);
     };
 
     // Funciones de utilidad para estados
-    const normalizeEstado = (estado: string) => {
+    const normalizeEstado = (estado: string): string => {
         return (estado || '')
             .trim()
             .toLowerCase()
@@ -89,7 +89,7 @@ export function useInicio() {
         if (index !== -1) {
             return flujoAprobacion.value[index];
         }
-        
+
         // Estado por defecto si no está en el flujo
         return {
             nombre: estado,
@@ -284,9 +284,9 @@ export function useInicio() {
     const marcarNotificacionLeida = async (notificacionId: string) => {
         try {
             await putJson(`/api/inicio/notificaciones/${notificacionId}/leer`, {}, { auth: true });
-            
+
             // Actualizar localmente
-            const notificacion = notificaciones.value.find(n => n.id === notificacionId);
+            const notificacion = notificaciones.value.find((n: Notificacion) => n.id === notificacionId);
             if (notificacion) {
                 notificacion.leida = true;
             }
@@ -298,9 +298,9 @@ export function useInicio() {
     const marcarTodasNotificacionesLeidas = async () => {
         try {
             await putJson('/api/inicio/notificaciones/marcar-leidas', {}, { auth: true });
-            
+
             // Actualizar localmente
-            notificaciones.value.forEach(n => {
+            notificaciones.value.forEach((n: Notificacion) => {
                 n.leida = true;
             });
         } catch (err: any) {
@@ -310,17 +310,17 @@ export function useInicio() {
 
     // Computed properties
     const solicitudesPendientes = computed(() => {
-        return solicitudes.value.filter(s => 
+        return solicitudes.value.filter((s: SolicitudResumen) =>
             ['pendiente', 'en_revision', 'requiere_documentacion'].includes(s.estado.toLowerCase())
         );
     });
 
     const solicitudesRequierenAccion = computed(() => {
-        return solicitudes.value.filter(s => s.requiere_accion);
+        return solicitudes.value.filter((s: SolicitudResumen) => s.requiere_accion);
     });
 
     const notificacionesNoLeidas = computed(() => {
-        return notificaciones.value.filter(n => !n.leida);
+        return notificaciones.value.filter((n: Notificacion) => !n.leida);
     });
 
     const totalNotificacionesNoLeidas = computed(() => {
@@ -332,15 +332,15 @@ export function useInicio() {
     });
 
     const pagosVencidos = computed(() => {
-        return proximosPagos.value.filter(p => p.dias_para_vencer < 0);
+        return proximosPagos.value.filter((p: ResumenFinanciero['proximos_pagos'][number]) => p.dias_para_vencer < 0);
     });
 
     const pagosPorVencer = computed(() => {
-        return proximosPagos.value.filter(p => p.dias_para_vencer >= 0 && p.dias_para_vencer <= 7);
+        return proximosPagos.value.filter((p: ResumenFinanciero['proximos_pagos'][number]) => p.dias_para_vencer >= 0 && p.dias_para_vencer <= 7);
     });
 
     const quickActionsDisponibles = computed(() => {
-        return quickActions.value.filter(action => action.disponible);
+        return quickActions.value.filter((action: QuickAction) => action.disponible);
     });
 
     // Utilidades adicionales

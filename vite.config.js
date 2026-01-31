@@ -28,6 +28,10 @@ export default defineConfig({
             "@composables": resolve(__dirname, "resources/js/composables"),
             "@layouts": resolve(__dirname, "resources/js/layouts"),
             "@types": resolve(__dirname, "resources/js/types"),
+            "~": resolve(__dirname, "resources/js"),
+            "~~": resolve(__dirname, "resources/"),
+            "@@": resolve(__dirname, "resources/"),
+            "ziggy-js": resolve(__dirname, "vendor/tightenco/ziggy"),
         },
     },
     build: {
@@ -36,7 +40,7 @@ export default defineConfig({
             output: {
                 manualChunks: {
                     vendor: ["vue", "@inertiajs/vue3"],
-                    ziggy: ["../../vendor/tightenco/ziggy"],
+                    ziggy: ["vendor/tightenco/ziggy/dist/index.esm.js"],
                 },
             },
         },
@@ -46,7 +50,8 @@ export default defineConfig({
             ignored: ["**/storage/framework/views/**"],
         },
         hmr: {
-            overlay: true,
+            host: "localhost", // host que usa el navegador
+            port: Number(process.env.VITE_PORT) || 5173, // puerto expuesto por Sail
         },
     },
     define: {

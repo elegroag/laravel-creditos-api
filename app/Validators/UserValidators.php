@@ -31,17 +31,23 @@ class UserValidators
     public static function validateRegister(array $data): \Illuminate\Validation\Validator
     {
         return Validator::make($data, [
-            'tipo_documento' => 'required|string|in:cedula,pasaporte,nit',
+            'username' => 'sometimes|string|min:3|max:50|regex:/^[a-z0-9_\.-]+$/',
+            'tipo_documento' => 'required|string|in:' . implode(',', array_keys(tipo_documentos_array())),
             'numero_documento' => 'required|string|max:20',
             'nombres' => 'required|string|max:100',
             'apellidos' => 'required|string|max:100',
             'telefono' => 'nullable|string|regex:/^\+?[0-9\s\-\(\)]{8,20}$/',
             'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/',
-            'password_confirmation' => 'required|same:password'
+            'password_confirmation' => 'required|same:password',
+            'full_name' => 'sometimes|string|max:255',
+            'phone' => 'sometimes|string|max:20',
+            'roles' => 'sometimes|array',
+            'disabled' => 'sometimes|boolean',
+            'is_active' => 'sometimes|boolean'
         ], [
             'tipo_documento.required' => 'El tipo de documento es requerido',
-            'tipo_documento.in' => 'El tipo de documento debe ser: cedula, pasaporte o nit',
+            'tipo_documento.in' => 'El tipo de documento seleccionado no es válido',
             'numero_documento.required' => 'El número de documento es requerido',
             'numero_documento.max' => 'El número de documento no puede exceder 20 caracteres',
             'nombres.required' => 'Los nombres son requeridos',

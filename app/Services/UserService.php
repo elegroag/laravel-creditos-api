@@ -33,6 +33,14 @@ class UserService extends BaseService
 
         $validated = $validator->validated();
 
+        // Generate username if not provided
+        if (!isset($validated['username']) || empty($validated['username'])) {
+            $validated['username'] = UserValidators::generateUsername(
+                $validated['nombres'],
+                $validated['apellidos']
+            );
+        }
+
         // Check if username already exists
         if (User::findByUsername($validated['username'])) {
             throw new ValidationException('El nombre de usuario ya está en uso');
@@ -43,15 +51,14 @@ class UserService extends BaseService
             throw new ValidationException('El correo electrónico ya está en uso');
         }
 
-        try {
-            // Generate username if not provided
-            if (!isset($validated['username']) || empty($validated['username'])) {
-                $validated['username'] = UserValidators::generateUsername(
-                    $validated['nombres'],
-                    $validated['apellidos']
-                );
-            }
+        // Transform password to password_hash
+        if (isset($validated['password'])) {
+            $validated['password_hash'] = Hash::make($validated['password']);
+            unset($validated['password']);
+            unset($validated['password_confirmation']);
+        }
 
+        try {
             // Create user with hashed password
             $user = User::create($validated);
 

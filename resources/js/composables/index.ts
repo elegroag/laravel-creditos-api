@@ -5,7 +5,7 @@ export * from './useStorage';
 
 // Exportar composables de autenticación
 export * from './auth/useLogin';
-export * from './auth/useRegistro';
+export * from './auth/useRegister';
 
 // Exportar composables de administración
 export * from './admin/useAdminUsers';

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->json('roles')->nullable();
             $table->boolean('disabled')->default(false);
             $table->boolean('is_active')->default(true);
-            $table->string('tipo_documento', 10)->nullable();
+            $table->string('tipo_documento', 3)->nullable();
             $table->string('numero_documento', 20)->nullable();
             $table->string('nombres', 100)->nullable();
             $table->string('apellidos', 100)->nullable();

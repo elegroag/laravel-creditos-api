@@ -166,7 +166,8 @@ class AuthController extends Controller
             $userData = [
                 'username' => $username,
                 'email' => $email,
-                'password' => Hash::make($password),
+                'password' => $password, // Pass plain password, UserService will hash it
+                'password_confirmation' => $password, // Add confirmation
                 'full_name' => $fullName,
                 'phone' => $telefono,
                 'tipo_documento' => $tipoDocumento,

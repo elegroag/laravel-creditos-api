@@ -1,3 +1,5 @@
+import { AnyObject } from "@/types/global";
+
 export class StorageAdapter {
     private static instance: StorageAdapter;
     private storeName: string;
@@ -23,10 +25,10 @@ export class StorageAdapter {
         }
     }
 
-    async setItem(key: string, value: string): Promise<void> {
+    async setItem(key: string, value: AnyObject | string): Promise<void> {
         if (typeof window === 'undefined') return;
         try {
-            localStorage.setItem(key, value);
+            localStorage.setItem(key, value instanceof Object ? JSON.stringify(value) : value);
         } catch (error) {
             console.error('Error setting item in localStorage:', error);
             throw error;

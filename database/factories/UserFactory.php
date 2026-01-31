@@ -23,11 +23,25 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $fullName = fake()->name();
+        $nameParts = explode(' ', $fullName, 2);
+        $nombres = $nameParts[0];
+        $apellidos = $nameParts[1] ?? '';
+
         return [
-            'name' => fake()->name(),
+            'username' => strtolower(str_replace(' ', '', $fullName)),
             'email' => fake()->unique()->safeEmail(),
+            'full_name' => $fullName,
+            'phone' => fake()->phoneNumber(),
+            'password_hash' => static::$password ??= Hash::make('password'),
+            'tipo_documento' => fake()->randomElement(['cedula', 'tarjeta', 'pasaporte']),
+            'numero_documento' => fake()->unique()->numerify('#########'),
+            'nombres' => $nombres,
+            'apellidos' => $apellidos,
+            'roles' => json_encode(['user_trabajador']),
+            'disabled' => false,
+            'is_active' => true,
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
         ];
     }
@@ -37,7 +51,7 @@ class UserFactory extends Factory
      */
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'email_verified_at' => null,
         ]);
     }
