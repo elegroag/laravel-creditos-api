@@ -62,6 +62,7 @@
                   <Label for="numero_documento">Número de documento</Label>
                   <Input
                     id="numero_documento"
+                    type="number"
                     v-model="form.numero_documento"
                     required
                     placeholder="1234567890"
@@ -113,7 +114,7 @@
                   <Input
                     id="telefono"
                     v-model="form.telefono"
-                    type="tel"
+                    type="number"
                     required
                     placeholder="3001234567"
                     :disabled="form.processing"
@@ -207,7 +208,7 @@
           <div class="text-center text-sm">
             <p class="text-muted-foreground">
               ¿Ya tienes una cuenta?
-              <Link href="/login" class="font-medium text-primary underline underline-offset-4">
+              <Link href="/web/login" view-transition class="font-medium text-primary underline underline-offset-4">
                 Inicia sesión
               </Link>
             </p>

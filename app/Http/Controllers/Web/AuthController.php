@@ -32,7 +32,7 @@ class AuthController extends Controller
     /**
      * Mostrar la página de login para asesores
      */
-    public function showAdviserLoginForm(): Response
+    public function showAdviserLoginForm()
     {
         // Si el usuario ya está autenticado, redirigir al inicio
         if (Auth::check()) {
@@ -40,6 +40,35 @@ class AuthController extends Controller
         }
 
         return Inertia::render('auth/adviser');
+    }
+
+    /**
+     * Mostrar pantalla de verificación de identidad (código de 6 dígitos)
+     */
+    public function showVerify(Request $request): Response
+    {
+        return Inertia::render('auth/verify', [
+            'coddoc' => $request->query('coddoc'),
+            'documento' => $request->query('documento'),
+        ]);
+    }
+
+    /**
+     * Procesar verificación de identidad (código de 6 dígitos)
+     */
+    public function verify(Request $request)
+    {
+        $validated = $request->validate([
+            'codigo' => ['required', 'digits:6'],
+            'coddoc' => ['nullable', 'string'],
+            'documento' => ['nullable', 'string'],
+        ]);
+
+        // TODO: Conectar aquí la validación real del código contra el servicio/API.
+
+        return redirect()
+            ->route('login')
+            ->with('status', 'Verificación enviada. Si el código es correcto, ya puedes iniciar sesión.');
     }
 
     /**
@@ -61,7 +90,7 @@ class AuthController extends Controller
             // Preparar respuesta de autenticación (token para API si se necesita)
             // En web, Laravel maneja la sesión automáticamente
             $authData = [
-                'access_token' => $user->createToken('web')->plainTextToken,
+                'access_token' => '',
                 'token_type' => 'bearer',
                 'user' => [
                     'id' => $user->id,
@@ -194,10 +223,12 @@ class AuthController extends Controller
      */
     public function showRegistrationForm()
     {
+        $tipo_documentos = tipo_documentos_array();
+        unset($tipo_documentos['3']);
         return Inertia::render('auth/register', [
             'username' => session('username'),
             'redirect' => session('redirect'),
-            'tipo_documentos' => tipo_documentos_array(),
+            'tipo_documentos' => $tipo_documentos,
         ]);
     }
 

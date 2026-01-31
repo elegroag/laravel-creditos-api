@@ -1,18 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
-import { Ziggy } from "../../vendor/tightenco/ziggy";
-
-// Tipos para la configuración
-interface AxiosConfig {
-    baseURL?: string;
-    timeout?: number;
-    headers?: Record<string, string>;
-}
-
-interface ErrorResponse {
-    message?: string;
-    status?: number;
-    errors?: Record<string, string[]>;
-}
+import { ZiggyVue } from "../../vendor/tightenco/ziggy";
+import { ErrorResponse } from "./types/global";
 
 // Configuración global de axios con tipado fuerte
 const axiosInstance: AxiosInstance = axios.create({
@@ -41,15 +29,7 @@ if (csrfTokenElement) {
     );
 }
 
-// Configuración de Ziggy para rutas de Laravel con tipado
-declare global {
-    interface Window {
-        Ziggy: typeof Ziggy;
-        axios: AxiosInstance;
-    }
-}
-
-window.Ziggy = Ziggy;
+window.Ziggy = ZiggyVue;
 window.axios = axiosInstance;
 
 // Interceptor para manejar errores de autenticación con tipado fuerte
@@ -63,13 +43,13 @@ axiosInstance.interceptors.response.use(
             console.warn("Sesión expirada, redirigiendo al login");
             window.location.href = "/login";
         }
-        
+
         // Manejo de errores 419 (token CSRF inválido)
         if (error.response?.status === 419) {
             console.error("Token CSRF inválido o expirado");
             window.location.reload();
         }
-        
+
         // Manejo de errores 422 (validación)
         if (error.response?.status === 422) {
             const validationErrors = error.response.data?.errors;
@@ -77,17 +57,17 @@ axiosInstance.interceptors.response.use(
                 console.error("Errores de validación:", validationErrors);
             }
         }
-        
+
         // Manejo de errores 500 (error del servidor)
         if (error.response?.status === 500) {
             console.error("Error interno del servidor");
         }
-        
+
         // Manejo de errores de red
         if (!error.response) {
             console.error("Error de conexión:", error.message);
         }
-        
+
         return Promise.reject(error);
     },
 );
@@ -95,5 +75,3 @@ axiosInstance.interceptors.response.use(
 // Exportar instancia tipada para uso en otros módulos
 export default axiosInstance;
 
-// Exportar tipos para uso en componentes
-export type { AxiosConfig, ErrorResponse };

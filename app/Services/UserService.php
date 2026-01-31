@@ -549,4 +549,10 @@ class UserService extends BaseService
     {
         return $users->map(fn($user) => $this->transformForApi($user))->toArray();
     }
+
+    //genera un pin de 6 digitos aleatorio
+    public function generatePin(): int
+    {
+        return rand(100000, 999999);
+    }
 }

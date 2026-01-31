@@ -8,28 +8,28 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Services\AuthenticationService;
 use App\Services\UserService;
 use App\Services\TrabajadorService;
-use App\Models\User;
+use App\Services\SenderEmail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class AuthController extends Controller
 {
     protected UserService $userService;
     protected TrabajadorService $trabajadorService;
+    protected AuthenticationService $authService;
 
     public function __construct(
         UserService $userService,
-        TrabajadorService $trabajadorService
+        TrabajadorService $trabajadorService,
+        AuthenticationService $authService
     ) {
         $this->userService = $userService;
         $this->trabajadorService = $trabajadorService;
+        $this->authService = $authService;
     }
 
     /**
@@ -41,13 +41,13 @@ class AuthController extends Controller
             $validated = $request->validated();
 
             // Rate limiting
-            $this->checkRateLimit('auth.login', 30, 60);
+            $this->authService->checkRateLimit('auth.login', 30, 60);
 
             $username = trim($validated['username']);
             $password = $validated['password'];
 
             // Normalize username
-            $normalizedUsername = $this->normalizeUsername($username);
+            $normalizedUsername = $this->authService->normalizeUsername($username);
 
             if (!$normalizedUsername || !$password) {
                 return response()->json([
@@ -56,61 +56,29 @@ class AuthController extends Controller
             }
 
             // Rate limiting by user
-            $this->checkRateLimit("auth.login.user:{$normalizedUsername}", 10, 60);
+            $this->authService->checkRateLimit("auth.login.user:{$normalizedUsername}", 10, 60);
 
-            // Authenticate user using Laravel's built-in authentication
-            if (!Auth::attempt(['username' => $normalizedUsername, 'password' => $password])) {
-                return response()->json([
-                    'error' => 'Credenciales inválidas'
-                ], 401);
-            }
+            // Authenticate using AuthenticationService
+            $authResult = $this->authService->login($normalizedUsername, $password);
 
-            $user = Auth::user();
-
-            // Get additional data if user has documento
+            // Get additional trabajador data if user has documento
             $trabajadorData = null;
-            if ($user && $user->numero_documento) {
+            if (isset($authResult['user']['numero_documento']) && $authResult['user']['numero_documento']) {
                 try {
-                    $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($user->numero_documento);
+                    $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($authResult['user']['numero_documento']);
                 } catch (\Exception $e) {
                     Log::warning("No se pudieron obtener datos del trabajador: " . $e->getMessage());
                 }
             }
 
-            // Create token using Sanctum
-            $token = $user->createToken('api');
-
-            // Prepare user response with additional data
-            $userResponse = [
-                'id' => $user->id,
-                'username' => $user->username,
-                'email' => $user->email,
-                'full_name' => $user->full_name,
-                'phone' => $user->phone,
-                'tipo_documento' => $user->tipo_documento,
-                'numero_documento' => $user->numero_documento,
-                'roles' => $user->roles,
-                'permissions' => $user->permissions ?? [],
-                'is_active' => $user->is_active,
-                'disabled' => $user->disabled,
-                'created_at' => $user->created_at->toISOString(),
-                'updated_at' => $user->updated_at->toISOString()
-            ];
-
             // Add trabajador data if available
             if ($trabajadorData) {
-                $userResponse['trabajador'] = $trabajadorData;
+                $authResult['user']['trabajador'] = $trabajadorData;
             }
 
-            return response()->json([
-                'access_token' => $token->plainTextToken,
-                'token_type' => 'Bearer',
-                'expires_in' => config('sanctum.expiration', 5184000), // 60 days default
-                'user' => $userResponse
-            ]);
+            return response()->json($authResult);
         } catch (\Exception $e) {
             Log::error('Error en login: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error de autenticación'
             ], 401);
@@ -126,9 +94,10 @@ class AuthController extends Controller
             $validated = $request->validated();
 
             // Rate limiting
-            $this->checkRateLimit('auth.register', 10, 60);
+            $this->authService->checkRateLimit('auth.register', 10, 60);
 
             // Extract data
+            Log::info('Validated data: ' . json_encode($validated));
             $tipoDocumento = $validated['tipo_documento'];
             $numeroDocumento = $validated['numero_documento'];
             $nombres = $validated['nombres'];
@@ -136,10 +105,9 @@ class AuthController extends Controller
             $telefono = $validated['telefono'];
             $email = $validated['email'];
             $password = $validated['password'];
+            $username = $validated['username'];
 
-            // Generate username
-            $username = $this->generateUsername($nombres, $apellidos);
-            if (!$this->isValidUsername($username)) {
+            if (!$this->authService->isValidUsername($username)) {
                 return response()->json([
                     'error' => 'Usuario inválido'
                 ], 400);
@@ -162,7 +130,6 @@ class AuthController extends Controller
             // Build full name
             $fullName = trim($nombres . ' ' . $apellidos);
 
-            // Create user data
             $userData = [
                 'username' => $username,
                 'email' => $email,
@@ -181,33 +148,51 @@ class AuthController extends Controller
                 'updated_at' => now()
             ];
 
-            // Create user
-            $createdUser = $this->userService->create($userData);
+            // Use AuthenticationService to create user and generate token
+            $authResult = $this->authService->register($userData);
+            $token = $authResult['access_token'];
 
-            // Generate token for newly created user using Sanctum
-            $token = $createdUser->createToken('api');
+            $pin = $this->userService->generatePin();
 
-            // Prepare user response
-            $userResponse = [
-                'id' => $createdUser->id,
-                'username' => $createdUser->username,
-                'email' => $createdUser->email,
-                'full_name' => $createdUser->full_name,
-                'phone' => $createdUser->phone,
-                'tipo_documento' => $createdUser->tipo_documento,
-                'numero_documento' => $createdUser->numero_documento,
-                'roles' => $createdUser->roles,
-                'permissions' => $createdUser->permissions ?? [],
-                'is_active' => $createdUser->is_active,
-                'disabled' => $createdUser->disabled,
-                'created_at' => $createdUser->created_at->toISOString(),
-                'updated_at' => $createdUser->updated_at->toISOString()
-            ];
+            // Use the user data from authResult
+            $userResponse = $authResult['user'];
+            $userResponse['pin'] = $pin;
+
+            // Crear instancia del servicio
+            $sender = new SenderEmail([
+                'asunto' => 'Comfaca Credito - Verificación de correo'
+            ]);
+            $body = '
+                <html>
+                <head>
+                    <title>Gracias por registrarte en Comfaca Credito</title>
+                </head>
+                <body>
+                    <h1>Gracias por registrarte en Comfaca Credito</h1>
+                    <p>Gracias por registrarte en Comfaca Credito. Ahora puedes iniciar sesión con tu correo electrónico y contraseña.</p>
+                    <p><strong>Fecha de envío:</strong> ' . now()->format('Y-m-d H:i:s') . '</p>
+                    <p><strong>Entorno:</strong> ' . config('app.env') . '</p>
+                    <p><strong>PIN:</strong> ' . $pin . '</p>
+                    <hr>
+                    <p><small>Este correo fue enviado automáticamente desde el sistema de Comfaca Credito.</small></p>
+                </body>
+                </html>
+            ';
+
+            $altBody = 'Gracias por registrarte en Comfaca Credito - Este es un correo de prueba para verificar que el registro se realizo correctamente.';
+
+            try {
+                // Enviar el correo
+                $sender->send($authResult['user']['email'], $body, null, $altBody);
+                Log::info('Correo enviado exitosamente');
+            } catch (\Exception $e) {
+                Log::error('Error al enviar el correo: ' . $e->getMessage());
+            }
 
             return response()->json([
-                'access_token' => $token->plainTextToken,
-                'token_type' => 'Bearer',
-                'expires_in' => config('sanctum.expiration', 5184000),
+                'access_token' => $token,
+                'token_type' => $authResult['token_type'],
+                'expires_in' => $authResult['expires_in'],
                 'user' => $userResponse
             ], 201);
         } catch (\Exception $e) {
@@ -226,7 +211,7 @@ class AuthController extends Controller
     {
         try {
             // Rate limiting for token verification
-            $this->checkRateLimit('auth.verify', 100, 60);
+            $this->authService->checkRateLimit('auth.verify', 100, 60);
 
             // The middleware should already verify the token
             $user = Auth::user();
@@ -269,13 +254,13 @@ class AuthController extends Controller
             $validated = $request->validated();
 
             // Rate limiting
-            $this->checkRateLimit('auth.adviser', 30, 60);
+            $this->authService->checkRateLimit('auth.adviser', 30, 60);
 
             $username = trim($validated['username']);
             $password = $validated['password'];
 
             // Normalize username
-            $normalizedUsername = $this->normalizeUsername($username);
+            $normalizedUsername = $this->authService->normalizeUsername($username);
 
             if (!$normalizedUsername || !$password) {
                 return response()->json([
@@ -284,16 +269,11 @@ class AuthController extends Controller
             }
 
             // Rate limiting by user
-            $this->checkRateLimit("auth.adviser.user:{$normalizedUsername}", 10, 60);
+            $this->authService->checkRateLimit("auth.adviser.user:{$normalizedUsername}", 10, 60);
 
-            // Authenticate user using Laravel's built-in authentication
-            if (!Auth::attempt(['username' => $normalizedUsername, 'password' => $password])) {
-                return response()->json([
-                    'error' => 'Credenciales inválidas'
-                ], 401);
-            }
-
-            $user = Auth::user();
+            // Authenticate using AuthenticationService
+            $authResult = $this->authService->login($normalizedUsername, $password);
+            $user = $this->authService->authenticate($normalizedUsername, $password);
 
             // Get additional data for advisers
             $usuarioSisuData = null;
@@ -310,45 +290,20 @@ class AuthController extends Controller
                 }
             }
 
-            // Create token using Sanctum
-            $token = $user->createToken('api');
-
-            // Prepare user response with additional data
-            $userResponse = [
-                'id' => $user->id,
-                'username' => $user->username,
-                'email' => $user->email,
-                'full_name' => $user->full_name,
-                'phone' => $user->phone,
-                'tipo_documento' => $user->tipo_documento,
-                'numero_documento' => $user->numero_documento,
-                'roles' => $user->roles,
-                'permissions' => $user->permissions ?? [],
-                'is_active' => $user->is_active,
-                'disabled' => $user->disabled,
-                'created_at' => $user->created_at->toISOString(),
-                'updated_at' => $user->updated_at->toISOString()
-            ];
-
             // Add adviser-specific data to user response
             if ($usuarioSisuData) {
-                $userResponse['asesor'] = $usuarioSisuData;
+                $authResult['user']['asesor'] = $usuarioSisuData;
             }
 
             if ($trabajadorData) {
-                $userResponse['trabajador'] = $trabajadorData;
+                $authResult['user']['trabajador'] = $trabajadorData;
             }
 
             if ($puntosAsesores) {
-                $userResponse['puntos_asesores'] = $puntosAsesores;
+                $authResult['user']['puntos_asesores'] = $puntosAsesores;
             }
 
-            return response()->json([
-                'access_token' => $token->plainTextToken,
-                'token_type' => 'Bearer',
-                'expires_in' => config('sanctum.expiration', 5184000),
-                'user' => $userResponse
-            ]);
+            return response()->json($authResult);
         } catch (\Exception $e) {
             Log::error('Error en login de asesor: ' . $e->getMessage());
 
@@ -393,13 +348,20 @@ class AuthController extends Controller
                 ], 401);
             }
 
-            // Create new token
-            $token = $user->createToken('api');
+            // Get current token from request and refresh it
+            $currentToken = $request->bearerToken();
+            if (!$currentToken) {
+                return response()->json([
+                    'error' => 'Token no proporcionado'
+                ], 401);
+            }
+
+            $tokenResult = $this->authService->refreshToken($currentToken);
 
             return response()->json([
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'expires_in' => config('sanctum.jwt_ttl', 86400),
+                'access_token' => $tokenResult['access_token'],
+                'token_type' => $tokenResult['token_type'],
+                'expires_in' => $tokenResult['expires_in'],
                 'user' => $user
             ]);
         } catch (\Exception $e) {
@@ -478,10 +440,9 @@ class AuthController extends Controller
                 ], 400);
             }
 
-            // Update password
-            $user->update([
-                'password' => Hash::make($validated['new_password']),
-                'updated_at' => now()
+            // Update password using repository
+            $this->userService->update($user->id, [
+                'password' => $validated['new_password']
             ]);
 
             return response()->json([
@@ -522,11 +483,11 @@ class AuthController extends Controller
                 'numero_documento' => 'sometimes|string|unique:users,numero_documento'
             ]);
 
-            $user->update($validated);
+            $updatedUser = $this->userService->update($user->id, $validated);
 
             return response()->json([
                 'message' => 'Perfil actualizado exitosamente',
-                'user' => $user
+                'user' => $updatedUser
             ]);
         } catch (ValidationException $e) {
             return response()->json([
@@ -539,57 +500,5 @@ class AuthController extends Controller
                 'error' => 'Error al actualizar perfil'
             ], 500);
         }
-    }
-
-    // Private helper methods
-
-    /**
-     * Check rate limit for given key.
-     */
-    private function checkRateLimit(string $key, int $maxAttempts, int $seconds): void
-    {
-        $key = "auth:{$key}";
-
-        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
-            throw new \Exception('Demasiados intentos, intenta más tarde');
-        }
-
-        RateLimiter::hit($key, $seconds);
-    }
-
-    /**
-     * Normalize username.
-     */
-    private function normalizeUsername(string $username): string
-    {
-        return strtolower(trim($username));
-    }
-
-    /**
-     * Generate username from names.
-     */
-    private function generateUsername(string $nombres, string $apellidos): string
-    {
-        $name1 = strtolower(Str::slug($nombres));
-        $name2 = strtolower(Str::slug($apellidos));
-
-        // Remove special characters and ensure it starts with letter
-        $username = preg_replace('/[^a-z0-9]/', '', $name1 . $name2);
-
-        // Ensure it starts with a letter
-        if (!ctype_alpha($username[0])) {
-            $username = 'u' . $username;
-        }
-
-        // Limit length
-        return substr($username, 0, 20);
-    }
-
-    /**
-     * Validate username format.
-     */
-    private function isValidUsername(string $username): bool
-    {
-        return preg_match('/^[a-z0-9]{3,20}$/', $username);
     }
 }

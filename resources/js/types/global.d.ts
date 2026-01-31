@@ -54,7 +54,6 @@ export interface AppConfig {
 }
 
 
-// global.d.ts
 declare module "@inertiajs/core" {
     export interface InertiaConfig {
         sharedPageProps: {
@@ -71,3 +70,19 @@ declare module "@inertiajs/core" {
 export interface AnyObject {
     [key: string]: any;
 }
+
+
+// Tipos para la configuración
+interface AxiosConfig {
+    baseURL?: string;
+    timeout?: number;
+    headers?: Record<string, string>;
+}
+
+interface ErrorResponse {
+    message?: string;
+    status?: number;
+    errors?: Record<string, string[]>;
+}
+
+export type { AxiosConfig, ErrorResponse };

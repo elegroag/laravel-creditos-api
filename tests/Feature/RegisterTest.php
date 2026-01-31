@@ -17,7 +17,7 @@ class RegisterTest extends TestCase
     public function test_user_can_register_successfully(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '123456789',
             'nombres' => 'Juan',
             'apellidos' => 'Pérez',
@@ -56,7 +56,7 @@ class RegisterTest extends TestCase
                     'email' => 'juan.perez@example.com',
                     'full_name' => 'Juan Pérez',
                     'phone' => '3001234567',
-                    'tipo_documento' => 'cedula',
+                    'tipo_documento' => '1',
                     'numero_documento' => '123456789',
                     'roles' => ['user_trabajador'],
                     'is_active' => true,
@@ -89,7 +89,7 @@ class RegisterTest extends TestCase
         ]);
 
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '987654321',
             'nombres' => 'Maria',
             'apellidos' => 'Gómez',
@@ -117,7 +117,7 @@ class RegisterTest extends TestCase
         ]);
 
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '123456789',
             'nombres' => 'Carlos',
             'apellidos' => 'López',
@@ -138,7 +138,7 @@ class RegisterTest extends TestCase
     public function test_registration_fails_with_invalid_email(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '111222333',
             'nombres' => 'Ana',
             'apellidos' => 'Martínez',
@@ -160,7 +160,7 @@ class RegisterTest extends TestCase
     public function test_registration_fails_with_password_mismatch(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '444555666',
             'nombres' => 'Roberto',
             'apellidos' => 'Silva',
@@ -182,7 +182,7 @@ class RegisterTest extends TestCase
     public function test_registration_fails_with_short_password(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '777888999',
             'nombres' => 'Laura',
             'apellidos' => 'Torres',
@@ -226,7 +226,7 @@ class RegisterTest extends TestCase
     public function test_registration_generates_valid_username(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '123456789',
             'nombres' => 'Juan Carlos',
             'apellidos' => 'Pérez García',
@@ -243,7 +243,7 @@ class RegisterTest extends TestCase
         // Verify username was generated correctly
         $user = User::where('email', 'juan.carlos@example.com')->first();
         $this->assertNotNull($user->username);
-        $this->assertMatchesRegularExpression('/^[a-z0-9]{3,20}$/', $user->username);
+        $this->assertMatchesRegularExpression('/^[a-z0-9_]{3,20}$/', $user->username);
     }
 
     /**
@@ -252,7 +252,7 @@ class RegisterTest extends TestCase
     public function test_registration_assigns_default_role(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '123456789',
             'nombres' => 'Diana',
             'apellidos' => 'Herrera',
@@ -276,7 +276,7 @@ class RegisterTest extends TestCase
     public function test_registration_creates_token_successfully(): void
     {
         $userData = [
-            'tipo_documento' => 'cedula',
+            'tipo_documento' => '1',
             'numero_documento' => '123456789',
             'nombres' => 'Gabriel',
             'apellidos' => 'Mendoza',

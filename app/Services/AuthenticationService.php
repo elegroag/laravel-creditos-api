@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AuthenticationService extends BaseService
 {
@@ -36,7 +38,7 @@ class AuthenticationService extends BaseService
     public function authenticate(string $identifier, string $password): ?User
     {
         // Try to find user by username or email
-        $user = $this->userRepository->findByUsernameOrEmail($identifier);
+        $user = $this->userRepository->findByUsername($identifier);
 
         if (!$user) {
             return null;
@@ -112,6 +114,7 @@ class AuthenticationService extends BaseService
             'roles' => $user->roles,
             'permissions' => $this->getUserPermissions($user->roles),
             'disabled' => $user->disabled,
+            'is_active' => $user->is_active,
             'tipo_documento' => $user->tipo_documento,
             'numero_documento' => $user->numero_documento,
             'nombres' => $user->nombres,
@@ -133,7 +136,6 @@ class AuthenticationService extends BaseService
         try {
             // Authenticate user
             $user = $this->authenticate($identifier, $password);
-
             if (!$user) {
                 throw new ValidationException('Credenciales inválidas');
             }
@@ -496,5 +498,53 @@ class AuthenticationService extends BaseService
         }
 
         return max(0, $expiration->diffInSeconds(Carbon::now()));
+    }
+
+    /**
+     * Generate username from names.
+     */
+    public function generateUsername(string $nombres, string $apellidos): string
+    {
+        $name1 = strtolower(Str::slug($nombres));
+        $name2 = strtolower(Str::slug($apellidos));
+
+        // Remove special characters and ensure it starts with letter
+        $name1 = preg_replace('/[^a-z0-9]/', '', $name1);
+        $name2 = preg_replace('/[^a-z0-9]/', '', $name2);
+        $username = substr($name1, 0, 3) . '_' . substr($name2, 0, 3);
+
+        // Limit length
+        return substr($username, 0, 20);
+    }
+
+    /**
+     * Normalize username.
+     */
+    public function normalizeUsername(string $username): string
+    {
+        return strtolower(trim($username));
+    }
+
+    /**
+     * Check rate limit for given key.
+     */
+    public function checkRateLimit(string $key, int $maxAttempts, int $seconds): void
+    {
+        $key = "auth:{$key}";
+
+        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            throw new \Exception('Demasiados intentos, intenta más tarde');
+        }
+
+        RateLimiter::hit($key, $seconds);
+    }
+
+
+    /**
+     * Validate username format.
+     */
+    public function isValidUsername(string $username): bool
+    {
+        return preg_match('/^[a-z0-9_]{3,20}$/', $username);
     }
 }

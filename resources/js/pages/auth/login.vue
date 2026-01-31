@@ -11,16 +11,16 @@
               </p>
             </div>
 
-            <form @submit.prevent="login" class="space-y-4">
+            <form @submit.prevent="handleLogin" class="space-y-4">
               <div class="space-y-2">
                 <Label for="username">Usuario</Label>
                 <Input
                   id="username"
-                  v-model="form.username"
+                  v-model="username"
                   type="text"
                   placeholder="Tu nombre de usuario"
                   required
-                  :disabled="form.processing"
+                  :disabled="loading"
                 />
               </div>
 
@@ -28,45 +28,45 @@
                 <Label for="password">Contraseña</Label>
                 <Input
                   id="password"
-                  v-model="form.password"
+                  v-model="password"
                   type="password"
                   placeholder="••••••••"
                   required
-                  :disabled="form.processing"
+                  :disabled="loading"
                 />
               </div>
 
               <Button
                 type="submit"
                 class="w-full"
-                :disabled="form.processing || !isConnected"
+                :disabled="loading || !isConnected"
               >
-                <svg v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="loading" class="mr-2 h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
-                {{ form.processing ? 'Ingresando...' : 'Ingresar' }}
+                {{ loading ? 'Ingresando...' : 'Ingresar' }}
               </Button>
 
-              <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2">
+              <div v-if="errorMsg" class="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
-                {{ errorMessage }}
+                {{ errorMsg }}
               </div>
 
               <!-- Mensaje de éxito -->
-              <div v-if="status" class="rounded-lg border border-green-500/50 bg-green-50 p-3 text-sm text-green-800 flex items-center gap-2">
+              <div v-if="props.status" class="rounded-lg border border-green-500/50 bg-green-50 p-3 text-sm text-green-800 flex items-center gap-2">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
-                {{ status }}
+                {{ props.status }}
               </div>
             </form>
 
             <div class="text-center text-sm">
               <p class="text-muted-foreground">
                 ¿No tienes cuenta?
-                <Link href="/register" class="font-medium text-primary underline underline-offset-4">
+                <Link href="/web/register" view-transition class="font-medium text-primary underline underline-offset-4">
                   Crear cuenta
                 </Link>
               </p>
@@ -103,26 +103,22 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3';
 import { cn } from '@/lib/utils';
 import Button from '@/components/ui/Button.vue';
 import Input from '@/components/ui/Input.vue';
 import Label from '@/components/ui/Label.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import { useLogin } from '@/composables/auth/useLogin';
 
 interface Props {
   canResetPassword?: boolean;
   status?: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
-const form = useForm({
-  username: '',
-  password: '',
-});
-
-const errorMessage = ref('');
+const { username, password, loading, errorMsg, login, checkAuthAndRedirect } = useLogin();
 
 // Estado de conexión (simulado)
 const isConnected = ref(true);
@@ -130,23 +126,8 @@ const checkingConnection = ref(false);
 const connectionMessage = ref('Conectado al servidor');
 const connectionStatusClass = ref('text-green-600 bg-green-50');
 
-const login = () => {
-  errorMessage.value = '';
-
-  form.post('/login', {
-    onSuccess: () => {
-      // Redirección automática por Inertia
-    },
-    onError: (errors: any) => {
-      // Manejar errores de validación
-      if (errors.username || errors.password) {
-        errorMessage.value = 'Credenciales incorrectas';
-      }
-    },
-    onFinish: () => {
-      form.reset('password');
-    },
-  });
+const handleLogin = async () => {
+  await login();
 };
 
 // Simular verificación de conexión
@@ -160,5 +141,8 @@ onMounted(() => {
     connectionMessage.value = 'Conectado al servidor';
     connectionStatusClass.value = 'text-green-600 bg-green-50';
   }, 1000);
+
+  // Verificar si ya está autenticado
+  checkAuthAndRedirect();
 });
 </script>

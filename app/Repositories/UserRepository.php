@@ -77,7 +77,7 @@ class UserRepository extends BaseRepository
      */
     public function createWithPassword(array $userData, string $password)
     {
-        $userData['password'] = Hash::make($password);
+        $userData['password_hash'] = Hash::make($password);
         $userData['username'] = strtolower($userData['username']);
 
         return $this->create($userData);

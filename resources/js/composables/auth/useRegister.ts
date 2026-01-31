@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { useForm, router } from '@inertiajs/vue3'
 import { useApi } from '@/composables/useApi'
+import { route } from '@/helpers/route'
 import { AnyObject } from '@/types/global'
 import { storage } from '~/composables/useStorage';
 
@@ -8,6 +9,7 @@ interface TipoDocumento {
     value: string
     label: string
 }
+
 
 interface FormData {
     tipo_documento: string
@@ -179,12 +181,11 @@ export function useRegistro(tipoDocumentos?: Record<string, string>) {
                 await storage.setItem('comfaca_credito_user', userData);
 
                 setTimeout(() => {
-
                     router.visit(
                         route('verify.show', {
-                            coddoc: response?.data.coddoc,
-                            documento: response?.data.documento
-                        }),
+                            coddoc: userData.tipo_documento,
+                            documento: userData.numero_documento
+                        })
                     );
                 }, 1000);
             }

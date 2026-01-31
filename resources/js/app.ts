@@ -1,5 +1,6 @@
 import "@/assets/css/index.css";
 import "./bootstrap";
+import "./helpers/route";
 
 import { createApp, h } from "vue";
 import { ZiggyVue } from "../../vendor/tightenco/ziggy";
