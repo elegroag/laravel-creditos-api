@@ -12,12 +12,10 @@ use App\Exceptions\ValidationException;
 class TrabajadorService extends EloquentService
 {
     private string $externalApiUrl;
-    private int $timeout;
 
     public function __construct()
     {
         $this->externalApiUrl = config('services.external_api.url', 'https://api.example.com');
-        $this->timeout = config('services.external_api.timeout', 8);
     }
 
     /**
@@ -428,9 +426,7 @@ class TrabajadorService extends EloquentService
     private function searchWorkersExternal(array $criteria): array
     {
         try {
-            $response = Http::post("{$this->externalApiUrl}/company/buscar_trabajadores", $criteria)
-                ->timeout($this->timeout);
-
+            $response = Http::post("{$this->externalApiUrl}/company/buscar_trabajadores", $criteria);
             if (!$response->successful()) {
                 Log::error('Search workers API error', [
                     'criteria' => $criteria,
@@ -467,8 +463,7 @@ class TrabajadorService extends EloquentService
     public function obtenerDatosUsuarioSisu(User $user): ?array
     {
         try {
-            $response = Http::get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username)
-                ->timeout($this->timeout);
+            $response = Http::get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username);
 
             if ($response->successful() && $response->json('success') && $response->json('data')) {
                 $data = $response->json('data');
@@ -502,8 +497,7 @@ class TrabajadorService extends EloquentService
     public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
     {
         try {
-            $response = Http::get($this->externalApiUrl . "/puntos/asesores/" . $user->username)
-                ->timeout($this->timeout);
+            $response = Http::get($this->externalApiUrl . "/puntos/asesores/" . $user->username);
 
             if ($response->successful() && $response->json('success') && $response->json('data')) {
                 return $response->json('data');
@@ -525,8 +519,7 @@ class TrabajadorService extends EloquentService
         try {
             $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
                 'json' => ['cedtra' => $numeroDocumento]
-            ])
-                ->timeout($this->timeout);
+            ]);
 
             if ($response->successful() && $response->json('success') && $response->json('data')) {
                 return $this->extractRelevantData($response->json('data'));
@@ -548,8 +541,7 @@ class TrabajadorService extends EloquentService
         try {
             $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
                 'cedtra' => $cedula
-            ])
-                ->timeout($this->timeout);
+            ]);
 
             if (!$response->successful()) {
                 Log::error('External API error', [

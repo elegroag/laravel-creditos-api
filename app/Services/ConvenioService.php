@@ -13,14 +13,10 @@ use Illuminate\Support\Collection;
 class ConvenioService extends EloquentService
 {
     private TrabajadorService $trabajadorService;
-    private string $externalApiUrl;
-    private int $timeout;
 
     public function __construct(?TrabajadorService $trabajadorService = null)
     {
         $this->trabajadorService = $trabajadorService ?: new TrabajadorService();
-        $this->externalApiUrl = config('services.external_api.url', 'https://api.example.com');
-        $this->timeout = config('services.external_api.timeout', 8);
     }
 
     /**

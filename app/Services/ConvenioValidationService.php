@@ -12,13 +12,11 @@ class ConvenioValidationService
 {
     private TrabajadorService $trabajadorService;
     private string $externalApiUrl;
-    private int $timeout;
 
     public function __construct(?TrabajadorService $trabajadorService = null)
     {
         $this->trabajadorService = $trabajadorService ?? app(TrabajadorService::class);
         $this->externalApiUrl = env('EXTERNAL_API_URL', 'https://api.example.com');
-        $this->timeout = env('EXTERNAL_API_TIMEOUT', 8);
     }
 
     /**
@@ -158,7 +156,7 @@ class ConvenioValidationService
             }
 
             // Timeout de 8 segundos: balance entre rapidez y confiabilidad
-            $response = Http::timeout($this->timeout)->post($this->externalApiUrl . '/company/informacion_trabajador', [
+            $response = Http::post($this->externalApiUrl . '/company/informacion_trabajador', [
                 'cedtra' => $cedula
             ]);
 

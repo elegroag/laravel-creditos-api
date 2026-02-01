@@ -41,12 +41,11 @@ class FirmaPlusService
                 'callback_url' => config('app.url') . '/api/firmas/webhook'
             ];
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($this->apiUrl . '/documentos/enviar', $payload)
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json'
-                ])
-                ->post($this->apiUrl . '/documentos/enviar', $payload);
+                ]);
 
             if (!$response->successful()) {
                 throw new \Exception('Error al enviar documento a FirmaPlus: ' . $response->body());
@@ -59,7 +58,6 @@ class FirmaPlusService
             ]);
 
             return $resultado;
-
         } catch (\Exception $e) {
             Log::error('Error en FirmaPlusService::enviarDocumentoParaFirma', [
                 'error' => $e->getMessage(),
@@ -80,12 +78,11 @@ class FirmaPlusService
                 'transaccion_id' => $transaccionId
             ]);
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::get($this->apiUrl . '/documentos/' . $transaccionId . '/estado')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json'
-                ])
-                ->get($this->apiUrl . '/documentos/' . $transaccionId . '/estado');
+                ]);
 
             if (!$response->successful()) {
                 throw new \Exception('Error al consultar estado en FirmaPlus: ' . $response->body());
@@ -99,7 +96,6 @@ class FirmaPlusService
             ]);
 
             return $estado;
-
         } catch (\Exception $e) {
             Log::error('Error en FirmaPlusService::consultarEstadoDocumento', [
                 'error' => $e->getMessage(),
@@ -121,12 +117,11 @@ class FirmaPlusService
                 'ruta_destino' => $rutaDestino
             ]);
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::get($this->apiUrl . '/documentos/' . $transaccionId . '/descargar')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Accept' => 'application/pdf'
-                ])
-                ->get($this->apiUrl . '/documentos/' . $transaccionId . '/descargar');
+                ]);
 
             if (!$response->successful()) {
                 throw new \Exception('Error al descargar documento firmado: ' . $response->body());
@@ -140,7 +135,6 @@ class FirmaPlusService
                 'ruta_destino' => $rutaDestino,
                 'size' => filesize($rutaDestino)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en FirmaPlusService::descargarDocumentoFirmado', [
                 'error' => $e->getMessage(),
@@ -162,12 +156,11 @@ class FirmaPlusService
                 'transaccion_id' => $transaccionId
             ]);
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($this->apiUrl . '/documentos/' . $transaccionId . '/cancelar')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json'
-                ])
-                ->post($this->apiUrl . '/documentos/' . $transaccionId . '/cancelar');
+                ]);
 
             if (!$response->successful()) {
                 throw new \Exception('Error al cancelar proceso en FirmaPlus: ' . $response->body());
@@ -180,7 +173,6 @@ class FirmaPlusService
             ]);
 
             return $resultado;
-
         } catch (\Exception $e) {
             Log::error('Error en FirmaPlusService::cancelarProcesoFirmado', [
                 'error' => $e->getMessage(),
@@ -197,12 +189,11 @@ class FirmaPlusService
     public function obtenerUrlFirma(string $transaccionId, string $firmanteId): string
     {
         try {
-            $response = Http::timeout($this->timeout)
+            $response = Http::get($this->apiUrl . '/documentos/' . $transaccionId . '/firmantes/' . $firmanteId . '/url')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json'
-                ])
-                ->get($this->apiUrl . '/documentos/' . $transaccionId . '/firmantes/' . $firmanteId . '/url');
+                ]);
 
             if (!$response->successful()) {
                 throw new \Exception('Error al obtener URL de firma: ' . $response->body());
@@ -211,7 +202,6 @@ class FirmaPlusService
             $resultado = $response->json();
 
             return $resultado['url_firma'] ?? '';
-
         } catch (\Exception $e) {
             Log::error('Error en FirmaPlusService::obtenerUrlFirma', [
                 'error' => $e->getMessage(),
@@ -229,11 +219,9 @@ class FirmaPlusService
     public function verificarDisponibilidad(): bool
     {
         try {
-            $response = Http::timeout(10)
-                ->get($this->apiUrl . '/health');
+            $response = Http::get($this->apiUrl . '/health');
 
             return $response->successful();
-
         } catch (\Exception $e) {
             Log::error('Error verificando disponibilidad de FirmaPlus', [
                 'error' => $e->getMessage()

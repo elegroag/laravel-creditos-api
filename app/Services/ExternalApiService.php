@@ -33,18 +33,20 @@ class ExternalApiService
             ]);
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
-
-            $response = Http::timeout($this->timeout)
-                ->withBasicAuth($this->username, $this->password)
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json'
-                ]);
-
             if (!empty($params)) {
-                $response = $response->get($url, $params);
+                $response = Http::get($url, $params)
+                    ->withBasicAuth($this->username, $this->password)
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'Content-Type' => 'application/json'
+                    ]);
             } else {
-                $response = $response->get($url);
+                $response = Http::get($url)
+                    ->withBasicAuth($this->username, $this->password)
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'Content-Type' => 'application/json'
+                    ]);
             }
 
             if (!$response->successful()) {
@@ -69,7 +71,6 @@ class ExternalApiService
             ]);
 
             return $responseData;
-
         } catch (\Exception $e) {
             Log::error('Error en petición GET a API externa', [
                 'endpoint' => $endpoint,
@@ -97,13 +98,13 @@ class ExternalApiService
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($url, $data)
                 ->withBasicAuth($this->username, $this->password)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json'
-                ])
-                ->post($url, $data);
+                ]);
+
 
             if (!$response->successful()) {
                 Log::error('Error en respuesta POST de API externa', [
@@ -127,7 +128,6 @@ class ExternalApiService
             ]);
 
             return $responseData;
-
         } catch (\Exception $e) {
             Log::error('Error en petición POST a API externa', [
                 'endpoint' => $endpoint,
@@ -155,13 +155,12 @@ class ExternalApiService
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($url, $data)
                 ->withBasicAuth($this->username, $this->password)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json'
-                ])
-                ->put($url, $data);
+                ]);
 
             if (!$response->successful()) {
                 Log::error('Error en respuesta PUT de API externa', [
@@ -185,7 +184,6 @@ class ExternalApiService
             ]);
 
             return $responseData;
-
         } catch (\Exception $e) {
             Log::error('Error en petición PUT a API externa', [
                 'endpoint' => $endpoint,
@@ -212,13 +210,12 @@ class ExternalApiService
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
 
-            $response = Http::timeout($this->timeout)
+            $response = Http::delete($url)
                 ->withBasicAuth($this->username, $this->password)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json'
-                ])
-                ->delete($url);
+                ]);
 
             if (!$response->successful()) {
                 Log::error('Error en respuesta DELETE de API externa', [
@@ -242,7 +239,6 @@ class ExternalApiService
             ]);
 
             return $responseData;
-
         } catch (\Exception $e) {
             Log::error('Error en petición DELETE a API externa', [
                 'endpoint' => $endpoint,
@@ -263,12 +259,10 @@ class ExternalApiService
     public function verificarDisponibilidad(): bool
     {
         try {
-            $response = Http::timeout(5)
-                ->withBasicAuth($this->username, $this->password)
-                ->get($this->baseUrl . '/health');
+            $response = Http::get($this->baseUrl . '/health')
+                ->withBasicAuth($this->username, $this->password);
 
             return $response->successful();
-
         } catch (\Exception $e) {
             Log::error('Error verificando disponibilidad del servicio externo', [
                 'error' => $e->getMessage()
@@ -293,7 +287,6 @@ class ExternalApiService
             }
 
             return null;
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo información del trabajador', [
                 'cedtra' => $cedtra,
@@ -317,7 +310,6 @@ class ExternalApiService
             }
 
             return [];
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo usuarios de créditos', [
                 'error' => $e->getMessage()
@@ -345,7 +337,6 @@ class ExternalApiService
             }
 
             return [];
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo datos generales de créditos', [
                 'error' => $e->getMessage()
@@ -373,7 +364,6 @@ class ExternalApiService
             }
 
             return [];
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo tipos de crédito', [
                 'error' => $e->getMessage()

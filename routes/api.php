@@ -32,6 +32,11 @@ require __DIR__ . '/api/lineas-inversion.php';
 require __DIR__ . '/api/perfil.php';
 require __DIR__ . '/api/postulaciones.php';
 
+
+Route::get('health', function () {
+    return response()->json(['status' => 'ok', 'message' => 'Bienvenido a Comfaca en Línea']);
+});
+
 // Rutas de la API (ejemplo)
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
