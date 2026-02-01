@@ -10,17 +10,36 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\User;
+use App\Repositories\UserRepository;
+use App\Services\AuthenticationService;
+use App\Services\TrabajadorService;
+use App\Services\UserService;
 
 class AuthController extends Controller
 {
+
+    protected UserService $userService;
+    protected TrabajadorService $trabajadorService;
+    protected AuthenticationService $authService;
+
+    public function __construct(
+        UserService $userService,
+        TrabajadorService $trabajadorService,
+        AuthenticationService $authService
+    ) {
+        $this->userService = $userService;
+        $this->trabajadorService = $trabajadorService;
+        $this->authService = $authService;
+    }
+
     /**
      * Mostrar la página de login
      */
     public function showLoginForm()
     {
-        // Si el usuario ya está autenticado, redirigir al dashboard
+        // Si el usuario ya está autenticado, redirigir al inicio
         if (Auth::check()) {
-            return redirect()->intended(route('dashboard'));
+            return redirect()->intended(route('inicio'));
         }
 
         return Inertia::render('auth/login', [
@@ -136,8 +155,8 @@ class AuthController extends Controller
                 ],
             ];
 
-            // Redirigir a la URL solicitada o al dashboard
-            return redirect()->intended(route('dashboard'));
+            // Redirigir a la URL solicitada o al inicio
+            return redirect()->intended(route('inicio'));
         }
 
         // Si la autenticación falla, verificar si el usuario existe para redirigir a registro
@@ -147,7 +166,7 @@ class AuthController extends Controller
             // Usuario no encontrado, redirigir a registro
             return redirect()->route('register')
                 ->with('username', $request->username)
-                ->with('redirect', $request->get('redirect', route('dashboard')));
+                ->with('redirect', $request->get('redirect', route('inicio')));
         }
 
         // Usuario encontrado pero contraseña incorrecta
@@ -205,7 +224,7 @@ class AuthController extends Controller
             Auth::login($user);
             $request->session()->regenerate();
 
-            return redirect()->intended(route('dashboard'));
+            return redirect()->intended(route('inicio'));
         } catch (\Exception $e) {
             Log::error('Error en registro', [
                 'error' => $e->getMessage(),
@@ -252,5 +271,61 @@ class AuthController extends Controller
             return is_array($user->permissions) ? $user->permissions : json_decode($user->permissions, true) ?? [];
         }
         return [];
+    }
+
+    /**
+     * Crear sesión web para asesores tras seleccionar punto.
+     */
+    public function createAdviserSession(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'access_token' => ['required', 'string'],
+                'selected_punto' => ['required', 'array'],
+                'selected_punto.numero' => ['nullable'],
+                'selected_punto.oficina_afiliacion' => ['nullable', 'string'],
+                'selected_punto.code_oficina' => ['nullable', 'string'],
+                'selected_punto.nombre_usuario' => ['nullable', 'string'],
+                'selected_punto.email' => ['nullable', 'string'],
+                'selected_punto.estado' => ['nullable', 'string'],
+            ]);
+
+            $token = $validated['access_token'];
+
+            $verified = $this->authService->verifyToken($token);
+            $userId = (int) ($verified['user']['id'] ?? 0);
+
+            if ($userId <= 0) {
+                throw new \Exception('Token inválido');
+            }
+
+            $user = $this->userService->getById($userId);
+            if (!$user) {
+                throw new \Exception('Usuario no encontrado');
+            }
+
+            Auth::login($user);
+            $request->session()->regenerate();
+
+            $rawPunto = $validated['selected_punto'];
+            $selectedPunto = [
+                'id' => (int) ($rawPunto['numero'] ?? 0),
+                'nombre' => (string) (($rawPunto['oficina_afiliacion'] ?? '') ?: ($rawPunto['nombre_usuario'] ?? '')),
+                'direccion' => '',
+                'telefono' => '',
+                'ciudad' => '',
+                'estado' => (string) ($rawPunto['estado'] ?? ''),
+            ];
+
+            $request->session()->put('selected_punto', $selectedPunto);
+
+            return redirect()->route('inicio');
+        } catch (\Exception $e) {
+            Log::error('Error creando sesión web de asesor: ' . $e->getMessage());
+
+            throw ValidationException::withMessages([
+                'access_token' => 'No fue posible crear la sesión del asesor',
+            ]);
+        }
     }
 }

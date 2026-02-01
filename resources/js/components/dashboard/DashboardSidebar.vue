@@ -103,7 +103,7 @@ const _abbr = (label: string): string => {
 };
 
 const getPrimaryRoleDisplay = computed(() => {
-    const roles = user?.roles || [];
+    const roles = user.value?.roles || [];
     if (roles.includes('admin')) return 'Administrador';
     if (roles.includes('adviser')) return 'Asesor';
     if (roles.includes('user_trabajador')) return 'Trabajador';
@@ -125,7 +125,7 @@ const sidebarMobileClasses = computed(() => {
 
 const isActive = (to: string) => {
     const path = window.location.pathname;
-    if (to === '/dashboard') return path === '/dashboard' || path === '/';
+    if (to === '/web/inicio') return path === '/web/inicio' || path === '/web/dashboard' || path === '/';
     return path.startsWith(to);
 };
 

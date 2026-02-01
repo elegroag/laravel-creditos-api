@@ -3,22 +3,14 @@
 namespace App\Services;
 
 use App\Models\User;
-use App\Repositories\UserRepository;
 use App\Validators\UserValidators;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Collection;
 
-class UserService extends BaseService
+class UserService extends EloquentService
 {
-    protected UserRepository $userRepository;
-
-    public function __construct(UserRepository $userRepository)
-    {
-        parent::__construct($userRepository);
-        $this->userRepository = $userRepository;
-    }
-
     /**
      * Create a new user.
      */
@@ -48,42 +40,17 @@ class UserService extends BaseService
 
         // Check if email already exists
         if (User::findByEmail($validated['email'])) {
-            throw new ValidationException('El correo electrónico ya está en uso');
+            throw new ValidationException('El email ya está en uso');
         }
 
-        // Transform password to password_hash
-        if (isset($validated['password'])) {
-            $validated['password_hash'] = Hash::make($validated['password']);
-            unset($validated['password']);
-            unset($validated['password_confirmation']);
-        }
+        // Hash password
+        $validated['password'] = Hash::make($validated['password']);
 
         try {
-            // Create user with hashed password
-            $user = User::create($validated);
-
-            $this->log('User created successfully', [
-                'user_id' => $user->id,
-                'username' => $user->username
-            ]);
-
-            return $user;
+            return User::create($validated);
         } catch (\Exception $e) {
-            $this->logError('Error creating user', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'creación de usuario');
             throw new \Exception('Error al crear usuario: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Get user by ID.
-     */
-    public function getById(string $id): ?User
-    {
-        try {
-            return User::find($id);
-        } catch (\Exception $e) {
-            $this->logError('Error getting user by ID', ['id' => $id, 'error' => $e->getMessage()]);
-            return null;
         }
     }
 
@@ -95,7 +62,7 @@ class UserService extends BaseService
         try {
             return User::findByUsername($username);
         } catch (\Exception $e) {
-            $this->logError('Error getting user by username', ['username' => $username, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'búsqueda de usuario por username');
             return null;
         }
     }
@@ -108,23 +75,7 @@ class UserService extends BaseService
         try {
             return User::findByEmail($email);
         } catch (\Exception $e) {
-            $this->logError('Error getting user by email', ['email' => $email, 'error' => $e->getMessage()]);
-            return null;
-        }
-    }
-
-    /**
-     * Get user by username or email.
-     */
-    public function getByUsernameOrEmail(string $identifier): ?User
-    {
-        try {
-            return User::where(function ($query) use ($identifier) {
-                $query->where('username', strtolower($identifier))
-                    ->orWhere('email', $identifier);
-            })->first();
-        } catch (\Exception $e) {
-            $this->logError('Error getting user by username or email', ['identifier' => $identifier, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'búsqueda de usuario por email');
             return null;
         }
     }
@@ -132,168 +83,55 @@ class UserService extends BaseService
     /**
      * Update user.
      */
-    public function update(string $id, array $data): User
+    public function update(string $id, array $data): ?User
     {
-        // Validate data
-        $validator = UserValidators::validateUpdate($data, $id);
-
-        if ($validator->fails()) {
-            throw new ValidationException($validator->errors()->first());
-        }
-
-        $validated = $validator->validated();
-
-        // Ensure user exists
-        $user = $this->ensureExists($id, 'Usuario');
-
-        // Check if email is being updated and already exists
-        if (isset($validated['email']) && $validated['email'] !== $user->email) {
-            if (User::where('email', $validated['email'])->where('id', '!=', $id)->exists()) {
-                throw new ValidationException('El correo electrónico ya está en uso');
-            }
-        }
-
         try {
-            $user->update($validated);
-            $updated = $user->fresh();
-
-            if (!$updated) {
-                throw new \Exception('No se pudo actualizar el usuario');
+            $user = User::find($id);
+            if ($user) {
+                $user->update($data);
+                return $user;
             }
-
-            $this->log('User updated successfully', [
-                'user_id' => $id,
-                'changes' => array_keys($validated)
-            ]);
-
-            return $updated;
+            return null;
         } catch (\Exception $e) {
-            $this->logError('Error updating user', ['id' => $id, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'actualización de usuario');
             throw new \Exception('Error al actualizar usuario: ' . $e->getMessage());
         }
     }
 
     /**
-     * Delete user (soft delete).
+     * Delete user.
      */
     public function delete(string $id): bool
     {
-        // Ensure user exists
-        $user = $this->ensureExists($id, 'Usuario');
-
         try {
-            $result = $user->delete();
-
-            if ($result) {
-                $this->log('User deleted successfully', ['user_id' => $id]);
-            }
-
-            return $result;
+            $result = User::destroy($id);
+            return (bool) $result;
         } catch (\Exception $e) {
-            $this->logError('Error deleting user', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al eliminar usuario: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * List users with pagination and filters.
-     */
-    public function list(int $skip = 0, int $limit = 50, ?bool $disabled = null, ?array $roles = null): array
-    {
-        try {
-            $query = User::query();
-
-            if ($disabled !== null) {
-                $query->where('disabled', $disabled);
-            }
-
-            if ($roles !== null) {
-                foreach ($roles as $role) {
-                    $query->whereJsonContains('roles', $role);
-                }
-            }
-
-            $users = $query->orderBy('created_at', 'desc')
-                ->offset($skip)
-                ->limit($limit)
-                ->get();
-
-            $total = $query->count();
-
-            return [
-                'users' => $users->toArray(),
-                'pagination' => [
-                    'skip' => $skip,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
-                ]
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error listing users', ['error' => $e->getMessage()]);
-            throw new \Exception('Error al listar usuarios: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Authenticate user.
-     */
-    public function authenticate(string $identifier, string $password): ?User
-    {
-        try {
-            $user = $this->getByUsernameOrEmail($identifier);
-
-            if ($user && !$user->disabled && $user->is_active && Hash::check($password, $user->password_hash)) {
-                // Update last login
-                $user->update(['last_login' => now()]);
-
-                $this->log('User authenticated successfully', [
-                    'user_id' => $user->id,
-                    'identifier' => $identifier
-                ]);
-
-                return $user;
-            }
-
-            return null;
-        } catch (\Exception $e) {
-            $this->logError('Error authenticating user', ['identifier' => $identifier, 'error' => $e->getMessage()]);
-            return null;
+            $this->handleDatabaseError($e, 'eliminación de usuario');
+            return false;
         }
     }
 
     /**
      * Change user password.
      */
-    public function changePassword(string $id, string $currentPassword, string $newPassword): bool
+    public function changePassword(string $id, string $newPassword): bool
     {
-        // Get user
-        $user = $this->getById($id);
-
-        if (!$user) {
-            throw new ValidationException('Usuario no encontrado');
-        }
-
-        // Verify current password
-        if (!Hash::check($currentPassword, $user->password)) {
-            throw new ValidationException('Contraseña actual incorrecta');
-        }
-
-        // Validate new password
-        if (!UserValidators::validatePassword($newPassword)) {
-            throw new ValidationException('La nueva contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número');
+        // Validate password
+        if (strlen($newPassword) < 8) {
+            throw new ValidationException('La contraseña debe tener al menos 8 caracteres');
         }
 
         try {
-            $result = $user->update(['password' => Hash::make($newPassword)]);
-
-            if ($result) {
-                $this->log('Password changed successfully', ['user_id' => $id]);
+            $user = User::find($id);
+            if (!$user) {
+                throw new ValidationException('Usuario no encontrado');
             }
 
+            $result = $user->update(['password' => Hash::make($newPassword)]);
             return $result;
         } catch (\Exception $e) {
-            $this->logError('Error changing password', ['id' => $id, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'cambio de contraseña');
             throw new \Exception('Error al cambiar contraseña: ' . $e->getMessage());
         }
     }
@@ -303,20 +141,15 @@ class UserService extends BaseService
      */
     public function enableUser(string $id): bool
     {
-        // Ensure user exists
-        $user = $this->ensureExists($id, 'Usuario');
-
         try {
-            $result = $user->update(['disabled' => false]);
-
-            if ($result) {
-                $this->log('User enabled successfully', ['user_id' => $id]);
+            $user = User::find($id);
+            if ($user) {
+                return $user->update(['disabled' => false]);
             }
-
-            return $result;
+            return false;
         } catch (\Exception $e) {
-            $this->logError('Error enabling user', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al habilitar usuario: ' . $e->getMessage());
+            $this->handleDatabaseError($e, 'habilitación de usuario');
+            return false;
         }
     }
 
@@ -325,20 +158,15 @@ class UserService extends BaseService
      */
     public function disableUser(string $id): bool
     {
-        // Ensure user exists
-        $user = $this->ensureExists($id, 'Usuario');
-
         try {
-            $result = $user->update(['disabled' => true]);
-
-            if ($result) {
-                $this->log('User disabled successfully', ['user_id' => $id]);
+            $user = User::find($id);
+            if ($user) {
+                return $user->update(['disabled' => true]);
             }
-
-            return $result;
+            return false;
         } catch (\Exception $e) {
-            $this->logError('Error disabling user', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al deshabilitar usuario: ' . $e->getMessage());
+            $this->handleDatabaseError($e, 'deshabilitación de usuario');
+            return false;
         }
     }
 
@@ -354,8 +182,6 @@ class UserService extends BaseService
 
             // Get role statistics using JSON operations
             $byRole = [];
-
-            // Get all users with roles
             $usersWithRoles = User::whereNotNull('roles')->get();
 
             foreach ($usersWithRoles as $user) {
@@ -367,7 +193,6 @@ class UserService extends BaseService
                 }
             }
 
-            // Sort by count descending
             arsort($byRole);
 
             return [
@@ -377,7 +202,7 @@ class UserService extends BaseService
                 'by_role' => $byRole
             ];
         } catch (\Exception $e) {
-            $this->logError('Error getting user statistics', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de estadísticas de usuarios');
             return [
                 'total' => 0,
                 'active' => 0,
@@ -414,7 +239,7 @@ class UserService extends BaseService
                 'count' => $users->count()
             ];
         } catch (\Exception $e) {
-            $this->logError('Error searching users', ['term' => $term, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'búsqueda de usuarios');
             return [
                 'users' => [],
                 'count' => 0
@@ -436,7 +261,7 @@ class UserService extends BaseService
                 'role' => $role
             ];
         } catch (\Exception $e) {
-            $this->logError('Error getting users by role', ['role' => $role, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de usuarios por rol');
             return [
                 'users' => [],
                 'count' => 0,
@@ -460,7 +285,7 @@ class UserService extends BaseService
                 'count' => $users->count()
             ];
         } catch (\Exception $e) {
-            $this->logError('Error getting active users', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de usuarios activos');
             return [
                 'users' => [],
                 'count' => 0
@@ -483,7 +308,7 @@ class UserService extends BaseService
                 'count' => $users->count()
             ];
         } catch (\Exception $e) {
-            $this->logError('Error getting administrators', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de administradores');
             return [
                 'users' => [],
                 'count' => 0
@@ -506,7 +331,7 @@ class UserService extends BaseService
                 'count' => $users->count()
             ];
         } catch (\Exception $e) {
-            $this->logError('Error getting advisers', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de asesores');
             return [
                 'users' => [],
                 'count' => 0
@@ -548,11 +373,5 @@ class UserService extends BaseService
     public function transformCollectionForApi($users): array
     {
         return $users->map(fn($user) => $this->transformForApi($user))->toArray();
-    }
-
-    //genera un pin de 6 digitos aleatorio
-    public function generatePin(): int
-    {
-        return rand(100000, 999999);
     }
 }

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Services\UserService;
-use App\Repositories\UserRepository;
 use App\Validators\UserValidators;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -14,19 +13,17 @@ use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\RateLimiter;
 
-class AuthenticationService extends BaseService
+class AuthenticationService extends EloquentService
 {
     protected UserService $userService;
-    protected UserRepository $userRepository;
 
     private string $jwtSecret;
     private string $jwtIssuer;
     private int $jwtTtlSeconds;
 
-    public function __construct(UserService $userService, UserRepository $userRepository)
+    public function __construct(UserService $userService)
     {
         $this->userService = $userService;
-        $this->userRepository = $userRepository;
         $this->jwtSecret = config('app.jwt_secret', 'default-secret-key');
         $this->jwtIssuer = config('app.jwt_issuer', 'comfaca-credito');
         $this->jwtTtlSeconds = config('app.jwt_ttl_seconds', 86400); // 24 hours
@@ -38,7 +35,9 @@ class AuthenticationService extends BaseService
     public function authenticate(string $identifier, string $password): ?User
     {
         // Try to find user by username or email
-        $user = $this->userRepository->findByUsername($identifier);
+        $user = User::where('username', $identifier)
+            ->orWhere('email', $identifier)
+            ->first();
 
         if (!$user) {
             return null;
@@ -55,7 +54,7 @@ class AuthenticationService extends BaseService
         }
 
         // Update last login
-        $this->userRepository->updateLastLogin($user->id);
+        $user->update(['last_login_at' => now()]);
 
         return $user;
     }
@@ -79,17 +78,25 @@ class AuthenticationService extends BaseService
         }
 
         // Check if username already exists
-        if ($this->userRepository->usernameExists($userData['username'])) {
+        if (User::where('username', $userData['username'])->exists()) {
             throw new ValidationException('El nombre de usuario ya está en uso');
         }
 
         // Check if email already exists
-        if (isset($userData['email']) && $this->userRepository->emailExists($userData['email'])) {
+        if (isset($userData['email']) && User::where('email', $userData['email'])->exists()) {
             throw new ValidationException('El correo electrónico ya está en uso');
         }
 
         // Create user
-        return $this->userRepository->createWithPassword($userData, $userData['password']);
+        return User::create([
+            'username' => $userData['username'],
+            'email' => $userData['email'] ?? null,
+            'password' => Hash::make($userData['password']),
+            'nombres' => $userData['nombres'] ?? '',
+            'apellidos' => $userData['apellidos'] ?? '',
+            'is_active' => true,
+            'disabled' => false
+        ]);
     }
 
     /**
@@ -97,7 +104,7 @@ class AuthenticationService extends BaseService
      */
     public function getUserById(int $userId): ?User
     {
-        return $this->userRepository->findById($userId);
+        return User::find($userId);
     }
 
     /**
@@ -157,7 +164,7 @@ class AuthenticationService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error during login', ['identifier' => $identifier, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'inicio de sesión');
             throw new \Exception('Error en el inicio de sesión: ' . $e->getMessage());
         }
     }
@@ -188,7 +195,7 @@ class AuthenticationService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error during registration', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'registro');
             throw new \Exception('Error en el registro: ' . $e->getMessage());
         }
     }
@@ -214,7 +221,7 @@ class AuthenticationService extends BaseService
                 'expires_at' => Carbon::createFromTimestamp($payload['exp'])->toISOString()
             ];
         } catch (\Exception $e) {
-            $this->logError('Error verifying token', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'verificación de token');
             throw new ValidationException('Token inválido: ' . $e->getMessage());
         }
     }
@@ -237,7 +244,7 @@ class AuthenticationService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error getting current user', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de usuario actual');
             throw new ValidationException('Error obteniendo usuario actual: ' . $e->getMessage());
         }
     }
@@ -269,7 +276,7 @@ class AuthenticationService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error refreshing token', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'refresco de token');
             throw new ValidationException('Error refrescando token: ' . $e->getMessage());
         }
     }
@@ -291,7 +298,7 @@ class AuthenticationService extends BaseService
 
             return true;
         } catch (\Exception $e) {
-            $this->logError('Error during logout', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'cierre de sesión');
             return false;
         }
     }

@@ -3,25 +3,261 @@
 namespace App\Services;
 
 use App\Models\EmpresaConvenio;
-use App\Repositories\ConvenioRepository;
 use App\Services\TrabajadorService;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
-class ConvenioService extends BaseService
+class ConvenioService extends EloquentService
 {
     private TrabajadorService $trabajadorService;
     private string $externalApiUrl;
     private int $timeout;
 
-    public function __construct(ConvenioRepository $convenioRepository, ?TrabajadorService $trabajadorService = null)
+    public function __construct(?TrabajadorService $trabajadorService = null)
     {
-        parent::__construct($convenioRepository);
         $this->trabajadorService = $trabajadorService ?: new TrabajadorService();
         $this->externalApiUrl = config('services.external_api.url', 'https://api.example.com');
         $this->timeout = config('services.external_api.timeout', 8);
+    }
+
+    /**
+     * Get active convenios.
+     */
+    public function getActiveConvenios(): Collection
+    {
+        try {
+            return EmpresaConvenio::active()
+                ->orderBy('razon_social')
+                ->get();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de convenios activos');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Get all active agreements.
+     */
+    public function getActiveAgreements(): array
+    {
+        try {
+            $convenios = EmpresaConvenio::active()->orderBy('razon_social')->get();
+
+            return [
+                'convenios' => $this->transformCollectionForApi($convenios),
+                'count' => $convenios->count()
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de convenios activos');
+            return [
+                'convenios' => [],
+                'count' => 0
+            ];
+        }
+    }
+
+    /**
+     * Get agreement by NIT.
+     */
+    public function getByNit(int $nit): ?EmpresaConvenio
+    {
+        try {
+            return EmpresaConvenio::where('nit', $nit)->first();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de convenio por NIT');
+            return null;
+        }
+    }
+
+    /**
+     * Create or update agreement.
+     */
+    public function createOrUpdate(array $criteria, array $data): EmpresaConvenio
+    {
+        try {
+            $convenio = EmpresaConvenio::updateOrCreate(['nit' => $data['nit']], $data);
+
+            $this->log('Agreement created/updated', [
+                'nit' => $data['nit'],
+                'razon_social' => $data['razon_social'] ?? ''
+            ]);
+
+            return $convenio;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'creación/actualización de convenio');
+            throw new \Exception('Error al crear/actualizar convenio: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Deactivate agreement.
+     */
+    public function deactivate(int $nit): bool
+    {
+        try {
+            $convenio = $this->getByNit($nit);
+
+            if (!$convenio) {
+                throw new ValidationException('Convenio no encontrado');
+            }
+
+            $convenio->update(['active' => false]);
+
+            $this->log('Agreement deactivated', ['nit' => $nit]);
+
+            return true;
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'desactivación de convenio');
+            return false;
+        }
+    }
+
+    /**
+     * Get statistics.
+     */
+    public function getStatistics(): array
+    {
+        try {
+            $total = EmpresaConvenio::count();
+            $active = EmpresaConvenio::where('active', true)->count();
+            $thisMonth = EmpresaConvenio::whereMonth('created_at', now()->month)->count();
+
+            return [
+                'total' => $total,
+                'active' => $active,
+                'inactive' => $total - $active,
+                'this_month' => $thisMonth,
+                'active_rate' => $total > 0 ? round(($active / $total) * 100, 2) : 0
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de estadísticas');
+            return [
+                'total' => 0,
+                'active' => 0,
+                'inactive' => 0,
+                'this_month' => 0,
+                'active_rate' => 0
+            ];
+        }
+    }
+
+    /**
+     * Search agreements.
+     */
+    public function search(array $criteria = []): array
+    {
+        try {
+            $term = $criteria['term'] ?? '';
+            $filters = $criteria['filters'] ?? [];
+
+            $query = EmpresaConvenio::where('active', true);
+
+            // Search by term
+            if (!empty($term)) {
+                $query->where(function ($q) use ($term) {
+                    $q->where('razon_social', 'like', "%{$term}%")
+                        ->orWhere('nit', 'like', "%{$term}%")
+                        ->orWhere('direccion', 'like', "%{$term}%");
+                });
+            }
+
+            // Apply filters
+            if (!empty($filters)) {
+                foreach ($filters as $field => $value) {
+                    if (!empty($value)) {
+                        $query->where($field, $value);
+                    }
+                }
+            }
+
+            $convenios = $query->orderBy('razon_social')->get();
+
+            return [
+                'convenios' => $this->transformCollectionForApi($convenios),
+                'count' => $convenios->count()
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de convenios');
+            return [
+                'convenios' => [],
+                'count' => 0
+            ];
+        }
+    }
+
+    /**
+     * Get paginated agreements.
+     */
+    public function getPaginated(int $perPage = 15, array $filters = []): array
+    {
+        try {
+            $query = EmpresaConvenio::where('active', true);
+
+            // Apply filters
+            if (!empty($filters)) {
+                foreach ($filters as $field => $value) {
+                    if (!empty($value)) {
+                        $query->where($field, $value);
+                    }
+                }
+            }
+
+            $convenios = $query->orderBy('razon_social')->paginate($perPage);
+
+            return [
+                'data' => $this->transformCollectionForApi($convenios->getCollection()),
+                'pagination' => [
+                    'current_page' => $convenios->currentPage(),
+                    'per_page' => $convenios->perPage(),
+                    'total' => $convenios->total(),
+                    'last_page' => $convenios->lastPage(),
+                    'from' => $convenios->firstItem(),
+                    'to' => $convenios->lastItem()
+                ]
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'paginación de convenios');
+            return [
+                'data' => [],
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => 0,
+                    'to' => 0
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Transform collection for API response.
+     */
+    private function transformCollectionForApi(Collection $collection): array
+    {
+        return $collection->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'nit' => $item->nit,
+                'razon_social' => $item->razon_social,
+                'direccion' => $item->direccion,
+                'ciudad' => $item->ciudad,
+                'departamento' => $item->departamento,
+                'telefono' => $item->telefono,
+                'email' => $item->email,
+                'sector_economico' => $item->sector_economico,
+                'tipo_empresa' => $item->tipo_empresa,
+                'active' => $item->active,
+                'created_at' => $item->created_at,
+                'updated_at' => $item->updated_at
+            ];
+        })->toArray();
     }
 
     /**
@@ -31,7 +267,7 @@ class ConvenioService extends BaseService
     {
         try {
             // 1. Get worker data
-            $trabajadorData = $this->obtenerDatosTrabajador($cedulaTrabajador);
+            $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($cedulaTrabajador);
 
             if (!$trabajadorData) {
                 throw new ValidationException(
@@ -98,357 +334,19 @@ class ConvenioService extends BaseService
                 );
             }
 
-            // 7. Validate service time (minimum 6 months)
-            $fechaAfiliacion = $trabajadorData['fecha_afiliacion'] ?? $trabajadorData['fecafi'] ?? null;
-
-            if (!$fechaAfiliacion) {
-                throw new ValidationException(
-                    'No se pudo determinar la fecha de afiliación del trabajador',
-                    ['cedula' => $cedulaTrabajador]
-                );
-            }
-
-            $mesesServicio = $this->calcularMesesServicio($fechaAfiliacion);
-
-            if ($mesesServicio < 6) {
-                throw new ValidationException(
-                    'El trabajador no cumple con el tiempo mínimo de servicio',
-                    [
-                        'cedula' => $cedulaTrabajador,
-                        'meses_servicio' => $mesesServicio,
-                        'minimo_requerido' => 6,
-                        'mensaje' => 'Se requieren al menos 6 meses de servicio en la empresa'
-                    ]
-                );
-            }
-
-            // 8. Build successful response
-            $this->log('Convenio validation successful', [
-                'nit_empresa' => $nitEmpresa,
-                'cedula_trabajador' => $cedulaTrabajador,
-                'meses_servicio' => $mesesServicio
-            ]);
-
             return [
-                'elegible' => true,
-                'convenio' => [
-                    'id' => $convenio->id,
-                    'nit' => $convenio->nit,
-                    'razon_social' => $convenio->razon_social,
-                    'fecha_convenio' => $convenio->fecha_convenio?->toISOString(),
-                    'fecha_vencimiento' => $convenio->fecha_vencimiento?->toISOString(),
-                    'estado' => $convenio->estado,
-                    'representante_nombre' => $convenio->representante_nombre,
-                    'representante_documento' => $convenio->representante_documento,
-                    'correo' => $convenio->correo,
-                    'telefono' => $convenio->telefono
-                ],
-                'trabajador' => [
-                    'cedula' => $trabajadorData['cedtra'] ?? $trabajadorData['cedula'],
-                    'nombre_completo' => $this->construirNombreCompleto($trabajadorData),
-                    'estado' => $trabajadorData['estado'],
-                    'meses_servicio' => $mesesServicio,
-                    'fecha_afiliacion' => $fechaAfiliacion,
-                    'salario' => $trabajadorData['salario'],
-                    'cargo' => $trabajadorData['cargo'],
-                    'email' => $trabajadorData['email']
-                ],
-                'mensaje' => 'El trabajador es elegible para solicitar crédito bajo convenio empresarial'
+                'valido' => true,
+                'convenio' => $this->transformForApi($convenio),
+                'trabajador' => $trabajadorData,
+                'mensaje' => 'El trabajador es elegible para crédito con convenio'
             ];
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error validating convenio eligibility', [
-                'cedula_trabajador' => $cedulaTrabajador,
-                'nit_empresa' => $nitEmpresa,
-                'error' => $e->getMessage()
-            ]);
-            throw new \Exception('Error en validación de convenio: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Get worker data from external API.
-     */
-    private function obtenerDatosTrabajador(string $cedula): ?array
-    {
-        try {
-            $response = Http::timeout($this->timeout)
-                ->post("{$this->externalApiUrl}/company/informacion_trabajador", [
-                    'cedtra' => $cedula
-                ]);
-
-            $data = $response->json();
-
-            if (!$data['success'] ?? false) {
-                $this->logError('External API returned error for worker', [
-                    'cedula' => $cedula,
-                    'error' => $data['error'] ?? 'Unknown error'
-                ]);
-                return null;
-            }
-
-            return $data['data'] ?? null;
-        } catch (\Exception $e) {
-            $this->logError('Exception getting worker data', [
-                'cedula' => $cedula,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
-
-    /**
-     * Find active agreement by company NIT.
-     */
-    private function buscarConvenioPorNit(int $nit): ?EmpresaConvenio
-    {
-        try {
-            $convenios = $this->repository->getActive();
-
-            foreach ($convenios as $convenio) {
-                if ($convenio->nit === $nit) {
-                    return $convenio;
-                }
-            }
-
-            return null;
-        } catch (\Exception $e) {
-            $this->logError('Error finding agreement by NIT', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
-
-    /**
-     * Calculate service months from affiliation date.
-     */
-    private function calcularMesesServicio(string $fechaAfiliacion): int
-    {
-        try {
-            $fechaAfi = $this->parseDate($fechaAfiliacion);
-
-            if (!$fechaAfi) {
-                return 0;
-            }
-
-            $diferencia = Carbon::now()->diffInMonths($fechaAfi);
-
-            return max(0, $diferencia);
-        } catch (\Exception $e) {
-            $this->logError('Error calculating service months', [
-                'fecha_afiliacion' => $fechaAfiliacion,
-                'error' => $e->getMessage()
-            ]);
-            return 0;
-        }
-    }
-
-    /**
-     * Build full name from worker data.
-     */
-    private function construirNombreCompleto(array $trabajadorData): string
-    {
-        $names = [
-            $trabajadorData['prinom'] ?? $trabajadorData['primer_nombre'] ?? '',
-            $trabajadorData['segnom'] ?? $trabajadorData['segundo_nombre'] ?? '',
-            $trabajadorData['priape'] ?? $trabajadorData['primer_apellido'] ?? '',
-            $trabajadorData['segape'] ?? $trabajadorData['segundo_apellido'] ?? ''
-        ];
-
-        return trim(implode(' ', array_filter($names)));
-    }
-
-    /**
-     * Parse date from various formats.
-     */
-    private function parseDate(string $date): ?Carbon
-    {
-        $formats = [
-            'Y-m-d',
-            'Y/m/d',
-            'd/m/Y',
-            'Y-m-d\TH:i:s',
-            'Y-m-d\TH:i:sZ'
-        ];
-
-        foreach ($formats as $format) {
-            try {
-                return Carbon::createFromFormat($format, $date);
-            } catch (\Exception $e) {
-                continue;
-            }
-        }
-
-        try {
-            return Carbon::parse($date);
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    /**
-     * Get all active agreements.
-     */
-    public function getActiveAgreements(): array
-    {
-        try {
-            $convenios = $this->repository->getActive();
-
+            $this->handleDatabaseError($e, 'validación de elegibilidad de convenio');
             return [
-                'convenios' => $this->transformCollectionForApi($convenios),
-                'count' => $convenios->count()
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error getting active agreements', ['error' => $e->getMessage()]);
-            return [
-                'convenios' => [],
-                'count' => 0
-            ];
-        }
-    }
-
-    /**
-     * Get agreement by NIT.
-     */
-    public function getByNit(int $nit): ?EmpresaConvenio
-    {
-        try {
-            return $this->repository->findByNit($nit);
-        } catch (\Exception $e) {
-            $this->logError('Error getting agreement by NIT', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
-
-    /**
-     * Create or update agreement.
-     */
-    public function createOrUpdate(array $criteria, array $data): EmpresaConvenio
-    {
-        try {
-            $convenio = $this->repository->createConvenio($data);
-
-            $this->log('Agreement created/updated', [
-                'nit' => $data['nit'],
-                'razon_social' => $data['razon_social'] ?? ''
-            ]);
-
-            return $convenio;
-        } catch (\Exception $e) {
-            $this->logError('Error creating/updating agreement', [
-                'nit' => $data['nit'] ?? '',
-                'error' => $e->getMessage()
-            ]);
-            throw new \Exception('Error al crear/actualizar convenio: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Deactivate agreement.
-     */
-    public function deactivate(int $nit): bool
-    {
-        try {
-            $convenio = $this->getByNit($nit);
-
-            if (!$convenio) {
-                throw new ValidationException('Convenio no encontrado');
-            }
-
-            $this->repository->deactivate($nit);
-
-            $this->log('Agreement deactivated', ['nit' => $nit]);
-
-            return true;
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            $this->logError('Error deactivating agreement', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
-            return false;
-        }
-    }
-
-    /**
-     * Get agreement statistics.
-     */
-    public function getStatistics(): array
-    {
-        try {
-            return $this->repository->getStatistics();
-        } catch (\Exception $e) {
-            $this->logError('Error getting agreement statistics', ['error' => $e->getMessage()]);
-            return [
-                'total' => 0,
-                'active' => 0,
-                'expired' => 0,
-                'expiring_soon' => 0,
-                'by_status' => [],
-                'by_city' => [],
-                'by_department' => [],
-                'by_sector' => [],
-                'active_percentage' => 0,
-                'expired_percentage' => 0
-            ];
-        }
-    }
-
-    /**
-     * Search agreements by criteria.
-     */
-    public function search(array $criteria): array
-    {
-        try {
-            $term = $criteria['term'] ?? '';
-            $filters = $criteria['filters'] ?? [];
-
-            $convenios = $this->repository->searchConvenios($term, $filters);
-
-            return [
-                'convenios' => $this->transformCollectionForApi($convenios),
-                'count' => $convenios->count(),
-                'criteria' => $criteria
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error searching agreements', [
-                'criteria' => $criteria,
-                'error' => $e->getMessage()
-            ]);
-            return [
-                'convenios' => [],
-                'count' => 0,
-                'criteria' => $criteria
-            ];
-        }
-    }
-
-    /**
-     * Get agreements with pagination.
-     */
-    public function getPaginated(int $perPage = 15, array $filters = []): array
-    {
-        try {
-            return $this->repository->getPaginated($perPage, $filters);
-        } catch (\Exception $e) {
-            $this->logError('Error getting paginated agreements', [
-                'per_page' => $perPage,
-                'filters' => $filters,
-                'error' => $e->getMessage()
-            ]);
-            return [
-                'data' => [],
-                'current_page' => 1,
-                'per_page' => $perPage,
-                'total' => 0,
-                'last_page' => 1
+                'valido' => false,
+                'error' => 'Error al validar elegibilidad del convenio'
             ];
         }
     }
@@ -459,9 +357,43 @@ class ConvenioService extends BaseService
     public function getDashboardData(): array
     {
         try {
-            return $this->repository->getDashboardData();
+            $total = EmpresaConvenio::count();
+            $activos = EmpresaConvenio::where('estado', 'Activo')->count();
+            $vencidos = EmpresaConvenio::where('estado', 'Vencido')->count();
+            $porVencer = EmpresaConvenio::where('estado', 'Activo')
+                ->where('fecha_vencimiento', '>', now())
+                ->where('fecha_vencimiento', '<=', now()->addDays(30))
+                ->count();
+
+            $creadosHoy = EmpresaConvenio::whereDate('created_at', today())->count();
+            $creadosAyer = EmpresaConvenio::whereDate('created_at', now()->subDay())->count();
+
+            $vencenProximos30Dias = EmpresaConvenio::where('estado', 'Activo')
+                ->where('fecha_vencimiento', '>', now())
+                ->where('fecha_vencimiento', '<=', now()->addDays(30))
+                ->count();
+
+            $porcentajeActivos = $total > 0 ? round(($activos / $total) * 100, 2) : 0;
+
+            $ciudadesUnicas = EmpresaConvenio::distinct('ciudad')->count('ciudad');
+            $departamentosUnicos = EmpresaConvenio::distinct('departamento')->count('departamento');
+            $sectoresEconomicosUnicos = EmpresaConvenio::distinct('sector_economico')->count('sector_economico');
+
+            return [
+                'total' => $total,
+                'activos' => $activos,
+                'vencidos' => $vencidos,
+                'por_vencer' => $porVencer,
+                'creados_hoy' => $creadosHoy,
+                'creados_ayer' => $creadosAyer,
+                'vencen_proximos_30_dias' => $vencenProximos30Dias,
+                'porcentaje_activos' => $porcentajeActivos,
+                'ciudades_unicas' => $ciudadesUnicas,
+                'departamentos_unicos' => $departamentosUnicos,
+                'sectores_economicos_unicos' => $sectoresEconomicosUnicos
+            ];
         } catch (\Exception $e) {
-            $this->logError('Error getting dashboard data', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de datos del dashboard');
             return [
                 'total' => 0,
                 'activos' => 0,
@@ -484,9 +416,13 @@ class ConvenioService extends BaseService
     public function getUniqueCities(): array
     {
         try {
-            return $this->repository->getUniqueCities()->toArray();
+            return EmpresaConvenio::whereNotNull('ciudad')
+                ->distinct('ciudad')
+                ->orderBy('ciudad')
+                ->pluck('ciudad')
+                ->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error getting unique cities', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de ciudades únicas');
             return [];
         }
     }
@@ -497,9 +433,13 @@ class ConvenioService extends BaseService
     public function getUniqueDepartments(): array
     {
         try {
-            return $this->repository->getUniqueDepartments()->toArray();
+            return EmpresaConvenio::whereNotNull('departamento')
+                ->distinct('departamento')
+                ->orderBy('departamento')
+                ->pluck('departamento')
+                ->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error getting unique departments', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de departamentos únicos');
             return [];
         }
     }
@@ -510,9 +450,13 @@ class ConvenioService extends BaseService
     public function getUniqueSectoresEconomicos(): array
     {
         try {
-            return $this->repository->getUniqueSectoresEconomicos()->toArray();
+            return EmpresaConvenio::whereNotNull('sector_economico')
+                ->distinct('sector_economico')
+                ->orderBy('sector_economico')
+                ->pluck('sector_economico')
+                ->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error getting unique economic sectors', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de sectores económicos únicos');
             return [];
         }
     }
@@ -523,9 +467,13 @@ class ConvenioService extends BaseService
     public function getUniqueTiposEmpresa(): array
     {
         try {
-            return $this->repository->getUniqueTiposEmpresa()->toArray();
+            return EmpresaConvenio::whereNotNull('tipo_empresa')
+                ->distinct('tipo_empresa')
+                ->orderBy('tipo_empresa')
+                ->pluck('tipo_empresa')
+                ->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error getting unique company types', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'obtención de tipos de empresa únicos');
             return [];
         }
     }
@@ -536,12 +484,40 @@ class ConvenioService extends BaseService
     public function exportToArray(array $filters = []): array
     {
         try {
-            return $this->repository->exportToArray($filters);
+            $query = EmpresaConvenio::query();
+
+            // Apply filters
+            if (!empty($filters)) {
+                foreach ($filters as $field => $value) {
+                    if (!empty($value)) {
+                        $query->where($field, $value);
+                    }
+                }
+            }
+
+            $convenios = $query->orderBy('razon_social')->get();
+
+            return $convenios->map(function ($convenio) {
+                return [
+                    'nit' => $convenio->nit,
+                    'razon_social' => $convenio->razon_social,
+                    'fecha_convenio' => $convenio->fecha_convenio,
+                    'fecha_vencimiento' => $convenio->fecha_vencimiento,
+                    'estado' => $convenio->estado,
+                    'representante_documento' => $convenio->representante_documento,
+                    'representante_nombre' => $convenio->representante_nombre,
+                    'telefono' => $convenio->telefono,
+                    'correo' => $convenio->correo,
+                    'ciudad' => $convenio->ciudad,
+                    'departamento' => $convenio->departamento,
+                    'sector_economico' => $convenio->sector_economico,
+                    'tipo_empresa' => $convenio->tipo_empresa,
+                    'created_at' => $convenio->created_at,
+                    'updated_at' => $convenio->updated_at
+                ];
+            })->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error exporting agreements', [
-                'filters' => $filters,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'exportación de convenios');
             return [];
         }
     }
@@ -552,13 +528,10 @@ class ConvenioService extends BaseService
     public function bulkUpdateStatus(array $nits, string $status): int
     {
         try {
-            return $this->repository->bulkUpdateStatus($nits, $status);
+            return EmpresaConvenio::whereIn('nit', $nits)
+                ->update(['estado' => $status]);
         } catch (\Exception $e) {
-            $this->logError('Error bulk updating agreements status', [
-                'nits' => $nits,
-                'status' => $status,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'actualización masiva de estado de convenios');
             return 0;
         }
     }
@@ -569,14 +542,15 @@ class ConvenioService extends BaseService
     public function getForRenewalNotification(int $daysBefore = 30): array
     {
         try {
-            return $this->repository->getForRenewalNotification($daysBefore)
+            return EmpresaConvenio::where('estado', 'Activo')
+                ->where('fecha_vencimiento', '>', now())
+                ->where('fecha_vencimiento', '<=', now()->addDays($daysBefore))
+                ->orderBy('fecha_vencimiento')
+                ->get()
                 ->map(fn($convenio) => $this->transformForApi($convenio))
                 ->toArray();
         } catch (\Exception $e) {
-            $this->logError('Error getting agreements for renewal notification', [
-                'days_before' => $daysBefore,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'obtención de convenios para notificación de renovación');
             return [];
         }
     }
@@ -587,12 +561,13 @@ class ConvenioService extends BaseService
     public function softDeleteConvenio(int $nit): bool
     {
         try {
-            return $this->repository->softDeleteConvenio($nit);
+            $convenio = EmpresaConvenio::where('nit', $nit)->first();
+            if (!$convenio) {
+                return false;
+            }
+            return $convenio->delete();
         } catch (\Exception $e) {
-            $this->logError('Error soft deleting agreement', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'eliminación suave de convenio');
             return false;
         }
     }
@@ -603,13 +578,54 @@ class ConvenioService extends BaseService
     public function restoreConvenio(int $nit): bool
     {
         try {
-            return $this->repository->restoreConvenio($nit);
+            $convenio = EmpresaConvenio::withTrashed()->where('nit', $nit)->first();
+            if (!$convenio) {
+                return false;
+            }
+            return $convenio->restore();
         } catch (\Exception $e) {
-            $this->logError('Error restoring agreement', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'restauración de convenio');
             return false;
+        }
+    }
+
+    /**
+     * Transform single agreement for API response.
+     */
+    private function transformForApi(EmpresaConvenio $convenio): array
+    {
+        return [
+            'id' => $convenio->id,
+            'nit' => $convenio->nit,
+            'razon_social' => $convenio->razon_social,
+            'fecha_convenio' => $convenio->fecha_convenio,
+            'fecha_vencimiento' => $convenio->fecha_vencimiento,
+            'estado' => $convenio->estado,
+            'representante_documento' => $convenio->representante_documento,
+            'representante_nombre' => $convenio->representante_nombre,
+            'telefono' => $convenio->telefono,
+            'correo' => $convenio->correo,
+            'ciudad' => $convenio->ciudad,
+            'departamento' => $convenio->departamento,
+            'sector_economico' => $convenio->sector_economico,
+            'tipo_empresa' => $convenio->tipo_empresa,
+            'created_at' => $convenio->created_at,
+            'updated_at' => $convenio->updated_at
+        ];
+    }
+
+    /**
+     * Find convenio by NIT (legacy method).
+     */
+    private function buscarConvenioPorNit(int $nit): ?EmpresaConvenio
+    {
+        try {
+            return EmpresaConvenio::where('nit', $nit)
+                ->where('estado', 'Activo')
+                ->first();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de convenio por NIT');
+            return null;
         }
     }
 }

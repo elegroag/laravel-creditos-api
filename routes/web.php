@@ -10,4 +10,5 @@ Route::get('/', function () {
 // Importar rutas de los diferentes módulos
 require __DIR__ . '/web/guest.php';
 require __DIR__ . '/web/inicio.php';
+require __DIR__ . '/web/simulador.php';
 require __DIR__ . '/web/perfil.php';

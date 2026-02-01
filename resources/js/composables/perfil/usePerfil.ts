@@ -1,10 +1,9 @@
-import { ref, computed, onMounted, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
 import { useSession } from '@/composables/useSession';
 import { useApi } from '@/composables/useApi';
-import type { 
-    Perfil, 
-    PasswordData, 
+import type {
+    Perfil,
+    PasswordData,
     PerfilUpdateData,
     PerfilPreferences,
     PerfilSecurity,
@@ -31,7 +30,7 @@ type PerfilApiData = {
 };
 
 export function usePerfil() {
-    const { user, setSession } = useSession();
+    const { user, updateUserData } = useSession();
     const { getJson, putJson, postJson } = useApi();
 
     // Estado del perfil
@@ -86,18 +85,18 @@ export function usePerfil() {
 
     // Computed properties
     const perfilCompleto = computed(() => {
-        return perfil.value.full_name && 
-               perfil.value.phone && 
-               perfil.value.tipo_documento && 
-               perfil.value.numero_documento;
+        return perfil.value.full_name &&
+            perfil.value.phone &&
+            perfil.value.tipo_documento &&
+            perfil.value.numero_documento;
     });
 
     const passwordValida = computed(() => {
         return passwordData.value.password_actual &&
-               passwordData.value.nueva_password &&
-               passwordData.value.confirmar_password &&
-               passwordData.value.nueva_password === passwordData.value.confirmar_password &&
-               passwordData.value.nueva_password.length >= 8;
+            passwordData.value.nueva_password &&
+            passwordData.value.confirmar_password &&
+            passwordData.value.nueva_password === passwordData.value.confirmar_password &&
+            passwordData.value.nueva_password.length >= 8;
     });
 
     const tieneSesionesActivas = computed(() => {
@@ -159,26 +158,9 @@ export function usePerfil() {
 
             if (response.success) {
                 success.value = 'Perfil actualizado exitosamente';
-                
-                // Actualizar sesión si el usuario cambió
-                if (user.value) {
-                    user.value = {
-                        ...user.value,
-                        username: perfil.value.username,
-                        email: perfil.value.email,
-                        nombres: perfil.value.nombres,
-                        apellidos: perfil.value.apellidos,
-                        full_name: perfil.value.full_name,
-                        telefono: perfil.value.phone,
-                        tipo_documento: perfil.value.tipo_documento,
-                        numero_documento: perfil.value.numero_documento
-                    };
-                    setSession({
-                        accessToken: localStorage.getItem('access_token') || '',
-                        tokenType: 'bearer',
-                        user: user.value
-                    });
-                }
+
+                // Recargar datos de autenticación vía Inertia
+                await updateUserData({});
             }
         } catch (err: any) {
             console.error('Error actualizando perfil:', err);
@@ -200,7 +182,7 @@ export function usePerfil() {
             if (response.success) {
                 success.value = 'Contraseña actualizada exitosamente';
                 showPasswordModal.value = false;
-                
+
                 // Limpiar formulario
                 passwordData.value = {
                     password_actual: '',
@@ -253,7 +235,7 @@ export function usePerfil() {
     const cerrarSesion = async (sessionId: string) => {
         try {
             await postJson('/api/perfil/sessions/close', { session_id: sessionId }, { auth: true });
-            
+
             // Recargar sesiones activas
             await cargarSecurity();
         } catch (err: any) {
@@ -266,7 +248,7 @@ export function usePerfil() {
     const cerrarTodasSesiones = async () => {
         try {
             await postJson('/api/perfil/sessions/close-all', {}, { auth: true });
-            
+
             // Recargar sesiones activas
             await cargarSecurity();
         } catch (err: any) {
@@ -380,27 +362,27 @@ export function usePerfil() {
 
     const validarPassword = (password: string): { valida: boolean; errores: string[] } => {
         const errores: string[] = [];
-        
+
         if (password.length < 8) {
             errores.push('La contraseña debe tener al menos 8 caracteres');
         }
-        
+
         if (!/[A-Z]/.test(password)) {
             errores.push('La contraseña debe tener al menos una mayúscula');
         }
-        
+
         if (!/[a-z]/.test(password)) {
             errores.push('La contraseña debe tener al menos una minúscula');
         }
-        
+
         if (!/[0-9]/.test(password)) {
             errores.push('La contraseña debe tener al menos un número');
         }
-        
+
         if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
             errores.push('La contraseña debe tener al menos un carácter especial');
         }
-        
+
         return {
             valida: errores.length === 0,
             errores
@@ -414,7 +396,7 @@ export function usePerfil() {
                 username: newUser.username || '',
                 email: newUser.email || '',
                 full_name: newUser.full_name || '',
-                phone: newUser.telefono || '',
+                phone: newUser.phone || '',
                 tipo_documento: newUser.tipo_documento || '',
                 numero_documento: newUser.numero_documento || '',
                 nombres: newUser.nombres || '',

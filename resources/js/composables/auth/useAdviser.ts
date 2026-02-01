@@ -2,11 +2,9 @@ import { ref } from 'vue';
 import { router } from '@inertiajs/core';
 import { useApi } from '@/composables/useApi';
 import { useSession } from '@/composables/useSession';
+import { route } from '@/helpers/route';
 import type { AdviserAuthResponse, PuntoAsesoria } from '@/types/adviser';
-
-type ApiEnvelope<T> = {
-    data: T;
-};
+import type { SessionUser } from '@/types/auth';
 
 type ModalPuntoAsesoria = {
     numero: number;
@@ -19,7 +17,7 @@ type ModalPuntoAsesoria = {
 
 export function useAdviser() {
     const { postJson } = useApi();
-    const { isAuthenticated, setSession } = useSession();
+    const { isAuthenticated, setSession, updateUserData } = useSession();
 
     const username = ref('');
     const password = ref('');
@@ -104,12 +102,10 @@ export function useAdviser() {
         errorMsg.value = '';
 
         try {
-            const response = await postJson<ApiEnvelope<AdviserAuthResponse>>('/api/auth/adviser/autenticar', {
+            const data = await postJson<AdviserAuthResponse>('auth/adviser/autenticar', {
                 username: username.value,
                 password: password.value
             });
-
-            const data = response.data;
             authData.value = data;
 
             const userRoles = Array.isArray(data?.user?.roles) ? data.user.roles : [];
@@ -117,7 +113,11 @@ export function useAdviser() {
                 throw new Error('El usuario no tiene rol de asesor');
             }
 
-            const puntos = Array.isArray(data?.user?.puntos_asesorias) ? data.user.puntos_asesorias : [];
+            const rawPuntos = (data?.user as unknown as { puntos_asesores?: PuntoAsesoria[]; puntos_asesorias?: PuntoAsesoria[] }) ?? {};
+            const puntos = Array.isArray(rawPuntos?.puntos_asesores)
+                ? rawPuntos.puntos_asesores
+                : (Array.isArray(rawPuntos?.puntos_asesorias) ? rawPuntos.puntos_asesorias : []);
+
             if (puntos.length > 0) {
                 puntosAsesoria.value = normalizePuntosAsesoria(puntos);
                 showPuntosModal.value = true;
@@ -145,7 +145,29 @@ export function useAdviser() {
         showPuntosModal.value = false;
 
         if (authData.value) {
-            await completeLogin(authData.value);
+            const token = String(authData.value.access_token || '');
+
+            router.post(route('adviser.session.store'), {
+                access_token: token,
+                selected_punto: punto
+            }, {
+                onSuccess: async () => {
+                    await completeLogin(authData.value as AdviserAuthResponse);
+                    const selectedPuntoForSession: SessionUser['selected_punto'] = {
+                        id: Number(punto.numero),
+                        nombre: punto.oficina_afiliacion || punto.nombre_usuario,
+                        direccion: '',
+                        telefono: '',
+                        ciudad: '',
+                        estado: punto.estado
+                    };
+
+                    await updateUserData({ selected_punto: selectedPuntoForSession });
+                },
+                onError: () => {
+                    errorMsg.value = 'No fue posible crear la sesión del asesor';
+                }
+            });
         }
     };
 

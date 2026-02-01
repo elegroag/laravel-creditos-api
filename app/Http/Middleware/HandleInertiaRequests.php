@@ -59,7 +59,7 @@ class HandleInertiaRequests extends Middleware
         // Cache user data for performance
         $cacheKey = "user_auth_data_{$user->id}";
 
-        return Cache::remember($cacheKey, 3600, function () use ($user) {
+        $base = Cache::remember($cacheKey, 3600, function () use ($user) {
             $roles = $this->getUserRoles($user);
             $permissions = $this->getUserPermissions($user);
 
@@ -78,6 +78,13 @@ class HandleInertiaRequests extends Middleware
                 'roles' => $roles,
             ];
         });
+
+        $selectedPunto = $request->session()->get('selected_punto');
+        if (is_array($selectedPunto) && isset($base['user']) && is_array($base['user'])) {
+            $base['user']['selected_punto'] = $selectedPunto;
+        }
+
+        return $base;
     }
 
     /**

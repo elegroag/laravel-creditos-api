@@ -3,14 +3,13 @@
 namespace App\Services;
 
 use App\Models\EntidadDigital;
-use App\Repositories\EntidadDigitalRepository;
-use App\Validators\SolicitudValidators;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 
-class EntidadDigitalService extends BaseService
+class EntidadDigitalService extends EloquentService
 {
     /**
      * Create or update entidad digital.
@@ -18,7 +17,27 @@ class EntidadDigitalService extends BaseService
     public function createOrUpdate(array $data): EntidadDigital
     {
         // Validate data
-        $validator = SolicitudValidators::validateEntidadDigital($data);
+        $validator = Validator::make($data, [
+            'tipo_identificacion' => 'required|string|max:50',
+            'numero_identificacion' => 'required|string|max:50',
+            'nombres' => 'required|string|max:255',
+            'apellidos' => 'required|string|max:255',
+            'username' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'telefono' => 'nullable|string|max:20',
+            'direccion' => 'nullable|string|max:500',
+            'ciudad' => 'nullable|string|max:100',
+            'departamento' => 'nullable|string|max:100',
+            'pais' => 'nullable|string|max:100',
+            'fecha_nacimiento' => 'nullable|date',
+            'genero' => 'nullable|string|max:20',
+            'estado_civil' => 'nullable|string|max:50',
+            'actividad_economica' => 'nullable|string|max:255',
+            'cargo' => 'nullable|string|max:255',
+            'ingresos_mensuales' => 'nullable|numeric|min:0',
+            'activo' => 'nullable|boolean',
+            'overwrite' => 'nullable|boolean'
+        ]);
 
         if ($validator->fails()) {
             throw new ValidationException($validator->errors()->first());
@@ -28,63 +47,60 @@ class EntidadDigitalService extends BaseService
 
         try {
             // Check if entidad already exists
-            $existing = $this->repository->findByDocument(
-                $validated['tipo_identificacion'],
-                $validated['numero_identificacion']
-            );
+            $existing = EntidadDigital::where('tipo_identificacion', $validated['tipo_identificacion'])
+                ->where('numero_identificacion', $validated['numero_identificacion'])
+                ->first();
 
             if ($existing && !($validated['overwrite'] ?? false)) {
                 throw new ValidationException('La entidad digital ya existe para este documento');
             }
 
-            // Process documents if provided
-            $documentos = [];
-            if (isset($validated['documentos'])) {
-                $documentos = $this->processDocuments($validated);
-            }
-
-            // Process selfie if provided
-            $selfiePath = null;
-            if (isset($validated['selfie']) && !empty($validated['selfie'])) {
-                $selfiePath = $this->processSelfie($validated);
-            }
-
-            // Create or update entidad
+            // Prepare entidad data
             $entidadData = [
-                'username' => $validated['username'],
                 'tipo_identificacion' => $validated['tipo_identificacion'],
                 'numero_identificacion' => $validated['numero_identificacion'],
-                'documentos' => $documentos,
-                'selfie' => $selfiePath,
-                'clave_firma_hash' => hash('sha256', $validated['clave_firma']),
-                'estado' => 'activa',
-                'metadata' => [
-                    'directorio' => $this->generateDirectoryPath($validated['tipo_identificacion'], $validated['numero_identificacion'])
-                ],
-                'validaciones' => [],
+                'nombres' => $validated['nombres'] ?? '',
+                'apellidos' => $validated['apellidos'] ?? '',
+                'username' => $validated['username'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'telefono' => $validated['telefono'] ?? null,
+                'direccion' => $validated['direccion'] ?? null,
+                'ciudad' => $validated['ciudad'] ?? null,
+                'departamento' => $validated['departamento'] ?? null,
+                'pais' => $validated['pais'] ?? 'Colombia',
+                'fecha_nacimiento' => $validated['fecha_nacimiento'] ?? null,
+                'genero' => $validated['genero'] ?? null,
+                'estado_civil' => $validated['estado_civil'] ?? null,
+                'actividad_economica' => $validated['actividad_economica'] ?? null,
+                'cargo' => $validated['cargo'] ?? null,
+                'ingresos_mensuales' => $validated['ingresos_mensuales'] ?? null,
+                'activo' => $validated['activo'] ?? true,
+                'validado' => false,
+                'fecha_validacion' => null,
+                'documentos' => $validated['documentos'] ?? [],
+                'selfie' => $validated['selfie'] ?? null,
                 'created_at' => now(),
-                'updated_at' => now(),
-                'last_validation_at' => now()
+                'updated_at' => now()
             ];
 
             if ($existing) {
-                $entidad = $this->repository->update($existing->id, $entidadData) ? $this->repository->findById($existing->id) : null;
+                $entidad = tap($existing)->update($entidadData);
             } else {
-                $entidad = $this->repository->create($entidadData);
+                $entidad = EntidadDigital::create($entidadData);
             }
 
             $this->log('Entidad digital created/updated successfully', [
-                'username' => $validated['username'],
                 'tipo_identificacion' => $validated['tipo_identificacion'],
-                'numero_identificacion' => $validated['numero_identificacion']
+                'numero_identificacion' => $validated['numero_identificacion'],
+                'username' => $validated['username'] ?? null
             ]);
 
             return $entidad;
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error creating/updating entidad digital', ['error' => $e->getMessage()]);
-            throw new \Exception('Error al crear/actualizar entidad digital: ' . $e->getMessage());
+            $this->handleDatabaseError($e, 'creación/actualización de entidad digital');
+            throw new \Exception('Error al procesar entidad digital: ' . $e->getMessage());
         }
     }
 
@@ -94,9 +110,11 @@ class EntidadDigitalService extends BaseService
     public function existsByDocument(string $tipoIdentificacion, string $numeroIdentificacion): bool
     {
         try {
-            return $this->repository->existsByDocument($tipoIdentificacion, $numeroIdentificacion);
+            return EntidadDigital::where('tipo_identificacion', $tipoIdentificacion)
+                ->where('numero_identificacion', $numeroIdentificacion)
+                ->exists();
         } catch (\Exception $e) {
-            $this->logError('Error checking entidad existence', ['error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'verificación de existencia de entidad');
             return false;
         }
     }
@@ -107,9 +125,9 @@ class EntidadDigitalService extends BaseService
     public function getByUsername(string $username): ?EntidadDigital
     {
         try {
-            return $this->repository->findByUsername($username);
+            return EntidadDigital::where('username', $username)->first();
         } catch (\Exception $e) {
-            $this->logError('Error getting entidad by username', ['username' => $username, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'búsqueda de entidad por username');
             return null;
         }
     }
@@ -120,145 +138,124 @@ class EntidadDigitalService extends BaseService
     public function getByDocument(string $tipoIdentificacion, string $numeroIdentificacion): ?EntidadDigital
     {
         try {
-            return $this->repository->findByDocument($tipoIdentificacion, $numeroIdentificacion);
+            return EntidadDigital::where('tipo_identificacion', $tipoIdentificacion)
+                ->where('numero_identificacion', $numeroIdentificacion)
+                ->first();
         } catch (\Exception $e) {
-            $this->logError('Error getting entidad by document', [
-                'tipo_identificacion' => $tipoIdentificacion,
-                'numero_identificacion' => $numeroIdentificacion,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'búsqueda de entidad por documento');
             return null;
         }
     }
 
     /**
-     * Add validation to entidad.
+     * Get entidad by ID.
      */
-    public function addValidation(string $username, string $tipoValidacion, string $resultado, array $detalles = []): bool
+    public function findById(int $id): ?EntidadDigital
     {
         try {
-            $entidad = $this->getByUsername($username);
-
-            if (!$entidad) {
-                throw new ValidationException('Entidad digital no encontrada');
-            }
-
-            $validationData = [
-                'tipo' => $tipoValidacion,
-                'resultado' => $resultado,
-                'detalles' => $detalles,
-                'timestamp' => now()->toISOString()
-            ];
-
-            $this->repository->addValidation($entidad->id, $validationData);
-
-            $this->log('Validation added to entidad', [
-                'username' => $username,
-                'tipo_validacion' => $tipoValidacion,
-                'resultado' => $resultado
-            ]);
-
-            return true;
-        } catch (ValidationException $e) {
-            throw $e;
+            return EntidadDigital::find($id);
         } catch (\Exception $e) {
-            $this->logError('Error adding validation to entidad', ['username' => $username, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'búsqueda de entidad por ID');
+            return null;
+        }
+    }
+
+    /**
+     * Update entidad.
+     */
+    public function update(int $id, array $data): bool
+    {
+        try {
+            $entidad = EntidadDigital::find($id);
+            if (!$entidad) {
+                return false;
+            }
+            return $entidad->update($data);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'actualización de entidad');
             return false;
         }
     }
 
     /**
-     * Save documents for entidad.
+     * Delete entidad.
      */
-    public function saveDocuments(string $username, array $documentos): array
+    public function delete(int $id): bool
     {
         try {
-            $entidad = $this->getByUsername($username);
-
+            $entidad = EntidadDigital::find($id);
             if (!$entidad) {
-                throw new ValidationException('Entidad digital no encontrada');
+                return false;
             }
-
-            $savedDocuments = [];
-            $directory = $entidad->metadata['directorio'] ?? $this->generateDirectoryPath(
-                $entidad->tipo_identificacion,
-                $entidad->numero_identificacion
-            );
-
-            foreach ($documentos as $tipo => $contenido) {
-                if ($this->isValidBase64($contenido)) {
-                    $filename = $this->generateDocumentFilename($tipo);
-                    $path = "{$directory}/{$filename}";
-
-                    // Decode and save base64 content
-                    $decodedContent = base64_decode($contenido);
-                    Storage::disk('public')->put($path, $decodedContent);
-
-                    $savedDocuments[$tipo] = $path;
-
-                    // Update entidad documents
-                    $currentDocumentos = $entidad->documentos ?? [];
-                    $currentDocumentos[$tipo] = $path;
-                    $this->repository->update($entidad->id, ['documentos' => $currentDocumentos]);
-                }
-            }
-
-            $this->log('Documents saved for entidad', [
-                'username' => $username,
-                'documents_count' => count($savedDocuments)
-            ]);
-
-            return $savedDocuments;
-        } catch (ValidationException $e) {
-            throw $e;
+            return $entidad->delete();
         } catch (\Exception $e) {
-            $this->logError('Error saving documents for entidad', ['username' => $username, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al guardar documentos: ' . $e->getMessage());
+            $this->handleDatabaseError($e, 'eliminación de entidad');
+            return false;
         }
     }
 
     /**
-     * Save selfie for entidad.
+     * Get all entidades.
      */
-    public function saveSelfie(string $username, string $selfieBase64): string
+    public function getAll(): \Illuminate\Support\Collection
     {
         try {
-            $entidad = $this->getByUsername($username);
-
-            if (!$entidad) {
-                throw new ValidationException('Entidad digital no encontrada');
-            }
-
-            if (!$this->isValidBase64($selfieBase64)) {
-                throw new ValidationException('Formato de selfie inválido');
-            }
-
-            $directory = $entidad->metadata['directorio'] ?? $this->generateDirectoryPath(
-                $entidad->tipo_identificacion,
-                $entidad->numero_identificacion
-            );
-
-            $filename = 'selfie_' . now()->format('YmdHis') . '.jpg';
-            $path = "{$directory}/{$filename}";
-
-            // Decode and save base64 content
-            $decodedContent = base64_decode($selfieBase64);
-            Storage::disk('public')->put($path, $decodedContent);
-
-            // Update entidad selfie
-            $this->repository->update($entidad->id, ['selfie' => $path]);
-
-            $this->log('Selfie saved for entidad', [
-                'username' => $username,
-                'path' => $path
-            ]);
-
-            return $path;
-        } catch (ValidationException $e) {
-            throw $e;
+            return EntidadDigital::orderBy('created_at', 'desc')->get();
         } catch (\Exception $e) {
-            $this->logError('Error saving selfie for entidad', ['username' => $username, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al guardar selfie: ' . $e->getMessage());
+            $this->handleDatabaseError($e, 'obtención de entidades');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Get active entidades.
+     */
+    public function getActive(): \Illuminate\Support\Collection
+    {
+        try {
+            return EntidadDigital::where('activo', true)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de entidades activas');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Get statistics.
+     */
+    public function getStatistics(): array
+    {
+        try {
+            $total = EntidadDigital::count();
+            $complete = EntidadDigital::where('estado', 'activa')->count();
+            $incomplete = $total - $complete;
+
+            // Get by estado
+            $byEstado = EntidadDigital::selectRaw('estado, COUNT(*) as count')
+                ->groupBy('estado')
+                ->pluck('count', 'estado')
+                ->toArray();
+
+            $completionRate = $total > 0 ? round(($complete / $total) * 100, 2) : 0;
+
+            return [
+                'total' => $total,
+                'complete' => $complete,
+                'incomplete' => $incomplete,
+                'by_estado' => $byEstado,
+                'completion_rate' => $completionRate
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de estadísticas de entidades');
+            return [
+                'total' => 0,
+                'complete' => 0,
+                'incomplete' => 0,
+                'by_estado' => [],
+                'completion_rate' => 0
+            ];
         }
     }
 
@@ -291,17 +288,14 @@ class EntidadDigitalService extends BaseService
             return [
                 'documents' => $documents,
                 'base64_documents' => $base64Documents,
-                'has_complete_documents' => $entidad->hasCompleteDocuments(),
-                'has_selfie' => $entidad->hasSelfie(),
-                'is_complete' => $entidad->isComplete()
+                'has_complete_documents' => $this->hasCompleteDocuments($entidad),
+                'has_selfie' => $this->hasSelfie($entidad),
+                'is_complete' => $this->isComplete($entidad)
             ];
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error getting documents for entidad', [
-                'username' => $username,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'obtención de documentos de entidad');
             throw new \Exception('Error al obtener documentos: ' . $e->getMessage());
         }
     }
@@ -336,7 +330,7 @@ class EntidadDigitalService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error deleting documents for entidad', ['username' => $username, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'eliminación de documentos de entidad');
             return false;
         }
     }
@@ -374,31 +368,8 @@ class EntidadDigitalService extends BaseService
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            $this->logError('Error generating QR for entidad', [
-                'tipo_identificacion' => $tipoIdentificacion,
-                'numero_identificacion' => $numeroIdentificacion,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'generación de QR para entidad');
             throw new \Exception('Error al generar QR: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Get entidad statistics.
-     */
-    public function getStatistics(): array
-    {
-        try {
-            return $this->repository->getStatistics();
-        } catch (\Exception $e) {
-            $this->logError('Error getting entidad statistics', ['error' => $e->getMessage()]);
-            return [
-                'total' => 0,
-                'complete' => 0,
-                'incomplete' => 0,
-                'by_estado' => [],
-                'completion_rate' => 0
-            ];
         }
     }
 
@@ -412,25 +383,52 @@ class EntidadDigitalService extends BaseService
             'username' => $entidad->username,
             'tipo_identificacion' => $entidad->tipo_identificacion,
             'numero_identificacion' => $entidad->numero_identificacion,
-            'full_identification' => $entidad->full_identification,
+            'full_identification' => $entidad->tipo_identificacion . ' ' . $entidad->numero_identificacion,
             'documentos' => $entidad->documentos,
             'selfie' => $entidad->selfie,
-            'selfie_url' => $entidad->selfie_url,
+            'selfie_url' => $entidad->selfie ? asset('storage/' . $entidad->selfie) : null,
             'estado' => $entidad->estado,
-            'estado_label' => $entidad->estado_label,
-            'is_active' => $entidad->isActive(),
-            'is_complete' => $entidad->isComplete(),
-            'has_complete_documents' => $entidad->hasCompleteDocuments(),
-            'has_selfie' => $entidad->hasSelfie(),
-            'document_count' => $entidad->document_count,
-            'validation_count' => $entidad->validation_count,
-            'successful_validations' => $entidad->successful_validations_count,
-            'failed_validations' => $entidad->failed_validations_count,
-            'latest_validation' => $entidad->latest_validation,
+            'estado_label' => ucfirst($entidad->estado),
+            'is_active' => $entidad->estado === 'activa',
+            'is_complete' => $this->isComplete($entidad),
+            'has_complete_documents' => $this->hasCompleteDocuments($entidad),
+            'has_selfie' => $this->hasSelfie($entidad),
+            'document_count' => count($entidad->documentos ?? []),
+            'validation_count' => 0, // TODO: Implement validation tracking
+            'successful_validations' => 0,
+            'failed_validations' => 0,
+            'latest_validation' => null,
             'created_at' => $entidad->created_at->toISOString(),
             'updated_at' => $entidad->updated_at->toISOString(),
-            'last_validation_at' => $entidad->last_validation_at?->toISOString()
+            'last_validation_at' => $entidad->updated_at->toISOString()
         ];
+    }
+
+    /**
+     * Check if entidad has complete documents.
+     */
+    private function hasCompleteDocuments($entidad): bool
+    {
+        $requiredDocuments = ['frente', 'reverso'];
+        $entidadDocuments = array_keys($entidad->documentos ?? []);
+
+        return count(array_intersect($requiredDocuments, $entidadDocuments)) >= 2;
+    }
+
+    /**
+     * Check if entidad has selfie.
+     */
+    private function hasSelfie($entidad): bool
+    {
+        return !empty($entidad->selfie);
+    }
+
+    /**
+     * Check if entidad is complete.
+     */
+    private function isComplete($entidad): bool
+    {
+        return $this->hasCompleteDocuments($entidad) && $this->hasSelfie($entidad);
     }
 
     /**
@@ -467,15 +465,6 @@ class EntidadDigitalService extends BaseService
         $tipoSafe = Str::slug($tipo);
         $numeroSafe = Str::slug($numero);
         return "documentos/{$tipoSafe}-{$numeroSafe}";
-    }
-
-    /**
-     * Generate document filename.
-     */
-    private function generateDocumentFilename(string $tipo): string
-    {
-        $timestamp = now()->format('YmdHis');
-        return "documento_{$tipo}_{$timestamp}.jpg";
     }
 
     /**

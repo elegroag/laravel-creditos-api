@@ -27,6 +27,7 @@ export interface SessionUser {
     roles: string[];
     permissions: string[];
     email: string;
+    phone: string;
     tipo_documento: string;
     numero_documento: string;
     nombres: string;

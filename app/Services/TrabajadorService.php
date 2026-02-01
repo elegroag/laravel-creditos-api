@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use App\Exceptions\ValidationException;
 
-class TrabajadorService extends BaseService
+class TrabajadorService extends EloquentService
 {
     private string $externalApiUrl;
     private int $timeout;
@@ -175,50 +175,6 @@ class TrabajadorService extends BaseService
     }
 
     /**
-     * Get worker data from external API.
-     */
-    public function getWorkerData(string $cedula): ?array
-    {
-        try {
-            $response = Http::timeout($this->timeout)
-                ->post("{$this->externalApiUrl}/company/informacion_trabajador", [
-                    'cedtra' => $cedula
-                ]);
-
-            if (!$response->successful()) {
-                $this->logError('External API error', [
-                    'cedula' => $cedula,
-                    'status' => $response->status(),
-                    'response' => $response->body()
-                ]);
-                return null;
-            }
-
-            $data = $response->json();
-
-            if (!$data['success'] ?? false) {
-                $this->logError('External API returned error', [
-                    'cedula' => $cedula,
-                    'error' => $data['error'] ?? 'Unknown error'
-                ]);
-                return null;
-            }
-
-            $this->log('Worker data retrieved successfully', [
-                'cedula' => $cedula
-            ]);
-
-            return $data['data'] ?? null;
-        } catch (\Exception $e) {
-            $this->logError('Exception getting worker data', [
-                'cedula' => $cedula,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
-
-    /**
      * Get worker with relevant data extraction.
      */
     public function getWorkerRelevantData(string $cedula): ?array
@@ -291,10 +247,7 @@ class TrabajadorService extends BaseService
 
             return max(0, $diferencia);
         } catch (\Exception $e) {
-            $this->logError('Error calculating service months', [
-                'fecha_afiliacion' => $fechaAfiliacion,
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'cálculo de meses de servicio');
             return 0;
         }
     }
@@ -349,22 +302,25 @@ class TrabajadorService extends BaseService
         $query = Trabajador::query();
 
         if (isset($criteria['cedula'])) {
-            $query->byDocument($criteria['cedula']);
+            $query->where('cedula', $criteria['cedula']);
         }
 
         if (isset($criteria['nombre'])) {
-            $query->byName($criteria['nombre']);
+            $query->where(function ($q) use ($criteria) {
+                $q->where('primer_nombre', 'like', '%' . $criteria['nombre'] . '%')
+                    ->orWhere('primer_apellido', 'like', '%' . $criteria['nombre'] . '%');
+            });
         }
 
         if (isset($criteria['empresa_nit'])) {
-            $query->byCompany($criteria['empresa_nit']);
+            $query->where('empresa_nit', $criteria['empresa_nit']);
         }
 
         if (isset($criteria['estado'])) {
             $query->where('estado', $criteria['estado']);
         }
 
-        $workers = $query->with('empresa')->get();
+        $workers = $query->get();
 
         // If no results and external search is enabled, try external API
         if ($workers->isEmpty() && !empty($criteria['external_search'])) {
@@ -375,55 +331,38 @@ class TrabajadorService extends BaseService
     }
 
     /**
-     * Search workers using external API.
-     */
-    private function searchWorkersExternal(array $criteria): array
-    {
-        try {
-            $response = Http::timeout($this->timeout)
-                ->post("{$this->externalApiUrl}/company/buscar_trabajadores", $criteria);
-
-            if (!$response->successful()) {
-                $this->logError('Search workers API error', [
-                    'criteria' => $criteria,
-                    'status' => $response->status()
-                ]);
-                return [];
-            }
-
-            $data = $response->json();
-
-            if (!$data['success'] ?? false) {
-                return [];
-            }
-
-            $externalWorkers = $data['data'] ?? [];
-
-            // Store in database and return
-            return array_map(function ($worker) {
-                $trabajador = $this->createWorkerFromExternal($worker);
-                return $trabajador->toApiArray();
-            }, $externalWorkers);
-        } catch (\Exception $e) {
-            $this->logError('Exception searching workers externally', [
-                'criteria' => $criteria,
-                'error' => $e->getMessage()
-            ]);
-            return [];
-        }
-    }
-
-    /**
      * Get worker statistics from database.
      */
     public function getWorkerStatistics(): array
     {
         try {
-            return Trabajador::getStatistics();
+            $total = Trabajador::count();
+            $activos = Trabajador::where('estado', 'A')->count();
+            $inactivos = $total - $activos;
+
+            // Get by categoria
+            $porCategoria = Trabajador::selectRaw('codigo_categoria, COUNT(*) as count')
+                ->groupBy('codigo_categoria')
+                ->pluck('count', 'codigo_categoria')
+                ->toArray();
+
+            // Get by empresa
+            $porEmpresa = Trabajador::selectRaw('empresa_nit, COUNT(*) as count')
+                ->groupBy('empresa_nit')
+                ->orderBy('count', 'desc')
+                ->limit(10)
+                ->pluck('count', 'empresa_nit')
+                ->toArray();
+
+            return [
+                'total' => $total,
+                'activos' => $activos,
+                'inactivos' => $inactivos,
+                'por_categoria' => $porCategoria,
+                'por_empresa' => $porEmpresa
+            ];
         } catch (\Exception $e) {
-            $this->logError('Exception getting worker statistics', [
-                'error' => $e->getMessage()
-            ]);
+            $this->handleDatabaseError($e, 'obtención de estadísticas de trabajadores');
             return [
                 'total' => 0,
                 'activos' => 0,
@@ -483,88 +422,85 @@ class TrabajadorService extends BaseService
             return null;
         }
     }
-
     /**
-     * Obtener datos del trabajador desde API externa (compatible con AuthController).
+     * Search workers using external API.
      */
-    public function obtenerDatosTrabajador(string $numeroDocumento): ?array
+    private function searchWorkersExternal(array $criteria): array
     {
         try {
-            $response = Http::timeout($this->timeout)
-                ->post($this->externalApiUrl . "/company/informacion_trabajador", [
-                    'json' => ['cedtra' => $numeroDocumento]
+            $response = Http::post("{$this->externalApiUrl}/company/buscar_trabajadores", $criteria)
+                ->timeout($this->timeout);
+
+            if (!$response->successful()) {
+                Log::error('Search workers API error', [
+                    'criteria' => $criteria,
+                    'status' => $response->status()
                 ]);
-
-            if ($response->successful() && $response->json('success') && $response->json('data')) {
-                return $this->extractRelevantData($response->json('data'));
+                return [];
             }
 
-            Log::warning("No se pudieron obtener datos del trabajador con documento: {$numeroDocumento}");
-            return null;
+            $data = $response->json();
+
+            if (!$data['success'] ?? false) {
+                return [];
+            }
+
+            $externalWorkers = $data['data'] ?? [];
+
+            // Store in database and return
+            return array_map(function ($worker) {
+                $trabajador = $this->createWorkerFromExternal($worker);
+                return $trabajador->toApiArray();
+            }, $externalWorkers);
         } catch (\Exception $e) {
-            Log::error("Error consultando datos del trabajador: " . $e->getMessage());
-            return null;
+            Log::error('Exception searching workers externally', [
+                'criteria' => $criteria,
+                'error' => $e->getMessage()
+            ]);
+            return [];
         }
     }
 
     /**
-     * Obtener datos del usuario desde API externa SISU (compatible con AuthController).
+     * Get worker data from external API.
      */
-    public function obtenerDatosUsuarioSisu(User $user): ?array
+    public function getWorkerData(string $cedula): ?array
     {
         try {
-            $response = Http::timeout($this->timeout)
-                ->get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username);
+            $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
+                'cedtra' => $cedula
+            ])
+                ->timeout($this->timeout);
 
-            if ($response->successful() && $response->json('success') && $response->json('data')) {
-                $data = $response->json('data');
-
-                if ($data['estado'] === 'A') {
-                    return [
-                        'full_name' => $data['nombre'] ?? null,
-                        'email' => $data['email'] ?? null,
-                        'phone' => $data['celular'] ?? null,
-                        'codigo_funcionario' => $data['tipfun'] ?? null,
-                        'estado' => $data['estado'] ?? null,
-                        'tipo_funcionario' => $data['tipfun_detalle'] ?? null
-                    ];
-                } else {
-                    Log::warning("Asesor {$user->username} no está activo en SISU");
-                }
-            } else {
-                Log::warning("No se pudieron obtener datos del asesor {$user->username}");
+            if (!$response->successful()) {
+                Log::error('External API error', [
+                    'cedula' => $cedula,
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+                return null;
             }
 
-            return null;
-        } catch (\Exception $e) {
-            Log::error("Error consultando datos del asesor: " . $e->getMessage());
-            return null;
-        }
-    }
+            $data = $response->json();
 
-    /**
-     * Obtener puntos de asesores por usuario desde API externa (compatible con AuthController).
-     */
-    public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
-    {
-        try {
-            $response = Http::timeout($this->timeout)
-                ->post($this->externalApiUrl . "/creditos/usuarios_creditos");
-
-            if ($response->successful() && $response->json('status') && $response->json('data')) {
-                $puntosAsesores = collect($response->json('data'))
-                    ->filter(function ($item) use ($user) {
-                        return (string) $item['numero_documento'] === (string) $user->numero_documento;
-                    })
-                    ->toArray();
-
-                Log::info("Se encontraron " . count($puntosAsesores) . " coincidencias para el documento {$user->numero_documento}");
-                return $puntosAsesores;
+            if (!$data['success'] ?? false) {
+                Log::error('External API returned error', [
+                    'cedula' => $cedula,
+                    'error' => $data['error'] ?? 'Unknown error'
+                ]);
+                return null;
             }
 
-            throw new ValidationException("El servicio externo no se encuentra disponible");
+            Log::info('Worker data retrieved successfully', [
+                'cedula' => $cedula
+            ]);
+
+            return $data['data'] ?? null;
         } catch (\Exception $e) {
-            Log::error("Error consultando asesores: " . $e->getMessage());
+            Log::error('Exception getting worker data', [
+                'cedula' => $cedula,
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }

@@ -1,5 +1,5 @@
 import { ref, computed, watch } from 'vue';
-import { useConvenioValidation } from './useConvenioValidation';
+import { useConvenioValidation } from '@/composables/solicitud/useConvenioValidation';
 import { useSimulador } from '@/composables/simulador/useSimulador';
 
 /**
@@ -147,7 +147,7 @@ export function useSimuladorConConvenio() {
         }
 
         const exito = await validarConvenio(nitEmpresa.value, cedulaTrabajador.value);
-        
+
         if (exito) {
             convenioVerificado.value = true;
             // Activar automáticamente el uso del convenio si es elegible
@@ -163,14 +163,14 @@ export function useSimuladorConConvenio() {
         if (!puedeUsarConvenio.value) return;
 
         usandoConvenio.value = true;
-        
+
         // Aplicar beneficios del convenio
         if (beneficiosConvenio.value) {
             // Ajustar tasa si aplica
             if (beneficiosConvenio.value.tasaReducida) {
                 // La tasa se ajustará automáticamente vía computed
             }
-            
+
             // Ajustar plazo máximo si excede el actual
             if (beneficiosConvenio.value.plazoExtendido && plazoMeses.value > 60) {
                 // El plazo ya está validado en plazoValido computed
@@ -199,7 +199,7 @@ export function useSimuladorConConvenio() {
     // Resultados del simulador con convenio
     const resultadosConvenio = computed(() => {
         const baseResultados = resultados.value;
-        
+
         if (!usandoConvenio.value) {
             return baseResultados;
         }

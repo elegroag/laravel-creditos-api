@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import type { SessionData } from '@/types/auth'
+import { getApiToken } from '@/composables/useSession'
 
 // Estado global de la sesión
 const sessionData = ref<SessionData | null>(null)
@@ -18,7 +19,7 @@ export const useApi = () => {
     }
 
     const getAuthHeader = () => {
-        const token = sessionData.value?.accessToken
+        const token = getApiToken()
         return token ? { Authorization: `Bearer ${token}` } : {}
     }
 
@@ -38,8 +39,9 @@ export const useApi = () => {
                 ...(opts?.headers || {})
             }
 
-            if (opts?.auth && sessionData.value?.accessToken) {
-                headers['Authorization'] = `Bearer ${sessionData.value.accessToken}`
+            if (opts?.auth) {
+                const token = getApiToken()
+                if (token) headers['Authorization'] = `Bearer ${token}`
             }
 
             // Agregar CSRF token si existe
@@ -94,8 +96,9 @@ export const useApi = () => {
                 ...(opts?.headers || {})
             }
 
-            if (opts?.auth && sessionData.value?.accessToken) {
-                headers['Authorization'] = `Bearer ${sessionData.value.accessToken}`
+            if (opts?.auth) {
+                const token = getApiToken()
+                if (token) headers['Authorization'] = `Bearer ${token}`
             }
 
             const response = await fetch(urlFor(path), {
@@ -144,8 +147,9 @@ export const useApi = () => {
                 ...(opts?.headers || {})
             }
 
-            if (opts?.auth && sessionData.value?.accessToken) {
-                headers['Authorization'] = `Bearer ${sessionData.value.accessToken}`
+            if (opts?.auth) {
+                const token = getApiToken()
+                if (token) headers['Authorization'] = `Bearer ${token}`
             }
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
@@ -199,8 +203,9 @@ export const useApi = () => {
                 ...(opts?.headers || {})
             }
 
-            if (opts?.auth && sessionData.value?.accessToken) {
-                headers['Authorization'] = `Bearer ${sessionData.value.accessToken}`
+            if (opts?.auth) {
+                const token = getApiToken()
+                if (token) headers['Authorization'] = `Bearer ${token}`
             }
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')

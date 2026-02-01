@@ -17,9 +17,25 @@ export interface SimuladorResultados {
     apto: boolean;
 }
 
+export interface LineaCreditoCategoria {
+    codcat: string;
+    facfin: string;
+}
+
+export interface LineaCreditoData {
+    tipcre: string;
+    detalle: string;
+    modxml4: number;
+    numcuo: number;
+    estcre: number;
+    pagseg: string;
+    estado?: 'A' | 'I' | string;
+    categorias?: LineaCreditoCategoria[];
+}
+
 // Interface extendida para almacenamiento en localStorage
 export interface SimuladorStorageData extends SimuladorData {
-    lineaCredito: any; // Datos de la línea de crédito seleccionada
+    lineaCredito: LineaCreditoData; // Datos de la línea de crédito seleccionada
     montoCredito: number; // Alias para monto
     tasaInteresAnual: number; // Alias para tasaEfectivaAnual
     cuotaMensual: number; // Resultado del cálculo

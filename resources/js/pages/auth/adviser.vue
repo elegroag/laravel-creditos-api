@@ -14,8 +14,8 @@
                             <Input
                                 id="username"
                                 v-model="username"
-                                type="text"
-                                placeholder="Tu usuario"
+                                type="number"
+                                placeholder="Tu nombre de usuario"
                                 :disabled="loading"
                             />
                         </div>

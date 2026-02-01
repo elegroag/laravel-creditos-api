@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue';
-import { useSession } from '@/composables/useSession';
-import { useApi } from '@/composables/useApi';
+import { usePage } from '@inertiajs/vue3';
 import type {
     SolicitudResumen,
     EstadoSolicitud,
@@ -13,8 +12,12 @@ import type {
 } from '@/types/inicio';
 
 export function useInicio() {
-    const { isAuthenticated } = useSession();
-    const { getJson, putJson } = useApi();
+    const page = usePage();
+
+    // Datos desde el servidor
+    const solicitudesData = computed(() => page.props.solicitudesData as any);
+    const estadosData = computed(() => page.props.estadosData as any);
+    const estadisticasData = computed(() => page.props.estadisticasData as any);
 
     // Estado de solicitudes
     const solicitudes = ref<SolicitudResumen[]>([]);
@@ -23,7 +26,7 @@ export function useInicio() {
 
     // Flujo de aprobación
     const flujoAprobacion = ref<EstadoSolicitud[]>([]);
-    const estadosData = ref<EstadoSolicitudData[]>([]);
+    const estadosDataLocal = ref<EstadoSolicitudData[]>([]);
     const loadingEstados = ref(false);
     const estadosError = ref('');
 
@@ -79,10 +82,23 @@ export function useInicio() {
             .replace(/[\u0300-\u036f]/g, '');
     };
 
-    const estadoIndex = (estado: string) => {
+    const getEstadoData = (estado: string): EstadoSolicitudData | undefined => {
+        const key = normalizeEstado(estado);
+        return estadosDataLocal.value.find((e: EstadoSolicitudData) => normalizeEstado(e.estado) === key);
+    };
+
+    const estadoIndex = (estado: string): number => {
         const s = normalizeEstado(estado);
         return flujoAprobacion.value.findIndex((e: EstadoSolicitud) => normalizeEstado(e.nombre) === s);
     };
+
+    const ultimaSolicitud = computed(() => (solicitudes.value.length ? solicitudes.value[0] : null));
+
+    const estadoIndexUltima = computed(() => {
+        const s = ultimaSolicitud.value;
+        if (!s) return -1;
+        return estadoIndex(String((s as { estado?: string }).estado || ''));
+    });
 
     const getEstadoInfo = (estado: string) => {
         const index = estadoIndex(estado);
@@ -127,185 +143,121 @@ export function useInicio() {
         return ((index + 1) / flujoAprobacion.value.length) * 100;
     };
 
-    // Métodos principales
-    const cargarSolicitudes = async () => {
-        if (!isAuthenticated.value) return;
+    const estadoProgressPercent = (estado: string): number => {
+        const idx = estadoIndex(estado);
+        if (idx < 0) return 0;
+        if (flujoAprobacion.value.length <= 1) return 0;
+        return Math.round((idx / (flujoAprobacion.value.length - 1)) * 100);
+    };
 
-        loadingSolicitudes.value = true;
+    const estadoProgressClass = (estado: string): string => {
+        const idx = estadoIndex(estado);
+        if (idx < 0) return 'bg-zinc-300';
+        if (idx <= 1) return 'bg-amber-500';
+        if (idx === flujoAprobacion.value.length - 1) return 'bg-zinc-500';
+        return 'bg-emerald-500';
+    };
+
+    const estadoBadgeClass = (estado: string): string => {
+        const s = normalizeEstado(estado);
+        if (s === 'aprobado' || s === 'activo' || s === 'desembolsado') return 'bg-emerald-50 text-emerald-800';
+        if (s === 'en validacion' || s === 'postulado') return 'bg-amber-50 text-amber-800';
+        if (s === 'finalizado') return 'bg-zinc-100 text-zinc-800';
+        if (s === 'desiste') return 'bg-red-50 text-red-800';
+        return 'bg-zinc-100 text-zinc-800';
+    };
+
+    // Métodos principales - ahora usan datos del servidor
+    const cargarSolicitudes = () => {
+        const data = solicitudesData.value;
+        if (data?.success) {
+            solicitudes.value = data.data || [];
+            solicitudesError.value = '';
+        } else {
+            solicitudes.value = [];
+            solicitudesError.value = data?.message || 'Error al cargar solicitudes';
+        }
+    };
+
+    const resetSolicitudes = () => {
+        solicitudes.value = [];
         solicitudesError.value = '';
+    };
 
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: SolicitudResumen[];
-                message?: string;
-            }>('/api/inicio/solicitudes', { auth: true });
-
-            if (response.success) {
-                solicitudes.value = response.data || [];
-            } else {
-                solicitudesError.value = response.message || 'Error al cargar solicitudes';
-            }
-        } catch (err: any) {
-            console.error('Error cargando solicitudes:', err);
-            solicitudesError.value = err.message || 'Error al cargar las solicitudes';
-        } finally {
-            loadingSolicitudes.value = false;
+    const cargarFlujoAprobacion = () => {
+        const data = estadosData.value;
+        if (data?.success) {
+            flujoAprobacion.value = data.data || [];
+            estadosDataLocal.value = data.data || [];
+            estadosError.value = '';
+        } else {
+            flujoAprobacion.value = [];
+            estadosDataLocal.value = [];
+            estadosError.value = data?.message || 'Error al cargar flujo de aprobación';
         }
     };
 
-    const cargarFlujoAprobacion = async () => {
-        loadingEstados.value = true;
-        estadosError.value = '';
-
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: {
-                    flujo: EstadoSolicitud[];
-                    estadisticas: EstadoSolicitudData[];
-                };
-                message?: string;
-            }>('/api/inicio/flujo-aprobacion', { auth: true });
-
-            if (response.success) {
-                flujoAprobacion.value = response.data.flujo || [];
-                estadosData.value = response.data.estadisticas || [];
-            } else {
-                estadosError.value = response.message || 'Error al cargar flujo de aprobación';
-            }
-        } catch (err: any) {
-            console.error('Error cargando flujo de aprobación:', err);
-            estadosError.value = err.message || 'Error al cargar el flujo de aprobación';
-        } finally {
-            loadingEstados.value = false;
+    const cargarDashboardStats = () => {
+        const data = estadisticasData.value;
+        if (data?.success) {
+            dashboardStats.value = data.data;
+            statsError.value = '';
+        } else {
+            dashboardStats.value = null;
+            statsError.value = data?.message || 'Error al cargar estadísticas';
         }
     };
 
-    const cargarDashboardStats = async () => {
-        if (!isAuthenticated.value) return;
-
-        loadingStats.value = true;
-        statsError.value = '';
-
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: DashboardStats;
-                message?: string;
-            }>('/api/inicio/dashboard-stats', { auth: true });
-
-            if (response.success) {
-                dashboardStats.value = response.data;
-            } else {
-                statsError.value = response.message || 'Error al cargar estadísticas';
-            }
-        } catch (err: any) {
-            console.error('Error cargando estadísticas:', err);
-            statsError.value = err.message || 'Error al cargar las estadísticas';
-        } finally {
-            loadingStats.value = false;
-        }
-    };
-
-    const cargarActividadReciente = async () => {
-        if (!isAuthenticated.value) return;
-
-        loadingActivity.value = true;
+    const cargarActividadReciente = () => {
+        // Por ahora, dejar vacío hasta tener datos reales de actividad
+        actividadReciente.value = [];
+        notificaciones.value = [];
         activityError.value = '';
+    };
 
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: {
-                    actividad: ActividadReciente[];
-                    notificaciones: Notificacion[];
-                };
-                message?: string;
-            }>('/api/inicio/actividad', { auth: true });
-
-            if (response.success) {
-                actividadReciente.value = response.data.actividad || [];
-                notificaciones.value = response.data.notificaciones || [];
-            } else {
-                activityError.value = response.message || 'Error al cargar actividad';
+    const cargarQuickActions = () => {
+        // Acciones rápidas basadas en el estado
+        quickActions.value = [
+            {
+                id: 'nueva-solicitud',
+                titulo: 'Nueva Solicitud',
+                descripcion: 'Iniciar una nueva solicitud de crédito',
+                icono: 'Plus',
+                url: '/solicitud',
+                color: 'primary',
+                disponible: true
+            },
+            {
+                id: 'simulador',
+                titulo: 'Simulador',
+                descripcion: 'Simular cuotas y plazos',
+                icono: 'Calculator',
+                url: '/web/simulador/lineas-credito',
+                color: 'secondary',
+                disponible: true
             }
-        } catch (err: any) {
-            console.error('Error cargando actividad:', err);
-            activityError.value = err.message || 'Error al cargar la actividad';
-        } finally {
-            loadingActivity.value = false;
+        ];
+    };
+
+    const cargarResumenFinanciero = () => {
+        const data = estadisticasData.value;
+        if (data?.success) {
+            resumenFinanciero.value = data.data;
+            financieroError.value = '';
+        } else {
+            resumenFinanciero.value = null;
+            financieroError.value = data?.message || 'Error al cargar resumen financiero';
         }
     };
 
-    const cargarQuickActions = async () => {
-        if (!isAuthenticated.value) return;
-
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: QuickAction[];
-            }>('/api/inicio/quick-actions', { auth: true });
-
-            if (response.success) {
-                quickActions.value = response.data || [];
-            }
-        } catch (err: any) {
-            console.error('Error cargando acciones rápidas:', err);
-        }
-    };
-
-    const cargarResumenFinanciero = async () => {
-        if (!isAuthenticated.value) return;
-
-        loadingFinanciero.value = true;
-        financieroError.value = '';
-
-        try {
-            const response = await getJson<{
-                success: boolean;
-                data: ResumenFinanciero;
-                message?: string;
-            }>('/api/inicio/resumen-financiero', { auth: true });
-
-            if (response.success) {
-                resumenFinanciero.value = response.data;
-            } else {
-                financieroError.value = response.message || 'Error al cargar resumen financiero';
-            }
-        } catch (err: any) {
-            console.error('Error cargando resumen financiero:', err);
-            financieroError.value = err.message || 'Error al cargar el resumen financiero';
-        } finally {
-            loadingFinanciero.value = false;
-        }
-    };
-
-    const marcarNotificacionLeida = async (notificacionId: string) => {
-        try {
-            await putJson(`/api/inicio/notificaciones/${notificacionId}/leer`, {}, { auth: true });
-
-            // Actualizar localmente
-            const notificacion = notificaciones.value.find((n: Notificacion) => n.id === notificacionId);
-            if (notificacion) {
-                notificacion.leida = true;
-            }
-        } catch (err: any) {
-            console.error('Error marcando notificación como leída:', err);
-        }
+    const marcarNotificacionLeida = async (_notificacionId: string) => {
+        // Implementación futura si se necesitan notificaciones
+        console.log('Marcar notificación como leída - no implementado');
     };
 
     const marcarTodasNotificacionesLeidas = async () => {
-        try {
-            await putJson('/api/inicio/notificaciones/marcar-leidas', {}, { auth: true });
-
-            // Actualizar localmente
-            notificaciones.value.forEach((n: Notificacion) => {
-                n.leida = true;
-            });
-        } catch (err: any) {
-            console.error('Error marcando todas las notificaciones como leídas:', err);
-        }
+        // Implementación futura si se necesitan notificaciones
+        console.log('Marcar todas las notificaciones como leídas - no implementado');
     };
 
     // Computed properties
@@ -372,21 +324,21 @@ export function useInicio() {
     };
 
     // Inicialización
-    const inicializar = async () => {
-        if (!isAuthenticated.value) return;
+    const inicializar = () => {
+        // Cargar todos los datos desde el servidor (síncrono)
+        cargarSolicitudes();
+        cargarFlujoAprobacion();
+        cargarDashboardStats();
+        cargarActividadReciente();
+        cargarQuickActions();
+        cargarResumenFinanciero();
+    };
 
-        await Promise.all([
-            cargarSolicitudes(),
-            cargarFlujoAprobacion(),
-            cargarDashboardStats(),
-            cargarActividadReciente(),
-            cargarQuickActions(),
-            cargarResumenFinanciero()
-        ]);
+    const cargarEstados = async () => {
+        await cargarFlujoAprobacion();
     };
 
     return {
-        // Estado
         solicitudes,
         loadingSolicitudes,
         solicitudesError,
@@ -394,46 +346,42 @@ export function useInicio() {
         estadosData,
         loadingEstados,
         estadosError,
+
         dashboardStats,
         loadingStats,
         statsError,
+
         actividadReciente,
         notificaciones,
         loadingActivity,
         activityError,
+        notificacionesNoLeidas,
+        totalNotificacionesNoLeidas,
+
         quickActions,
+        quickActionsDisponibles,
+
         resumenFinanciero,
         loadingFinanciero,
         financieroError,
-
-        // Computed
-        solicitudesPendientes,
-        solicitudesRequierenAccion,
-        notificacionesNoLeidas,
-        totalNotificacionesNoLeidas,
         proximosPagos,
         pagosVencidos,
         pagosPorVencer,
-        quickActionsDisponibles,
 
-        // Métodos principales
-        cargarSolicitudes,
-        cargarFlujoAprobacion,
-        cargarDashboardStats,
-        cargarActividadReciente,
-        cargarQuickActions,
-        cargarResumenFinanciero,
+        solicitudesPendientes,
+        solicitudesRequierenAccion,
 
-        // Métodos de notificaciones
-        marcarNotificacionLeida,
-        marcarTodasNotificacionesLeidas,
+        ultimaSolicitud,
+        estadoIndexUltima,
 
-        // Utilidades de formateo
         fmtMoney,
         fmtDate,
         fmtDateTime,
 
-        // Utilidades de estados
+        getEstadoData,
+        estadoProgressPercent,
+        estadoProgressClass,
+        estadoBadgeClass,
         getEstadoInfo,
         getEstadoColor,
         getEstadoIcono,
@@ -442,11 +390,20 @@ export function useInicio() {
         getProgresoEstado,
         getEstadoBadgeColor,
 
-        // Utilidades adicionales
         getDiasEnEstado,
         getDiasParaVencer,
 
-        // Inicialización
+        cargarEstados,
+        cargarFlujoAprobacion,
+        cargarSolicitudes,
+        resetSolicitudes,
+        cargarDashboardStats,
+        cargarActividadReciente,
+        cargarQuickActions,
+        cargarResumenFinanciero,
+        marcarNotificacionLeida,
+        marcarTodasNotificacionesLeidas,
+
         inicializar,
     };
 }

@@ -5,362 +5,36 @@ namespace App\Services;
 use App\Models\SolicitudCredito;
 use App\Models\NumeroSolicitud;
 use App\Models\EstadoSolicitud;
-use App\Repositories\BaseRepository;
-use App\Validators\SolicitudValidators;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Validator;
 
-class SolicitudService extends BaseService
+class SolicitudService extends EloquentService
 {
-    protected BaseRepository $estadoRepository;
-
-    public function __construct(BaseRepository $solicitudRepository, BaseRepository $estadoRepository = null)
-    {
-        parent::__construct($solicitudRepository);
-        $this->estadoRepository = $estadoRepository ?: new BaseRepository(new EstadoSolicitud());
-    }
-
     /**
      * Create a new solicitud.
      */
     public function create(array $data, string $ownerUsername): SolicitudCredito
     {
-        // Validate data
-        $validator = SolicitudValidators::validateCreate($data);
-
-        if ($validator->fails()) {
-            throw new ValidationException($validator->errors()->first());
-        }
-
-        $validated = $validator->validated();
-
         try {
-            // Create solicitud with automatic number generation
-            $solicitud = SolicitudCredito::createWithNumber(array_merge($validated, [
+            // Generate unique solicitud number
+            $numeroSolicitud = $this->generarNumeroSolicitud();
+
+            // Prepare solicitud data
+            $solicitudData = array_merge([
+                'numero_solicitud' => $numeroSolicitud,
                 'owner_username' => $ownerUsername,
-                'estado_codigo' => 'POSTULADO'
-            ]));
+                'estado' => 'PENDIENTE',
+                'created_at' => now(),
+                'updated_at' => now()
+            ], $data);
 
-            // Add initial timeline event
-            $solicitud->addTimelineEntry('POSTULADO', 'Creación de solicitud', $ownerUsername);
-
-            $this->log('Solicitud created successfully', [
-                'solicitud_id' => $solicitud->numero_solicitud,
-                'numero_solicitud' => $solicitud->numero_solicitud,
-                'owner_username' => $ownerUsername
-            ]);
-
-            return $solicitud;
+            return SolicitudCredito::create($solicitudData);
         } catch (\Exception $e) {
-            $this->logError('Error creating solicitud', ['error' => $e->getMessage()]);
-            throw new \Exception('Error al crear solicitud: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Get solicitud by ID.
-     */
-    public function getById(string $id): ?SolicitudCredito
-    {
-        try {
-            return $this->repository->findById($id);
-        } catch (\Exception $e) {
-            $this->logError('Error getting solicitud by ID', ['id' => $id, 'error' => $e->getMessage()]);
-            return null;
-        }
-    }
-
-    /**
-     * Get solicitudes by owner.
-     */
-    public function getByOwner(string $ownerUsername, int $skip = 0, int $limit = 50, ?string $estado = null): array
-    {
-        try {
-            $query = SolicitudCredito::where('owner_username', $ownerUsername);
-
-            if ($estado) {
-                $query->where('estado_codigo', $estado);
-            }
-
-            $solicitudes = $query->orderBy('created_at', 'desc')
-                ->skip($skip)
-                ->limit($limit)
-                ->get();
-
-            $total = SolicitudCredito::where('owner_username', $ownerUsername)
-                ->when($estado, fn($q) => $q->where('estado_codigo', $estado))
-                ->count();
-
-            return [
-                'solicitudes' => $solicitudes->toArray(),
-                'pagination' => [
-                    'skip' => $skip,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
-                ]
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error getting solicitudes by owner', ['owner_username' => $ownerUsername, 'error' => $e->getMessage()]);
-            return [
-                'solicitudes' => [],
-                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
-            ];
-        }
-    }
-
-    /**
-     * Update solicitud.
-     */
-    public function update(string $id, array $data): SolicitudCredito
-    {
-        // Validate data
-        $validator = SolicitudValidators::validateUpdate($data);
-
-        if ($validator->fails()) {
-            throw new ValidationException($validator->errors()->first());
-        }
-
-        $validated = $validator->validated();
-
-        // Ensure solicitud exists
-        $solicitud = $this->ensureExists($id, 'Solicitud');
-
-        try {
-            $solicitud->update($validated);
-
-            $this->log('Solicitud updated successfully', [
-                'solicitud_id' => $id,
-                'changes' => array_keys($validated)
-            ]);
-
-            return $solicitud->fresh();
-        } catch (\Exception $e) {
-            $this->logError('Error updating solicitud', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al actualizar solicitud: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Update solicitud estado.
-     */
-    public function updateEstado(string $id, string $nuevoEstado, string $detalle = 'Cambio de estado', ?string $usuario = null): SolicitudCredito
-    {
-        // Ensure solicitud exists
-        $solicitud = $this->ensureExists($id, 'Solicitud');
-
-        try {
-            $solicitud->updateEstadoValidado($nuevoEstado, $detalle, $usuario);
-
-            $this->log('Solicitud estado updated', [
-                'solicitud_id' => $id,
-                'estado_anterior' => $solicitud->getOriginal('estado'),
-                'estado_nuevo' => $nuevoEstado,
-                'detalle' => $detalle,
-                'usuario' => $usuario
-            ]);
-
-            return $solicitud->fresh();
-        } catch (\Exception $e) {
-            $this->logError('Error updating solicitud estado', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al actualizar estado: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Delete solicitud (soft delete - change to DESISTE).
-     */
-    public function delete(string $id): bool
-    {
-        // Ensure solicitud exists
-        $solicitud = $this->ensureExists($id, 'Solicitud');
-
-        try {
-            // Change state to DESISTE instead of physical deletion
-            $this->updateEstado($id, 'DESISTE', 'Solicitud eliminada por el usuario');
-
-            $this->log('Solicitud deleted (DESISTE)', ['solicitud_id' => $id]);
-
-            return true;
-        } catch (\Exception $e) {
-            $this->logError('Error deleting solicitud', ['id' => $id, 'error' => $e->getMessage()]);
-            throw new \Exception('Error al eliminar solicitud: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * List solicitudes with filters.
-     */
-    public function list(int $skip = 0, int $limit = 50, array $filters = []): array
-    {
-        try {
-            $query = SolicitudCredito::query();
-
-            // Apply filters
-            if (isset($filters['estado'])) {
-                $query->where('estado_codigo', $filters['estado']);
-            }
-
-            if (isset($filters['numero_solicitud'])) {
-                $query->where('numero_solicitud', 'like', '%' . $filters['numero_solicitud'] . '%');
-            }
-
-            if (isset($filters['owner_username'])) {
-                $query->where('owner_username', $filters['owner_username']);
-            }
-
-            if (isset($filters['numero_documento'])) {
-                $query->whereHas('solicitante', function ($q) use ($filters) {
-                    $q->where('numero_documento', 'like', '%' . $filters['numero_documento'] . '%');
-                });
-            }
-
-            if (isset($filters['nombre_usuario'])) {
-                $query->whereHas('solicitante', function ($q) use ($filters) {
-                    $q->whereRaw("CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')) like ?", ['%' . $filters['nombre_usuario'] . '%']);
-                });
-            }
-
-            // Apply sorting
-            $orderBy = $filters['ordenar_por'] ?? 'created_at';
-            $orderDirection = $filters['orden_direccion'] ?? 'desc';
-            $query->orderBy($orderBy, $orderDirection);
-
-            $solicitudes = $query->skip($skip)->limit($limit)->get();
-            $total = $query->count();
-
-            return [
-                'solicitudes' => $solicitudes->toArray(),
-                'pagination' => [
-                    'skip' => $skip,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
-                ]
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error listing solicitudes', ['error' => $e->getMessage()]);
-            return [
-                'solicitudes' => [],
-                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
-            ];
-        }
-    }
-
-    /**
-     * Advanced search with multiple filters.
-     */
-    public function advancedSearch(array $filters, int $skip = 0, int $limit = 50): array
-    {
-        try {
-            $query = SolicitudCredito::query();
-
-            // Multiple estados filter
-            if (isset($filters['estados']) && is_array($filters['estados'])) {
-                if (count($filters['estados']) === 1) {
-                    $query->where('estado_codigo', $filters['estados'][0]);
-                } else {
-                    $query->whereIn('estado_codigo', $filters['estados']);
-                }
-            }
-
-            // Document number filter
-            if (isset($filters['numero_documento'])) {
-                $query->whereHas('solicitante', function ($q) use ($filters) {
-                    $q->where('numero_documento', 'like', '%' . $filters['numero_documento'] . '%');
-                });
-            }
-
-            // Name filter
-            if (isset($filters['nombre_usuario'])) {
-                $query->whereHas('solicitante', function ($q) use ($filters) {
-                    $q->whereRaw("CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, '')) like ?", ['%' . $filters['nombre_usuario'] . '%']);
-                });
-            }
-
-            // Owner filter
-            if (isset($filters['owner_username'])) {
-                $query->where('owner_username', $filters['owner_username']);
-            }
-
-            // Amount range filter
-            if (isset($filters['monto_min'])) {
-                $query->where('monto_solicitado', '>=', $filters['monto_min']);
-            }
-            if (isset($filters['monto_max'])) {
-                $query->where('monto_solicitado', '<=', $filters['monto_max']);
-            }
-
-            // Date range filter
-            if (isset($filters['fecha_desde'])) {
-                $query->where('created_at', '>=', $filters['fecha_desde']);
-            }
-            if (isset($filters['fecha_hasta'])) {
-                $query->where('created_at', '<=', $filters['fecha_hasta']);
-            }
-
-            // Sorting
-            $orderBy = $filters['ordenar_por'] ?? 'created_at';
-            $orderDirection = $filters['orden_direccion'] ?? 'desc';
-            $query->orderBy($orderBy, $orderDirection);
-
-            $solicitudes = $query->skip($skip)->limit($limit)->get();
-            $total = $query->count();
-
-            return [
-                'solicitudes' => $solicitudes->toArray(),
-                'pagination' => [
-                    'skip' => $skip,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
-                ]
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error in advanced search', ['error' => $e->getMessage()]);
-            return [
-                'solicitudes' => [],
-                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
-            ];
-        }
-    }
-
-    /**
-     * Get solicitud statistics.
-     */
-    public function getStatistics(): array
-    {
-        try {
-            $total = SolicitudCredito::count();
-
-            $byEstado = SolicitudCredito::join('estados_solicitud', 'solicitudes_credito.estado_codigo', '=', 'estados_solicitud.codigo')
-                ->groupBy('estados_solicitud.codigo', 'estados_solicitud.nombre')
-                ->selectRaw('estados_solicitud.codigo as _id, COUNT(*) as count')
-                ->orderBy('count', 'desc')
-                ->pluck('count', '_id')
-                ->toArray();
-
-            $byOwner = SolicitudCredito::groupBy('owner_username')
-                ->selectRaw('owner_username as _id, COUNT(*) as count')
-                ->orderBy('count', 'desc')
-                ->limit(10)
-                ->pluck('count', '_id')
-                ->toArray();
-
-            return [
-                'total' => $total,
-                'by_estado' => $byEstado,
-                'by_owner' => $byOwner
-            ];
-        } catch (\Exception $e) {
-            $this->logError('Error getting solicitud statistics', ['error' => $e->getMessage()]);
-            return [
-                'total' => 0,
-                'by_estado' => [],
-                'by_owner' => []
-            ];
+            $this->handleDatabaseError($e, 'creación de solicitud');
+            throw new \Exception('Error al crear solicitud');
         }
     }
 
@@ -369,9 +43,13 @@ class SolicitudService extends BaseService
      */
     public function uploadDocuments(string $solicitudId, array $documents): array
     {
-        $solicitud = $this->ensureExists($solicitudId, 'Solicitud');
-
         try {
+            $solicitud = $this->getById($solicitudId);
+
+            if (!$solicitud) {
+                throw new ValidationException('Solicitud no encontrada');
+            }
+
             $uploadedDocuments = [];
             $solicitudDir = "solicitudes/{$solicitudId}";
 
@@ -396,16 +74,10 @@ class SolicitudService extends BaseService
             }
 
             // Update solicitud with documents
-            $documentosExistentes = $solicitud->documentos()->where('activo', true)->get()->keyBy('tipo_documento')->toArray();
+            $documentosExistentes = json_decode($solicitud->documentos ?? '[]', true);
             $nuevosDocumentos = array_merge($documentosExistentes, $uploadedDocuments);
 
-            // Update existing documents and create new ones
-            foreach ($uploadedDocuments as $tipo => $documentoData) {
-                $solicitud->documentos()->updateOrCreate(
-                    ['tipo_documento' => $tipo],
-                    array_merge($documentoData, ['activo' => true])
-                );
-            }
+            $solicitud->update(['documentos' => json_encode($nuevosDocumentos)]);
 
             $this->log('Documents uploaded successfully', [
                 'solicitud_id' => $solicitudId,
@@ -414,221 +86,69 @@ class SolicitudService extends BaseService
 
             return $uploadedDocuments;
         } catch (\Exception $e) {
-            $this->logError('Error uploading documents', ['solicitud_id' => $solicitudId, 'error' => $e->getMessage()]);
+            $this->handleDatabaseError($e, 'subida de documentos');
             throw new \Exception('Error al subir documentos: ' . $e->getMessage());
         }
     }
 
     /**
      * Get available transitions for solicitud.
-                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
-            ];
-        }
-    }
-
-    /**
-     * Transform solicitud for API response.
      */
-    public function transformForApi($solicitud): array
-    {
-        $estado = $solicitud->estado;
-        $solicitante = $solicitud->solicitante;
-
-        return [
-            'id' => $solicitud->numero_solicitud,
-            'numero_solicitud' => $solicitud->numero_solicitud,
-            'owner_username' => $solicitud->owner_username,
-            'monto_solicitado' => $solicitud->monto_solicitado,
-            'monto_solicitado_formatted' => $solicitud->monto_solicitado_formatted,
-            'monto_aprobado' => $solicitud->monto_aprobado,
-            'monto_aprobado_formatted' => $solicitud->monto_aprobado_formatted,
-            'plazo_meses' => $solicitud->plazo_meses,
-            'tasa_interes' => $solicitud->tasa_interes,
-            'destino_credito' => $solicitud->destino_credito,
-            'descripcion' => $solicitud->descripcion,
-            'estado' => $solicitud->estado_codigo,
-            'estado_label' => $estado?->nombre ?? $solicitud->estado_codigo,
-            'estado_color' => $estado?->color ?? '#6B7280',
-            'estado_metadata' => [
-                'codigo' => $solicitud->estado_codigo,
-                'nombre' => $estado?->nombre,
-                'color' => $estado?->color,
-                'orden' => $estado?->orden
-            ],
-            'solicitante' => $solicitante ? $solicitante->toApiArray() : null,
-            'solicitante_full_name' => $solicitante?->nombre_completo,
-            'solicitante_email' => $solicitante?->email,
-            'solicitante_phone' => $solicitante?->telefono,
-            'solicitante_document' => $solicitante?->numero_documento,
-            'documentos' => $solicitud->documentos()->where('activo', true)->get()->map(fn($doc) => $doc->toApiArray())->toArray(),
-            'timeline' => $solicitud->timeline()->with(['estado', 'usuario'])->orderBy('fecha', 'desc')->get()->map(fn($entry) => $entry->toApiArray())->toArray(),
-            'xml_filename' => $solicitud->xml_filename,
-            'payload' => $solicitud->payload ? $solicitud->payload->toApiArray() : null,
-            'created_at' => $solicitud->created_at->toISOString(),
-            'updated_at' => $solicitud->updated_at->toISOString(),
-            'requires_action' => $estado?->requiresAction() ?? false,
-            'is_final_state' => $estado?->isFinal() ?? false,
-            'is_active_state' => $estado?->isActive() ?? false,
-            'can_be_modified' => !($estado?->isFinal() ?? false)
-        ];
-    }
-
-    /**
-     * Transform collection for API response.
-     */
-    public function transformCollectionForApi($solicitudes): array
-    {
-        return $solicitudes->map(fn($solicitud) => $this->transformForApi($solicitud))->toArray();
-    }
-
-    /**
-     * Get available states for solicitudes.
-     */
-    public function getEstadosDisponibles(): array
+    public function getAvailableTransitions(string $solicitudId): array
     {
         try {
-            // Estados predefinidos del sistema
-            $estados = [
-                [
-                    'id' => 'POSTULADO',
-                    'nombre' => 'Postulado',
-                    'descripcion' => 'Solicitud recién creada',
-                    'orden' => 1,
-                    'color' => '#6c757d'
-                ],
-                [
-                    'id' => 'EN_REVISION',
-                    'nombre' => 'En Revisión',
-                    'descripcion' => 'Solicitud siendo revisada',
-                    'orden' => 2,
-                    'color' => '#007bff'
-                ],
-                [
-                    'id' => 'REQUIERE_DOCUMENTOS',
-                    'nombre' => 'Requiere Documentos',
-                    'descripcion' => 'Se requieren documentos adicionales',
-                    'orden' => 3,
-                    'color' => '#ffc107'
-                ],
-                [
-                    'id' => 'ENVIADO_PENDIENTE_APROBACION',
-                    'nombre' => 'Enviado para Aprobación',
-                    'descripcion' => 'Solicitud enviada para aprobación',
-                    'orden' => 4,
-                    'color' => '#17a2b8'
-                ],
-                [
-                    'id' => 'APROBADO',
-                    'nombre' => 'Aprobado',
-                    'descripcion' => 'Solicitud aprobada',
-                    'orden' => 5,
-                    'color' => '#28a745'
-                ],
-                [
-                    'id' => 'RECHAZADO',
-                    'nombre' => 'Rechazado',
-                    'descripcion' => 'Solicitud rechazada',
-                    'orden' => 6,
-                    'color' => '#dc3545'
-                ],
-                [
-                    'id' => 'Desiste',
-                    'nombre' => 'Desiste',
-                    'descripcion' => 'Usuario desistió de la solicitud',
-                    'orden' => 7,
-                    'color' => '#6f42c1'
-                ]
-            ];
+            $solicitud = $this->getById($solicitudId);
 
-            // Ordenar por campo 'orden'
-            usort($estados, function ($a, $b) {
-                return $a['orden'] - $b['orden'];
-            });
+            if (!$solicitud) {
+                return [];
+            }
 
-            return $estados;
+            // Define available transitions based on current state
+            $transitions = match ($solicitud->estado) {
+                'PENDIENTE' => ['EN_REVISION', 'RECHAZADO'],
+                'EN_REVISION' => ['APROBADO', 'RECHAZADO', 'REQUIERE_INFO'],
+                'APROBADO' => ['FINALIZADO', 'CANCELADO'],
+                'RECHAZADO' => ['POSTULADO'],
+                'REQUIERE_INFO' => ['EN_REVISION', 'RECHAZADO'],
+                default => []
+            };
+
+            return $transitions;
         } catch (\Exception $e) {
-            Log::error('Error en SolicitudService::getEstadosDisponibles', [
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
+            $this->handleDatabaseError($e, 'obtención de transiciones disponibles');
+            return [];
         }
     }
 
     /**
-     * Get statistics for solicitudes.
+     * Get solicitudes by date range.
      */
-    public function getEstadisticas(?string $username = null): array
+    public function getByDateRange(string $startDate, string $endDate, int $skip = 0, int $limit = 50): array
     {
         try {
-            $query = SolicitudCredito::query();
-
-            // Si no es admin, filtrar por usuario
-            if ($username) {
-                $query->where('owner_username', $username);
-            }
-
-            $total = $query->count();
-            $porEstado = $query->selectRaw('estado, COUNT(*) as count')
-                ->groupBy('estado')
-                ->pluck('count', 'estado')
-                ->toArray();
-            $montoTotal = $query->sum('monto_solicitado') ?? 0;
-            $montoPromedio = $query->avg('monto_solicitado') ?? 0;
-            $plazoPromedio = $query->avg('plazo_meses') ?? 0;
-
-            return [
-                'total' => $total,
-                'por_estado' => $porEstado,
-                'monto_total' => $montoTotal,
-                'monto_promedio' => $montoPromedio,
-                'plazo_promedio' => $plazoPromedio,
-                'fecha_consulta' => now()->toISOString()
-            ];
-        } catch (\Exception $e) {
-            Log::error('Error en SolicitudService::getEstadisticas', [
-                'username' => $username,
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-    }
-
-    /**
-     * Search solicitudes by term.
-     */
-    public function buscar(string $termino, int $limit = 50, ?string $estado = null, ?string $username = null): array
-    {
-        try {
-            $query = SolicitudCredito::where(function ($q) use ($termino) {
-                $q->where('numero_solicitud', 'LIKE', '%' . $termino . '%')
-                    ->orWhere('solicitante->nombres_apellidos', 'LIKE', '%' . $termino . '%')
-                    ->orWhere('solicitante->numero_identificacion', 'LIKE', '%' . $termino . '%')
-                    ->orWhere('owner_username', 'LIKE', '%' . $termino . '%');
-            });
-
-            // Filtrar por estado si se proporciona
-            if ($estado) {
-                $query->where('estado', $estado);
-            }
-
-            // Filtrar por usuario si no es admin
-            if ($username) {
-                $query->where('owner_username', $username);
-            }
-
-            $solicitudes = $query->orderBy('created_at', 'desc')
+            $solicitudes = SolicitudCredito::whereBetween('created_at', [$startDate, $endDate])
+                ->orderBy('created_at', 'desc')
+                ->skip($skip)
                 ->limit($limit)
                 ->get();
 
-            return $this->transformCollectionForApi($solicitudes);
+            $total = SolicitudCredito::whereBetween('created_at', [$startDate, $endDate])->count();
+
+            return [
+                'solicitudes' => $this->transformCollectionForApi($solicitudes),
+                'pagination' => [
+                    'skip' => $skip,
+                    'limit' => $limit,
+                    'total' => $total,
+                    'has_more' => ($skip + $limit) < $total
+                ]
+            ];
         } catch (\Exception $e) {
-            Log::error('Error en SolicitudService::buscar', [
-                'termino' => $termino,
-                'estado' => $estado,
-                'username' => $username,
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
+            $this->handleDatabaseError($e, 'obtención de solicitudes por rango de fechas');
+            return [
+                'solicitudes' => [],
+                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
+            ];
         }
     }
 
@@ -657,5 +177,195 @@ class SolicitudService extends BaseService
         $timestamp = now()->format('YmdHis');
         $extension = $file->getClientOriginalExtension();
         return "{$tipo}_{$timestamp}.{$extension}";
+    }
+
+    /**
+     * Transform solicitud for API response.
+     */
+    public function transformForApi($solicitud): array
+    {
+        return [
+            'id' => $solicitud->id,
+            'numero_solicitud' => $solicitud->numero_solicitud,
+            'owner_username' => $solicitud->owner_username,
+            'monto_solicitado' => $solicitud->monto_solicitado,
+            'monto_solicitado_formatted' => number_format($solicitud->monto_solicitado, 0, ',', '.'),
+            'monto_aprobado' => $solicitud->monto_aprobado,
+            'monto_aprobado_formatted' => $solicitud->monto_aprobado ? number_format($solicitud->monto_aprobado, 0, ',', '.') : null,
+            'plazo_meses' => $solicitud->plazo_meses,
+            'tasa_interes' => $solicitud->tasa_interes,
+            'destino_credito' => $solicitud->destino_credito,
+            'descripcion' => $solicitud->descripcion,
+            'estado' => $solicitud->estado,
+            'estado_label' => match ($solicitud->estado) {
+                'PENDIENTE' => 'Pendiente',
+                'EN_REVISION' => 'En Revisión',
+                'APROBADO' => 'Aprobado',
+                'RECHAZADO' => 'Rechazado',
+                'FINALIZADO' => 'Finalizado',
+                'CANCELADO' => 'Cancelado',
+                'REQUIERE_INFO' => 'Requiere Información',
+                default => $solicitud->estado
+            },
+            'documentos' => json_decode($solicitud->documentos ?? '[]', true),
+            'created_at' => $solicitud->created_at->toISOString(),
+            'updated_at' => $solicitud->updated_at->toISOString(),
+            'requires_action' => in_array($solicitud->estado, ['REQUIERE_INFO']),
+            'is_final_state' => in_array($solicitud->estado, ['APROBADO', 'RECHAZADO', 'FINALIZADO', 'CANCELADO']),
+            'can_be_modified' => !in_array($solicitud->estado, ['APROBADO', 'RECHAZADO', 'FINALIZADO', 'CANCELADO'])
+        ];
+    }
+
+    /**
+     * Get solicitud by ID.
+     */
+    public function getById(string $id): ?SolicitudCredito
+    {
+        try {
+            return SolicitudCredito::find($id);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de solicitud');
+            return null;
+        }
+    }
+
+    /**
+     * Transform collection for API response.
+     */
+    public function transformCollectionForApi($collection): array
+    {
+        return $collection->map(fn($solicitud) => $this->transformForApi($solicitud))->toArray();
+    }
+
+    /**
+     * Find solicitud by ID.
+     */
+    public function findById(int $id): ?SolicitudCredito
+    {
+        try {
+            return SolicitudCredito::find($id);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de solicitud');
+            return null;
+        }
+    }
+
+    /**
+     * Find solicitud by number.
+     */
+    public function findByNumero(string $numero): ?SolicitudCredito
+    {
+        try {
+            return SolicitudCredito::where('numero_solicitud', $numero)->first();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda por número');
+            return null;
+        }
+    }
+
+    /**
+     * Update solicitud.
+     */
+    public function update(int $id, array $data): bool
+    {
+        try {
+            $solicitud = SolicitudCredito::find($id);
+            if (!$solicitud) {
+                return false;
+            }
+            return $solicitud->update($data);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'actualización de solicitud');
+            return false;
+        }
+    }
+
+    /**
+     * Update solicitud status.
+     */
+    public function updateEstado(int $id, string $estado): bool
+    {
+        try {
+            $solicitud = SolicitudCredito::find($id);
+            if (!$solicitud) {
+                return false;
+            }
+            return $solicitud->update(['estado' => $estado]);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'actualización de estado');
+            return false;
+        }
+    }
+
+    /**
+     * Delete solicitud.
+     */
+    public function delete(int $id): bool
+    {
+        try {
+            $solicitud = SolicitudCredito::find($id);
+            if (!$solicitud) {
+                return false;
+            }
+            return $solicitud->delete();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'eliminación de solicitud');
+            return false;
+        }
+    }
+
+    /**
+     * Get solicitudes by user.
+     */
+    public function getByUser(string $username): \Illuminate\Support\Collection
+    {
+        try {
+            return SolicitudCredito::where('owner_username', $username)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de solicitudes por usuario');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Get solicitudes by status.
+     */
+    public function getByEstado(string $estado): \Illuminate\Support\Collection
+    {
+        try {
+            return SolicitudCredito::where('estado', $estado)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de solicitudes por estado');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Get all solicitudes.
+     */
+    public function getAll(): \Illuminate\Support\Collection
+    {
+        try {
+            return SolicitudCredito::orderBy('created_at', 'desc')->get();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de solicitudes');
+            return collect([]);
+        }
+    }
+
+    /**
+     * Generate unique solicitud number.
+     */
+    private function generarNumeroSolicitud(): string
+    {
+        do {
+            $numero = 'SOL-' . date('Y') . '-' . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
+        } while (SolicitudCredito::where('numero_solicitud', $numero)->exists());
+
+        return $numero;
     }
 }

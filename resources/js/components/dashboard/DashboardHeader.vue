@@ -40,18 +40,18 @@
             </span>
 
             <div class="relative">
-                <Button 
-                    variant="ghost" 
-                    class="relative h-9 w-9 rounded-full border border-border/50 p-0 hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring" 
+                <Button
+                    variant="ghost"
+                    class="relative h-9 w-9 rounded-full border border-border/50 p-0 hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring"
                     @click="userMenuOpen = !userMenuOpen"
                 >
                     <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs ring-offset-background transition-colors hover:bg-primary/20">
                         {{ _abbr(user?.username || 'Usuario') }}
                     </div>
                 </Button>
-                
-                <div 
-                    v-if="userMenuOpen" 
+
+                <div
+                    v-if="userMenuOpen"
                     class="absolute right-0 mt-2 w-64 origin-top-right rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-in fade-in zoom-in-95 duration-200"
                 >
                     <Link
@@ -64,11 +64,11 @@
                         </svg>
                         <span class="font-medium">Mi Perfil</span>
                     </Link>
-                    
+
                     <div class="h-px bg-border/60 mx-1 my-1"></div>
-                    
-                    <button 
-                        class="relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground group" 
+
+                    <button
+                        class="relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground group"
                         @click="handleLogout"
                     >
                         <svg class="mr-2 h-4 w-4 text-muted-foreground group-hover:text-accent-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,28 +110,28 @@ const _abbr = (label: string): string => {
 const sectionTitle = computed(() => {
     const path = window.location.pathname;
     const navItems = [
-        { label: 'Inicio', to: '/dashboard' },
-        { label: 'Simulador', to: '/simulador' },
+        { label: 'Inicio', to: '/web/inicio' },
+        { label: 'Simulador', to: '/web/simulador' },
         { label: 'Solicitud', to: '/solicitud' },
         { label: 'Mis Solicitudes', to: '/mis-solicitudes' },
         { label: 'Documentos', to: '/documentos' },
         { label: 'Administración', to: '/admin' }
     ];
-    
-    const current = navItems.find(item => 
-        item.to === '/' && path === '/' || 
-        (item.to !== '/' && path.startsWith(item.to))
+
+    const current = navItems.find(item =>
+        (item.to === '/web/inicio' && (path === '/web/inicio' || path === '/web/dashboard' || path === '/')) ||
+        (item.to !== '/web/inicio' && path.startsWith(item.to))
     );
-    
+
     return current?.label || 'Inicio';
 });
 
 const handleLogout = async () => {
     userMenuOpen.value = false;
     try {
-        await router.post('/logout');
+        await router.get('logout');
         clearSession();
-        router.visit('/login');
+        router.visit('login');
     } catch (error) {
         console.error('Error al cerrar sesión:', error);
     }

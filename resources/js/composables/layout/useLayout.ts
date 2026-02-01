@@ -1,15 +1,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { useSession } from '@/composables/useSession';
-import type { 
-    NavItem, 
-    LayoutConfig, 
+import type {
+    NavItem,
+    LayoutConfig,
     BreadcrumbItem,
     NotificationItem,
     QuickAction,
     UserMenuItem,
-    SearchState,
-    ThemeConfig
+    SearchState
 } from '@/types/layout';
 
 // Estado compartido (singleton)
@@ -57,81 +56,82 @@ export function useLayout() {
     // Items de navegación
     const navItems = computed<NavItem[]>(() => {
         const items: NavItem[] = [
-            { 
-                label: 'Inicio', 
-                to: '/dashboard', 
-                abbr: abbr('Inicio'), 
+            {
+                label: 'Inicio',
+                to: '/web/inicio',
+                abbr: abbr('Inicio'),
                 icon: '🏠',
-                requiresAuth: true 
+                requiresAuth: true
             },
-            { 
-                label: 'Simulador', 
-                to: '/simulador', 
-                abbr: abbr('Simulador'), 
+            {
+                label: 'Simulador',
+                to: '/web/simulador',
+                abbr: abbr('Simulador'),
                 icon: '🧮',
                 requiresAuth: true,
                 category: 'user'
             },
-            { 
-                label: 'Solicitud', 
-                to: '/solicitud', 
-                abbr: abbr('Solicitud'), 
+            {
+                label: 'Solicitud',
+                to: '/solicitud',
+                abbr: abbr('Solicitud'),
                 icon: '📋',
                 requiresAuth: true,
                 category: 'user'
             },
-            { 
-                label: 'Mis Solicitudes', 
-                to: '/mis-solicitudes', 
-                abbr: abbr('Solicitudes'), 
+            {
+                label: 'Mis Solicitudes',
+                to: '/mis-solicitudes',
+                abbr: abbr('Solicitudes'),
                 icon: '📄',
                 requiresAuth: true,
                 category: 'user'
             },
-            { 
-                label: 'Documentos', 
-                to: '/documentos', 
-                abbr: abbr('Documentos'), 
+            {
+                label: 'Documentos',
+                to: '/documentos',
+                abbr: abbr('Documentos'),
                 icon: '📎',
                 requiresAuth: true,
                 category: 'user'
             },
-            { 
-                label: 'Administración', 
-                abbr: abbr('Admin'), 
+            {
+                label: 'Administración',
+                to: '/admin',
+                abbr: abbr('Admin'),
                 icon: '⚙️',
                 requiresAuth: true,
                 category: 'admin',
                 permissions: ['admin'],
                 children: [
-                    { 
-                        label: 'Usuarios', 
-                        to: '/admin/usuarios', 
-                        abbr: abbr('Usuarios'), 
+                    {
+                        label: 'Usuarios',
+                        to: '/admin/usuarios',
+                        abbr: abbr('Usuarios'),
                         icon: '👥',
                         requiresAuth: true,
                         permissions: ['admin']
                     },
-                    { 
-                        label: 'Solicitudes', 
-                        to: '/admin/solicitudes', 
-                        abbr: abbr('Solicitudes'), 
+                    {
+                        label: 'Solicitudes',
+                        to: '/admin/solicitudes',
+                        abbr: abbr('Solicitudes'),
                         icon: '📋',
                         requiresAuth: true,
                         permissions: ['admin']
                     },
-                    { 
-                        label: 'Convenios', 
-                        to: '/admin/convenios', 
-                        abbr: abbr('Comvenios'), 
+                    {
+                        label: 'Convenios',
+                        to: '/admin/convenios',
+                        abbr: abbr('Comvenios'),
                         icon: '🤝',
                         requiresAuth: true,
                         permissions: ['admin']
                     },
-                    { 
-                        label: 'Reportes', 
-                        to: '/admin/reportes', 
-                        abbr: abbr('Reportes'), 
+                    {
+                        label: 'Reportes',
+                        to: '/admin/reportes',
+                        abbr: abbr('Reportes'),
                         icon: '📊',
                         requiresAuth: true,
                         permissions: ['admin']
@@ -145,14 +145,14 @@ export function useLayout() {
             if (item.requiresAuth && !isAuthenticated.value) {
                 return false;
             }
-            
+
             if (item.permissions && item.permissions.length > 0) {
                 const userPermissions = user.value?.permissions || [];
-                return item.permissions.some(permission => 
+                return item.permissions.some(permission =>
                     userPermissions.includes(permission)
                 );
             }
-            
+
             return true;
         });
     });
@@ -215,7 +215,7 @@ export function useLayout() {
         {
             label: '',
             icon: '',
-            handler: () => {},
+            handler: () => { },
             divider: true
         },
         {
@@ -301,7 +301,7 @@ export function useLayout() {
         try {
             // Simular búsqueda - en producción esto llamaría a una API real
             await new Promise(resolve => setTimeout(resolve, 300));
-            
+
             // Simular resultados de búsqueda
             const mockResults = [
                 {
@@ -320,10 +320,10 @@ export function useLayout() {
                     url: '/simulador',
                     icon: '🧮'
                 }
-            ].filter(item => 
-                    item.title.toLowerCase().includes(query.toLowerCase()) ||
-                    item.description.toLowerCase().includes(query.toLowerCase())
-                );
+            ].filter(item =>
+                item.title.toLowerCase().includes(query.toLowerCase()) ||
+                item.description.toLowerCase().includes(query.toLowerCase())
+            );
 
             searchState.value.results = mockResults;
         } catch (error) {
@@ -345,12 +345,11 @@ export function useLayout() {
         const newNotification: NotificationItem = {
             id: Date.now().toString(),
             timestamp: new Date().toISOString(),
-            read: false,
             ...notification
         };
-        
+
         notifications.value.unshift(newNotification);
-        
+
         // Limitar a 10 notificaciones
         if (notifications.value.length > 10) {
             notifications.value = notifications.value.slice(0, 10);
@@ -392,7 +391,7 @@ export function useLayout() {
         const themes: Array<'light' | 'dark' | 'auto'> = ['light', 'dark', 'auto'];
         const currentIndex = themes.indexOf(currentTheme);
         const nextIndex = (currentIndex + 1) % themes.length;
-        
+
         layoutConfig.value.theme = themes[nextIndex];
         applyTheme(themes[nextIndex]);
     };
@@ -439,7 +438,7 @@ export function useLayout() {
                 case 's':
                     if (isAuthenticated.value) {
                         event.preventDefault();
-                        router.visit('/simulador');
+                        router.visit('/web/simulador');
                     }
                     break;
                 case 'p':
@@ -463,10 +462,10 @@ export function useLayout() {
     const initialize = () => {
         // Aplicar tema inicial
         applyTheme(layoutConfig.value.theme);
-        
+
         // Agregar event listeners
         document.addEventListener('keydown', handleKeydown);
-        
+
         // Detectar preferencia de tema del sistema
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         mediaQuery.addEventListener('change', () => {
@@ -482,19 +481,19 @@ export function useLayout() {
     const updateBreadcrumbsFromRoute = () => {
         const path = currentPath.value;
         const pathSegments = path.split('/').filter(Boolean);
-        
+
         const items: BreadcrumbItem[] = [
-            { label: 'Inicio', to: '/dashboard' }
+            { label: 'Inicio', to: '/web/inicio' }
         ];
 
         // Construir breadcrumbs basados en la ruta
-        let currentPath = '';
+        let builtPath = '';
         for (const segment of pathSegments) {
-            currentPath += '/' + segment;
-            const navItem = navItems.value.find(item => item.to === currentPath);
+            builtPath += '/' + segment;
+            const navItem = navItems.value.find(item => item.to === builtPath);
             items.push({
                 label: navItem?.label || segment,
-                to: currentPath
+                to: builtPath
             });
         }
 
