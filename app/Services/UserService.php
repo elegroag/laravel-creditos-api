@@ -353,6 +353,14 @@ class UserService extends EloquentService
     }
 
     /**
+     * Generate a random 4-digit PIN.
+     */
+    public function generatePin(): string
+    {
+        return str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
      * Transform user for API response.
      */
     public function transformForApi($user): array

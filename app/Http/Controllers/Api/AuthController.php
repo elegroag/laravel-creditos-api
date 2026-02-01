@@ -9,6 +9,7 @@ use App\Services\AuthenticationService;
 use App\Services\UserService;
 use App\Services\TrabajadorService;
 use App\Services\SenderEmail;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,11 +77,21 @@ class AuthController extends Controller
                 $authResult['user']['trabajador'] = $trabajadorData;
             }
 
+            $authResult["message"] = "Login exitoso";
+            $authResult["success"] = true;
+            $authResult["timestamp"] = now();
+
             return response()->json($authResult);
         } catch (\Exception $e) {
-            Log::error('Error en login: ' . $e->getMessage());
+            Log::error('Error en login: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
-                'error' => 'Error de autenticación'
+                'error' => 'Error de autenticación',
+                'success' => false,
+                'timestamp' => now(),
+                'message' => $e->getMessage()
             ], 401);
         }
     }
@@ -106,6 +117,7 @@ class AuthController extends Controller
             $email = $validated['email'];
             $password = $validated['password'];
             $username = $validated['username'];
+            $confirmar_password = $validated['confirmar_password'];
 
             if (!$this->authService->isValidUsername($username)) {
                 return response()->json([
@@ -134,7 +146,7 @@ class AuthController extends Controller
                 'username' => $username,
                 'email' => $email,
                 'password' => $password, // Pass plain password, UserService will hash it
-                'password_confirmation' => $password, // Add confirmation
+                'confirmar_password' => $confirmar_password, // Add confirmation
                 'full_name' => $fullName,
                 'phone' => $telefono,
                 'tipo_documento' => $tipoDocumento,
@@ -150,7 +162,6 @@ class AuthController extends Controller
 
             // Use AuthenticationService to create user and generate token
             $authResult = $this->authService->register($userData);
-            $token = $authResult['access_token'];
 
             $pin = $this->userService->generatePin();
 
@@ -190,16 +201,20 @@ class AuthController extends Controller
             }
 
             return response()->json([
-                'access_token' => $token,
+                'access_token' => $authResult['access_token'],
                 'token_type' => $authResult['token_type'],
                 'expires_in' => $authResult['expires_in'],
-                'user' => $userResponse
+                'user' => $userResponse,
+                'success' => true,
+                'message' => "Proceso de registro completado"
             ], 201);
         } catch (\Exception $e) {
             Log::error('Error en registro: ' . $e->getMessage());
 
             return response()->json([
-                'error' => 'Error al registrar usuario'
+                'error' => 'Error al registrar usuario',
+                'success' => false,
+                'message' => $e->getMessage()
             ], 400);
         }
     }

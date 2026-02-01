@@ -91,9 +91,14 @@ class AuthenticationService extends EloquentService
         return User::create([
             'username' => $userData['username'],
             'email' => $userData['email'] ?? null,
-            'password' => Hash::make($userData['password']),
+            'password_hash' => Hash::make($userData['password']),
             'nombres' => $userData['nombres'] ?? '',
             'apellidos' => $userData['apellidos'] ?? '',
+            'full_name' => $userData['full_name'] ?? null,
+            'phone' => $userData['phone'] ?? null,
+            'tipo_documento' => $userData['tipo_documento'] ?? null,
+            'numero_documento' => $userData['numero_documento'] ?? null,
+            'roles' => $userData['roles'] ?? ['user_trabajador'],
             'is_active' => true,
             'disabled' => false
         ]);
@@ -131,7 +136,7 @@ class AuthenticationService extends EloquentService
             'updated_at' => $user->updated_at->toISOString(),
             'is_administrator' => $user->is_administrator,
             'is_adviser' => $user->is_adviser,
-            'is_regular_user' => $user->is_regular_user
+            'is_regular_user' => $user->is_regular_user,
         ];
     }
 
@@ -140,33 +145,21 @@ class AuthenticationService extends EloquentService
      */
     public function login(string $identifier, string $password): array
     {
-        try {
-            // Authenticate user
-            $user = $this->authenticate($identifier, $password);
-            if (!$user) {
-                throw new ValidationException('Credenciales inválidas');
-            }
-
-            // Generate token
-            $token = $this->generateToken($user);
-
-            $this->log('User logged in successfully', [
-                'user_id' => $user->id,
-                'username' => $user->username
-            ]);
-
-            return [
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'expires_in' => $this->jwtTtlSeconds,
-                'user' => $this->transformUserForApi($user)
-            ];
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'inicio de sesión');
-            throw new \Exception('Error en el inicio de sesión: ' . $e->getMessage());
+        // Authenticate user
+        $user = $this->authenticate($identifier, $password);
+        if (!$user) {
+            throw new ValidationException('Credenciales inválidas');
         }
+
+        // Generate token
+        $token = $this->generateToken($user);
+
+        return [
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => $this->jwtTtlSeconds,
+            'user' => $this->transformUserForApi($user)
+        ];
     }
 
     /**
@@ -174,30 +167,23 @@ class AuthenticationService extends EloquentService
      */
     public function register(array $userData): array
     {
-        try {
-            // Create user
-            $user = $this->createUser($userData);
+        // Create user
+        $user = $this->createUser($userData);
 
-            // Generate token
-            $token = $this->generateToken($user);
+        // Generate token
+        $token = $this->generateToken($user);
 
-            $this->log('User registered successfully', [
-                'user_id' => $user->id,
-                'username' => $user->username
-            ]);
+        $this->log('User registered successfully', [
+            'user_id' => $user->id,
+            'username' => $user->username
+        ]);
 
-            return [
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'expires_in' => $this->jwtTtlSeconds,
-                'user' => $this->transformUserForApi($user)
-            ];
-        } catch (ValidationException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'registro');
-            throw new \Exception('Error en el registro: ' . $e->getMessage());
-        }
+        return [
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => $this->jwtTtlSeconds,
+            'user' => $this->transformUserForApi($user)
+        ];
     }
 
     /**
@@ -405,6 +391,11 @@ class AuthenticationService extends EloquentService
     private function getUserPermissions(array $userRoles): array
     {
         $permissions = [];
+
+        // Handle null or empty roles
+        if (empty($userRoles)) {
+            return $permissions;
+        }
 
         // Define role permissions
         $rolePermissions = [
