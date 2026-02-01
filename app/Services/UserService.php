@@ -55,6 +55,19 @@ class UserService extends EloquentService
     }
 
     /**
+     * Get user by ID.
+     */
+    public function getById(int $id): ?User
+    {
+        try {
+            return User::find($id);
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de usuario por ID');
+            return null;
+        }
+    }
+
+    /**
      * Get user by username.
      */
     public function getByUsername(string $username): ?User

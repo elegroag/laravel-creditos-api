@@ -462,6 +462,85 @@ class TrabajadorService extends EloquentService
     }
 
     /**
+     * Obtener datos del usuario desde API externa SISU (compatible con AuthController).
+     */
+    public function obtenerDatosUsuarioSisu(User $user): ?array
+    {
+        try {
+            $response = Http::get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username)
+                ->timeout($this->timeout);
+
+            if ($response->successful() && $response->json('success') && $response->json('data')) {
+                $data = $response->json('data');
+
+                if ($data['estado'] === 'A') {
+                    return [
+                        'full_name' => $data['nombre'] ?? null,
+                        'email' => $data['email'] ?? null,
+                        'phone' => $data['celular'] ?? null,
+                        'codigo_funcionario' => $data['tipfun'] ?? null,
+                        'estado' => $data['estado'] ?? null,
+                        'tipo_funcionario' => $data['tipfun_detalle'] ?? null
+                    ];
+                } else {
+                    Log::warning("Asesor {$user->username} no está activo en SISU");
+                }
+            } else {
+                Log::warning("No se pudieron obtener datos del asesor {$user->username}");
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error consultando datos del asesor: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Obtener puntos de asesores por usuario desde API externa (compatible con AuthController).
+     */
+    public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
+    {
+        try {
+            $response = Http::get($this->externalApiUrl . "/puntos/asesores/" . $user->username)
+                ->timeout($this->timeout);
+
+            if ($response->successful() && $response->json('success') && $response->json('data')) {
+                return $response->json('data');
+            }
+
+            Log::warning("No se pudieron obtener puntos del asesor {$user->username}");
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error consultando puntos de asesores: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Obtener datos del trabajador desde API externa (compatible con AuthController).
+     */
+    public function obtenerDatosTrabajador(string $numeroDocumento): ?array
+    {
+        try {
+            $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
+                'json' => ['cedtra' => $numeroDocumento]
+            ])
+                ->timeout($this->timeout);
+
+            if ($response->successful() && $response->json('success') && $response->json('data')) {
+                return $this->extractRelevantData($response->json('data'));
+            }
+
+            Log::warning("No se pudieron obtener datos del trabajador con documento: {$numeroDocumento}");
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error consultando datos del trabajador: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Get worker data from external API.
      */
     public function getWorkerData(string $cedula): ?array

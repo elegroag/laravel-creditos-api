@@ -56,9 +56,9 @@ class MovileController extends Controller
                 'iss' => config('app.jwt.issuer', 'comfaca-credito'),
                 'sub' => $username,
                 'type' => 'mobile_auth',
-                'iat' => $now->timestamp(),
-                'exp' => $expiresAt->timestamp(),
-                'jti' => Str::uuid()->toString()
+                'iat' => $now->timestamp('UTC'),
+                'exp' => $expiresAt->timestamp('UTC'),
+                'jti' => \Illuminate\Support\Str::uuid()->toString()
             ];
 
             $tempToken = JWTAuth::encode($authPayload);
@@ -464,7 +464,7 @@ class MovileController extends Controller
                         'valid' => !$isExpired,
                         'username' => $username,
                         'expires_at' => $expiresAt->toISOString(),
-                        'expires_in_minutes' => $expiresAt->diffInMinutes(Carbon::now())->absoluteValue(),
+                        'expires_in_minutes' => $expiresAt->diffInMinutes(Carbon::now())->getValue(),
                         'type' => 'mobile_auth'
                     ]
                 ]);

@@ -3,42 +3,43 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Repositories\SolicitudRepository;
-use App\Repositories\EstadoSolicitudRepository;
 use App\Services\SolicitudService;
 use App\Services\UserService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class InicioController extends Controller
 {
-    protected SolicitudRepository $solicitudRepository;
-    protected EstadoSolicitudRepository $estadoRepository;
     protected SolicitudService $solicitudService;
+    protected UserService $userService;
 
     public function __construct(
-        SolicitudRepository $solicitudRepository,
-        EstadoSolicitudRepository $estadoRepository
+        SolicitudService $solicitudService,
+        UserService $userService
     ) {
-        $this->solicitudRepository = $solicitudRepository;
-        $this->estadoRepository = $estadoRepository;
-        $this->solicitudService = new SolicitudService($solicitudRepository, $estadoRepository);
+        $this->solicitudService = $solicitudService;
+        $this->userService = $userService;
     }
 
-    public function index(): Response
+    public function index(): Response|RedirectResponse
     {
         try {
             // Obtener datos de solicitudes
-            $user = auth()->user();
-            $solicitudes = $this->solicitudRepository
-                ->where('owner_username', $user->username)
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $user = Auth::user();
 
-            // Obtener estados de solicitud
-            $estados = $this->estadoRepository->all();
+            if (!$user) {
+                return redirect()->route('login');
+            }
+
+            // Obtener solicitudes del usuario usando el service
+            $solicitudesResult = $this->solicitudService->getByOwner($user->username, 0, 1000);
+            $solicitudes = collect($solicitudesResult['solicitudes'] ?? []);
+
+            // Obtener estados disponibles usando el service
+            $estados = $this->solicitudService->getEstadosDisponibles();
 
             // Obtener estadísticas básicas
             $estadisticas = [
@@ -55,7 +56,7 @@ class InicioController extends Controller
                 ],
                 'estadosData' => [
                     'success' => true,
-                    'data' => $estados->toArray()
+                    'data' => $estados
                 ],
                 'estadisticasData' => [
                     'success' => true,
@@ -63,25 +64,28 @@ class InicioController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al obtener datos para el inicio', [
-                'error' => $e->getMessage()
+            Log::error('Error en InicioController@index', [
+                'error' => $e->getMessage(),
+                'user' => Auth::user()?->username
             ]);
 
             return Inertia::render('inicio/index', [
                 'solicitudesData' => [
                     'success' => false,
-                    'message' => 'Error al cargar las solicitudes',
                     'data' => []
                 ],
                 'estadosData' => [
                     'success' => false,
-                    'message' => 'Error al cargar los estados',
                     'data' => []
                 ],
                 'estadisticasData' => [
                     'success' => false,
-                    'message' => 'Error al cargar las estadísticas',
-                    'data' => null
+                    'data' => [
+                        'total_solicitudes' => 0,
+                        'pendientes' => 0,
+                        'aprobadas' => 0,
+                        'rechazadas' => 0
+                    ]
                 ]
             ]);
         }

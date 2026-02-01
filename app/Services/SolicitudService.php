@@ -92,6 +92,311 @@ class SolicitudService extends EloquentService
     }
 
     /**
+     * Search solicitudes by term with filters.
+     */
+    public function buscar(string $termino, int $limit = 50, ?string $estado = null, ?string $username = null): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            // Filter by username if provided
+            if ($username) {
+                $query->where('owner_username', $username);
+            }
+
+            // Filter by estado if provided
+            if ($estado) {
+                $query->where('estado', $estado);
+            }
+
+            // Search in multiple fields
+            $query->where(function ($q) use ($termino) {
+                $q->where('numero_solicitud', 'like', '%' . $termino . '%')
+                    ->orWhere('owner_username', 'like', '%' . $termino . '%')
+                    ->orWhere('numero_documento', 'like', '%' . $termino . '%')
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(payload, "$.solicitud.tipcre")) LIKE ?', ['%' . $termino . '%'])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(payload, "$.postulante.primer_nombre")) LIKE ?', ['%' . $termino . '%'])
+                    ->orWhereRaw('JSON_UNQUOTE(JSON_EXTRACT(payload, "$.postulante.primer_apellido")) LIKE ?', ['%' . $termino . '%']);
+            });
+
+            // Order by relevance (numero_solicitud first, then created_at)
+            $query->orderByRaw('CASE WHEN numero_solicitud LIKE ? THEN 1 ELSE 2 END', ['%' . $termino . '%'])
+                ->orderBy('created_at', 'desc');
+
+            // Apply limit
+            $solicitudes = $query->limit($limit)->get();
+
+            return [
+                'solicitudes' => $solicitudes->toArray(),
+                'count' => $solicitudes->count(),
+                'termino' => $termino,
+                'estado' => $estado,
+                'username' => $username,
+                'limit' => $limit
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda de solicitudes');
+            return [
+                'solicitudes' => [],
+                'count' => 0,
+                'termino' => $termino,
+                'estado' => $estado,
+                'username' => $username,
+                'limit' => $limit
+            ];
+        }
+    }
+
+    /**
+     * Get statistics for solicitudes.
+     */
+    public function getEstadisticas(?string $username = null): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            // Filter by username if provided
+            if ($username) {
+                $query->where('owner_username', $username);
+            }
+
+            // Total solicitudes
+            $total = $query->count();
+
+            // By estado
+            $estadosQuery = SolicitudCredito::query();
+            if ($username) {
+                $estadosQuery->where('owner_username', $username);
+            }
+            $porEstado = $estadosQuery->selectRaw('estado, COUNT(*) as count')
+                ->groupBy('estado')
+                ->pluck('count', 'estado')
+                ->toArray();
+
+            // By month (last 6 months)
+            $mesesQuery = SolicitudCredito::query();
+            if ($username) {
+                $mesesQuery->where('owner_username', $username);
+            }
+            $porMes = $mesesQuery->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as mes, COUNT(*) as count')
+                ->where('created_at', '>=', now()->subMonths(6))
+                ->groupBy('mes')
+                ->orderBy('mes')
+                ->pluck('count', 'mes')
+                ->toArray();
+
+            // By tipo credito
+            $tiposQuery = SolicitudCredito::query();
+            if ($username) {
+                $tiposQuery->where('owner_username', $username);
+            }
+            $porTipo = $tiposQuery->selectRaw('JSON_UNQUOTE(JSON_EXTRACT(payload, "$.solicitud.tipcre")) as tipo, COUNT(*) as count')
+                ->whereNotNull('payload')
+                ->groupBy('tipo')
+                ->orderBy('count', 'desc')
+                ->pluck('count', 'tipo')
+                ->toArray();
+
+            return [
+                'total' => $total,
+                'por_estado' => $porEstado,
+                'por_mes' => $porMes,
+                'por_tipo' => $porTipo,
+                'username' => $username
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de estadísticas de solicitudes');
+            return [
+                'total' => 0,
+                'por_estado' => [],
+                'por_mes' => [],
+                'por_tipo' => [],
+                'username' => $username
+            ];
+        }
+    }
+
+    /**
+     * Get available estados for solicitudes.
+     */
+    public function getEstadosDisponibles(): array
+    {
+        try {
+            // Get distinct estados from database
+            $estados = SolicitudCredito::distinct('estado')
+                ->pluck('estado')
+                ->filter()
+                ->toArray();
+
+            // Default estados if none found
+            if (empty($estados)) {
+                $estados = [
+                    'NUEVA',
+                    'ENVIADO_VALIDACION',
+                    'EN_VALIDACION',
+                    'ENVIADO_PENDIENTE_APROBACION',
+                    'PENDIENTE_APROBACION',
+                    'APROBADA',
+                    'RECHAZADA',
+                    'DESESTIMADA',
+                    'CANCELADA',
+                    'DESISTE'
+                ];
+            }
+
+            return $estados;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de estados disponibles');
+            return [
+                'NUEVA',
+                'ENVIADO_VALIDACION',
+                'EN_VALIDACION',
+                'ENVIADO_PENDIENTE_APROBACION',
+                'PENDIENTE_APROBACION',
+                'APROBADA',
+                'RECHAZADA',
+                'DESESTIMADA',
+                'CANCELADA',
+                'DESISTE'
+            ];
+        }
+    }
+
+    /**
+     * List all solicitudes with pagination and filters.
+     */
+    public function list(int $skip = 0, int $limit = 50, array $filters = []): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            // Apply filters if provided
+            if (!empty($filters)) {
+                foreach ($filters as $field => $value) {
+                    if (is_array($value)) {
+                        $query->whereIn($field, $value);
+                    } else {
+                        $query->where($field, $value);
+                    }
+                }
+            }
+
+            // Apply ordering
+            $query->orderBy('created_at', 'desc');
+
+            // Apply pagination
+            $solicitudes = $query->skip($skip)->limit($limit)->get();
+
+            return [
+                'solicitudes' => $solicitudes->toArray(),
+                'count' => $solicitudes->count(),
+                'skip' => $skip,
+                'limit' => $limit
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'listado de solicitudes');
+            return [
+                'solicitudes' => [],
+                'count' => 0,
+                'skip' => $skip,
+                'limit' => $limit
+            ];
+        }
+    }
+
+    /**
+     * Advanced search for solicitudes with multiple filters.
+     */
+    public function advancedSearch(array $filters, int $skip = 0, int $limit = 50): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            // Filter by owner username
+            if (isset($filters['owner_username'])) {
+                $query->where('owner_username', $filters['owner_username']);
+            }
+
+            // Filter by estado
+            if (isset($filters['estado'])) {
+                $query->where('estado', $filters['estado']);
+            }
+
+            // Filter by multiple estados
+            if (isset($filters['estados']) && is_array($filters['estados'])) {
+                $query->whereIn('estado', $filters['estados']);
+            }
+
+            // Filter by numero_solicitud
+            if (isset($filters['numero_solicitud'])) {
+                $query->where('numero_solicitud', 'like', '%' . $filters['numero_solicitud'] . '%');
+            }
+
+            // Filter by numero_documento
+            if (isset($filters['numero_documento'])) {
+                $query->where('numero_documento', $filters['numero_documento']);
+            }
+
+            // Filter by nombre_usuario
+            if (isset($filters['nombre_usuario'])) {
+                $query->where('owner_username', 'like', '%' . $filters['nombre_usuario'] . '%');
+            }
+
+            // Filter by monto range
+            if (isset($filters['monto_minimo'])) {
+                $query->where('monto_solicitado', '>=', $filters['monto_minimo']);
+            }
+            if (isset($filters['monto_maximo'])) {
+                $query->where('monto_solicitado', '<=', $filters['monto_maximo']);
+            }
+
+            // Apply ordering
+            $ordenarPor = $filters['ordenar_por'] ?? 'created_at';
+            $ordenDireccion = $filters['orden_direccion'] ?? 'desc';
+            $query->orderBy($ordenarPor, $ordenDireccion);
+
+            // Apply pagination
+            $solicitudes = $query->skip($skip)->limit($limit)->get();
+
+            return $solicitudes->toArray();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'búsqueda avanzada de solicitudes');
+            return [];
+        }
+    }
+
+    /**
+     * Get solicitudes by owner.
+     */
+    public function getByOwner(string $username, int $skip = 0, int $limit = 50, ?string $estado = null): array
+    {
+        try {
+            $query = SolicitudCredito::where('owner_username', $username);
+
+            // Filter by estado if provided
+            if ($estado) {
+                $query->where('estado', $estado);
+            }
+
+            $solicitudes = $query->orderBy('created_at', 'desc')
+                ->skip($skip)
+                ->limit($limit)
+                ->get();
+
+            return [
+                'solicitudes' => $solicitudes->toArray(),
+                'count' => $solicitudes->count()
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'obtención de solicitudes por propietario');
+            return [
+                'solicitudes' => [],
+                'count' => 0
+            ];
+        }
+    }
+
+    /**
      * Get available transitions for solicitud.
      */
     public function getAvailableTransitions(string $solicitudId): array

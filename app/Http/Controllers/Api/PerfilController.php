@@ -26,7 +26,7 @@ class PerfilController extends Controller
 
     /**
      * Obtiene el perfil del usuario autenticado.
-     * 
+     *
      * Returns:
      *     Datos del perfil del usuario
      */
@@ -34,7 +34,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -44,12 +44,12 @@ class PerfilController extends Controller
             }
 
             $username = $user->username;
-            
+
             Log::info('Obteniendo perfil para usuario', ['username' => $username]);
-            
+
             // Obtener usuario completo
             $usuario = $this->userService->getByUsername($username);
-            
+
             if (!$usuario) {
                 return response()->json([
                     'success' => false,
@@ -57,7 +57,7 @@ class PerfilController extends Controller
                     'details' => []
                 ], 404);
             }
-            
+
             // Construir full_name
             $fullName = null;
             if ($usuario->nombres && $usuario->apellidos) {
@@ -65,7 +65,7 @@ class PerfilController extends Controller
             } elseif ($usuario->nombres) {
                 $fullName = $usuario->nombres;
             }
-            
+
             // Formatear respuesta
             $perfilData = [
                 'id' => (string) $usuario->id,
@@ -82,15 +82,14 @@ class PerfilController extends Controller
                 'created_at' => $usuario->created_at?->toISOString(),
                 'updated_at' => $usuario->updated_at?->toISOString()
             ];
-            
+
             Log::info('Perfil obtenido exitosamente', ['username' => $username]);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $perfilData,
                 'message' => 'Perfil obtenido exitosamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error obteniendo perfil', [
                 'error' => $e->getMessage(),
@@ -109,10 +108,10 @@ class PerfilController extends Controller
 
     /**
      * Actualiza el perfil del usuario autenticado.
-     * 
+     *
      * Args:
      * update_data: Datos de actualización validados
-     * 
+     *
      * Returns:
      *     Perfil actualizado
      */
@@ -120,7 +119,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -130,7 +129,7 @@ class PerfilController extends Controller
             }
 
             $username = $user->username;
-            
+
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
                 'email' => 'sometimes|email|max:255',
@@ -161,14 +160,14 @@ class PerfilController extends Controller
             }
 
             $updateData = $validator->validated();
-            
+
             Log::info('Actualizando perfil para usuario', [
                 'username' => $username,
                 'update_fields' => array_keys($updateData)
             ]);
-            
+
             $usuario = $this->userService->getByUsername($username);
-            
+
             if (!$usuario) {
                 return response()->json([
                     'success' => false,
@@ -176,10 +175,10 @@ class PerfilController extends Controller
                     'details' => []
                 ], 404);
             }
-            
+
             // Preparar datos para actualización con manejo robusto de roles
             $updateDataClean = $updateData;
-            
+
             // Manejar roles - asegurar que sea un array
             if (isset($updateDataClean['roles']) && $updateDataClean['roles'] !== null) {
                 $roles = $updateDataClean['roles'];
@@ -191,10 +190,10 @@ class PerfilController extends Controller
                     $updateDataClean['roles'] = [];
                 }
             }
-            
+
             // Actualizar usuario
             $usuarioActualizado = $this->userService->update($usuario->id, $updateDataClean);
-            
+
             if (!$usuarioActualizado) {
                 return response()->json([
                     'success' => false,
@@ -202,7 +201,7 @@ class PerfilController extends Controller
                     'details' => []
                 ], 400);
             }
-            
+
             // Construir full_name
             $fullName = null;
             if ($usuarioActualizado->nombres && $usuarioActualizado->apellidos) {
@@ -210,7 +209,7 @@ class PerfilController extends Controller
             } elseif ($usuarioActualizado->nombres) {
                 $fullName = $usuarioActualizado->nombres;
             }
-            
+
             // Formatear respuesta
             $perfilData = [
                 'id' => (string) $usuarioActualizado->id,
@@ -227,15 +226,14 @@ class PerfilController extends Controller
                 'created_at' => $usuarioActualizado->created_at?->toISOString(),
                 'updated_at' => $usuarioActualizado->updated_at?->toISOString()
             ];
-            
+
             Log::info('Perfil actualizado exitosamente', ['username' => $username]);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $perfilData,
                 'message' => 'Perfil actualizado exitosamente'
             ]);
-
         } catch (ValidationException $e) {
             Log::error('Error de validación al actualizar perfil', [
                 'error' => $e->getMessage(),
@@ -247,7 +245,6 @@ class PerfilController extends Controller
                 'error' => 'Datos inválidos',
                 'details' => $e->errors()
             ], 400);
-
         } catch (\Exception $e) {
             Log::error('Error actualizando perfil', [
                 'error' => $e->getMessage(),
@@ -267,10 +264,10 @@ class PerfilController extends Controller
 
     /**
      * Cambia la contraseña del usuario autenticado.
-     * 
+     *
      * Args:
      * password_data: Datos de cambio de contraseña validados
-     * 
+     *
      * Returns:
      *     Confirmación de cambio
      */
@@ -278,7 +275,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -313,12 +310,12 @@ class PerfilController extends Controller
             $passwordData = $validator->validated();
             $currentPassword = $passwordData['current_password'];
             $newPassword = $passwordData['new_password'];
-            
+
             Log::info('Intentando cambiar contraseña', ['username' => $user->username]);
-            
+
             // Obtener usuario para verificar que existe
             $usuario = $this->userService->getByUsername($user->username);
-            
+
             if (!$usuario) {
                 return response()->json([
                     'success' => false,
@@ -326,29 +323,28 @@ class PerfilController extends Controller
                     'details' => []
                 ], 404);
             }
-            
+
             // Verificar contraseña actual
             if (!Hash::check($currentPassword, $usuario->password)) {
                 Log::warning('Contraseña actual incorrecta', ['username' => $user->username]);
-                
+
                 return response()->json([
                     'success' => false,
                     'error' => 'La contraseña actual es incorrecta',
                     'details' => []
                 ], 400);
             }
-            
+
             // Cambiar contraseña
             $usuario->password = Hash::make($newPassword);
             $usuario->save();
-            
+
             Log::info('Contraseña cambiada exitosamente', ['username' => $user->username]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Contraseña cambiada exitosamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al cambiar contraseña', [
                 'error' => $e->getMessage(),
@@ -368,10 +364,10 @@ class PerfilController extends Controller
 
     /**
      * Obtiene la actividad reciente del usuario (solicitudes, documentos, etc.).
-     * 
+     *
      * Args:
      * query_params: Parámetros de consulta validados
-     * 
+     *
      * Returns:
      *     Actividad reciente del usuario
      */
@@ -379,7 +375,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -414,20 +410,20 @@ class PerfilController extends Controller
             $limit = $queryParams['limit'] ?? 20;
             $skip = $queryParams['skip'] ?? 0;
             $type = $queryParams['type'] ?? 'todos';
-            
+
             Log::info('Obteniendo actividad del usuario', [
                 'username' => $user->username,
                 'limit' => $limit,
                 'skip' => $skip,
                 'type' => $type
             ]);
-            
+
             // Obtener solicitudes recientes del usuario
             $solicitudes = $this->solicitudService->getByOwner($user->username, $skip, $limit);
-            
+
             // Formatear como actividad
             $actividad = [];
-            
+
             foreach ($solicitudes as $solicitud) {
                 $actividad[] = [
                     'type' => 'solicitud',
@@ -438,7 +434,7 @@ class PerfilController extends Controller
                     'descripcion' => 'Estado: ' . $solicitud['estado']
                 ];
             }
-            
+
             $activityData = [
                 'actividad' => $actividad,
                 'total' => count($actividad),
@@ -446,18 +442,17 @@ class PerfilController extends Controller
                 'skip' => $skip,
                 'type' => $type
             ];
-            
+
             Log::info('Actividad del usuario obtenida', [
                 'username' => $user->username,
                 'total' => count($actividad)
             ]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Actividad obtenida exitosamente',
                 'data' => $activityData
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener actividad del usuario', [
                 'error' => $e->getMessage(),
@@ -482,7 +477,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -492,12 +487,12 @@ class PerfilController extends Controller
             }
 
             $username = $user->username;
-            
+
             Log::info('Obteniendo estadísticas del perfil', ['username' => $username]);
-            
+
             // Obtener estadísticas básicas
             $solicitudes = $this->solicitudService->getByOwner($username, 0, 1000);
-            
+
             $estadisticas = [
                 'total_solicitudes' => count($solicitudes),
                 'solicitudes_por_estado' => [],
@@ -507,7 +502,7 @@ class PerfilController extends Controller
                 'roles' => $user->roles ?? [],
                 'perfil_completo' => $this->verificarPerfilCompleto($user)
             ];
-            
+
             // Agrupar solicitudes por estado
             $estados = [];
             foreach ($solicitudes as $solicitud) {
@@ -518,7 +513,7 @@ class PerfilController extends Controller
                 $estados[$estado]++;
             }
             $estadisticas['solicitudes_por_estado'] = $estados;
-            
+
             // Última actividad
             if (!empty($solicitudes)) {
                 $ultimaSolicitud = $solicitudes[0];
@@ -528,18 +523,17 @@ class PerfilController extends Controller
                     'descripcion' => 'Última solicitud: ' . $ultimaSolicitud['estado']
                 ];
             }
-            
+
             Log::info('Estadísticas del perfil obtenidas', [
                 'username' => $username,
                 'total_solicitudes' => $estadisticas['total_solicitudes']
             ]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Estadísticas obtenidas exitosamente',
                 'data' => $estadisticas
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas del perfil', [
                 'error' => $e->getMessage(),
@@ -563,13 +557,13 @@ class PerfilController extends Controller
     private function verificarPerfilCompleto($user): bool
     {
         $camposRequeridos = ['email', 'phone', 'nombres', 'apellidos'];
-        
+
         foreach ($camposRequeridos as $campo) {
             if (empty($user->$campo)) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -580,7 +574,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -609,15 +603,14 @@ class PerfilController extends Controller
                     'sesion_recordar' => true
                 ]
             ];
-            
+
             Log::info('Configuración del perfil obtenida', ['username' => $user->username]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Configuración obtenida exitosamente',
                 'data' => $configuracion
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener configuración del perfil', [
                 'error' => $e->getMessage(),
@@ -641,7 +634,7 @@ class PerfilController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -667,21 +660,20 @@ class PerfilController extends Controller
             }
 
             $configData = $validator->validated();
-            
+
             Log::info('Actualizando configuración del perfil', [
                 'username' => $user->username,
                 'config_keys' => array_keys($configData)
             ]);
-            
+
             // Aquí se guardaría la configuración en la base de datos
             // Por ahora, solo retornamos confirmación
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Configuración actualizada exitosamente',
                 'data' => $configData
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al actualizar configuración del perfil', [
                 'error' => $e->getMessage(),

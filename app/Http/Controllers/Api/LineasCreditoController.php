@@ -40,10 +40,9 @@ class LineasCreditoController extends Controller
             ];
 
             // Realizar la consulta a la API externa
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($this->externalApiUrl . '/creditos/datos_generales')->timeout($this->timeout)
                 ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->withHeaders($headers)
-                ->post($this->externalApiUrl . '/creditos/datos_generales');
+                ->withHeaders($headers);
 
             // Verificar si la respuesta fue exitosa
             if (!$response->successful()) {
@@ -90,7 +89,6 @@ class LineasCreditoController extends Controller
                 'message' => 'Datos generales obtenidos exitosamente',
                 'data' => $responseData['data'] ?? []
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al consultar parámetros generales', [
                 'error' => $e->getMessage(),
@@ -123,10 +121,9 @@ class LineasCreditoController extends Controller
             ];
 
             // Realizar la consulta a la API externa
-            $response = Http::timeout($this->timeout)
+            $response = Http::post($this->externalApiUrl . '/creditos/tipo_creditos')->timeout($this->timeout)
                 ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->withHeaders($headers)
-                ->post($this->externalApiUrl . '/creditos/tipo_creditos');
+                ->withHeaders($headers);
 
             // Verificar si la respuesta fue exitosa
             if (!$response->successful()) {
@@ -174,7 +171,6 @@ class LineasCreditoController extends Controller
                 'message' => 'Tipos de crédito obtenidos exitosamente',
                 'data' => $responseData['data'] ?? []
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al consultar tipos de crédito', [
                 'error' => $e->getMessage(),
@@ -217,11 +213,11 @@ class LineasCreditoController extends Controller
             // Verificar si ambas consultas fueron exitosas
             if (!$parametrosData['success'] || !$tiposData['success']) {
                 $errors = [];
-                
+
                 if (!$parametrosData['success']) {
                     $errors['parametros'] = $parametrosData['error'] ?? 'Error desconocido';
                 }
-                
+
                 if (!$tiposData['success']) {
                     $errors['tipos_creditos'] = $tiposData['error'] ?? 'Error desconocido';
                 }
@@ -243,7 +239,6 @@ class LineasCreditoController extends Controller
                 'message' => 'Información de líneas de crédito obtenida exitosamente',
                 'data' => $combinedData
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al consultar información completa de líneas de crédito', [
                 'error' => $e->getMessage(),
@@ -271,9 +266,9 @@ class LineasCreditoController extends Controller
             $startTime = microtime(true);
 
             // Intentar una consulta simple
-            $response = Http::timeout(5)
+            $response = Http::get($this->externalApiUrl . '/health')
                 ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->get($this->externalApiUrl . '/health');
+                ->timeout(5);
 
             $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -295,7 +290,6 @@ class LineasCreditoController extends Controller
                     'timestamp' => now()->toISOString()
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al verificar disponibilidad del servicio', [
                 'error' => $e->getMessage()
@@ -337,7 +331,7 @@ class LineasCreditoController extends Controller
             // Agregar estadísticas adicionales si hay datos
             if (!empty($tiposData['data'])) {
                 $tipos = $tiposData['data'];
-                $estadisticas['tipos_activos'] = count(array_filter($tipos, function($tipo) {
+                $estadisticas['tipos_activos'] = count(array_filter($tipos, function ($tipo) {
                     return ($tipo['estado'] ?? '') === 'activo';
                 }));
             }
@@ -349,7 +343,6 @@ class LineasCreditoController extends Controller
                 'message' => 'Estadísticas obtenidas exitosamente',
                 'data' => $estadisticas
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de líneas de crédito', [
                 'error' => $e->getMessage()

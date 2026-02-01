@@ -62,8 +62,7 @@ class PostulanteController extends Controller
             $timeout = config('services.external_api.timeout', 8);
 
             // Realizar petición a la API externa
-            $response = Http::timeout($timeout)
-                ->post($externalApiUrl . '/affiliation/listar_conyuges_trabajador', $apiPayload);
+            $response = Http::post($externalApiUrl . '/affiliation/listar_conyuges_trabajador', $apiPayload)->timeout($timeout);
 
             // Verificar respuesta
             if (!$response->successful()) {
@@ -113,7 +112,6 @@ class PostulanteController extends Controller
                 'message' => 'Cónyuges consultados exitosamente',
                 'data' => $responseData['data'] ?? []
             ]);
-
         } catch (ValidationException $e) {
             Log::warning('Error de validación en buscarConyugeTrabajador', [
                 'errors' => $e->errors()
@@ -124,7 +122,6 @@ class PostulanteController extends Controller
                 'error' => 'Datos inválidos',
                 'details' => $e->errors()
             ], 400);
-
         } catch (\Exception $e) {
             Log::error('Error inesperado en buscarConyugeTrabajador', [
                 'error' => $e->getMessage(),

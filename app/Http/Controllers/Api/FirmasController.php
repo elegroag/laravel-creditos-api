@@ -173,7 +173,7 @@ class FirmasController extends Controller
     /**
      * Firmar documento usando token compartido
      */
-    public function firmarConToken(Request $request, string $token): Response
+    public function firmarConToken(Request $request, string $token): jsonResponse|Response
     {
         try {
             $validator = Validator::make($request->all(), [
@@ -275,10 +275,11 @@ class FirmasController extends Controller
                 'saved_filename' => $savedFilename
             ]);
 
-            return new Response($firmasOut, 200, [
+            $response  = new Response($firmasOut, 200, [
                 'Content-Type' => 'application/xml',
                 'X-Saved-Filename' => $savedFilename ?? ''
             ]);
+            return $response;
         } catch (\Exception $e) {
             Log::error('Error al firmar con token compartido', [
                 'token' => $token,

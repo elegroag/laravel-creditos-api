@@ -30,7 +30,7 @@ class SolicitudXmlController extends Controller
      * Generar XML de solicitud de crédito
      * @deprecated - Usar el endpoint en FirmasController
      */
-    public function generarXmlSolicitud(Request $request): Response
+    public function generarXmlSolicitud(Request $request): Response|JsonResponse
     {
         try {
             // Validar datos de entrada
@@ -93,7 +93,6 @@ class SolicitudXmlController extends Controller
                         'filename' => $savedFilename,
                         'solicitud_id' => $savedSolicitudId
                     ]);
-
                 } catch (\Exception $e) {
                     Log::error('Error al guardar XML', [
                         'error' => $e->getMessage(),
@@ -129,7 +128,6 @@ class SolicitudXmlController extends Controller
             ]);
 
             return $response;
-
         } catch (\Exception $e) {
             Log::error('Error interno al generar XML de solicitud', [
                 'error' => $e->getMessage(),
@@ -224,7 +222,6 @@ class SolicitudXmlController extends Controller
                     'success' => true,
                     'data' => $data
                 ]);
-
             } catch (\ValueError $e) {
                 Log::error('XML inválido', [
                     'filename' => $filename,
@@ -236,7 +233,6 @@ class SolicitudXmlController extends Controller
                     'error' => "XML inválido: {$e->getMessage()}",
                     'details' => []
                 ], 400);
-
             } catch (\Exception $e) {
                 Log::error('Error al extraer datos del XML', [
                     'filename' => $filename,
@@ -251,7 +247,6 @@ class SolicitudXmlController extends Controller
                     ]
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error interno al extraer datos XML', [
                 'error' => $e->getMessage(),
@@ -279,7 +274,7 @@ class SolicitudXmlController extends Controller
         if (!is_string($numeroSolicitud) || empty(trim($numeroSolicitud))) {
             // Obtener línea de crédito para generar el número
             $lineaCredito = $solicitudPayload['tipcre'] ?? '03';
-            
+
             if (is_string($lineaCredito) && !empty(trim($lineaCredito))) {
                 $numeroSolicitud = $this->numeroSolicitudService->generarNumeroSolicitud(trim($lineaCredito));
                 $solicitudPayload['numero_solicitud'] = $numeroSolicitud;
@@ -299,7 +294,7 @@ class SolicitudXmlController extends Controller
     private function guardarXmlEnSistemaArchivos(string $xmlBytes, string $numeroSolicitud): string
     {
         $activosDir = storage_path('app/storage/activos');
-        
+
         // Crear directorio si no existe
         if (!is_dir($activosDir)) {
             mkdir($activosDir, 0755, true);
@@ -339,7 +334,7 @@ class SolicitudXmlController extends Controller
     private function guardarSolicitudEnBaseDatos(array $data, string $numeroSolicitud, string $savedFilename): string
     {
         $user = Auth::user();
-        
+
         if (!$user) {
             throw new \ValueError('Token inválido');
         }
@@ -351,15 +346,15 @@ class SolicitudXmlController extends Controller
         $solicitantePayload = $data['solicitante'] ?? [];
         $solicitudPayload = $data['solicitud'] ?? [];
 
-        $montoSolicitado = $solicitudPayload['valor_solicitado'] ?? 
-                          $solicitudPayload['valor_solicitud'] ?? 0;
-        
+        $montoSolicitado = $solicitudPayload['valor_solicitado'] ??
+            $solicitudPayload['valor_solicitud'] ?? 0;
+
         $plazoMeses = $solicitudPayload['plazo_meses'] ?? 0;
         $estado = 'POSTULADO';
 
         // Buscar solicitud existente
         $query = SolicitudCredito::where('owner_username', $username);
-        
+
         if (!empty($numeroSolicitud)) {
             $query->where('numero_solicitud', $numeroSolicitud);
         } else {
@@ -390,7 +385,7 @@ class SolicitudXmlController extends Controller
         if ($existing) {
             // Actualizar solicitud existente
             $existing->update($updateData);
-            
+
             // Agregar al timeline
             $timeline = $existing->timeline ?? [];
             $timeline[] = [
@@ -434,18 +429,18 @@ class SolicitudXmlController extends Controller
     {
         // Reemplazar caracteres no seguros
         $safe = preg_replace('/[^a-zA-Z0-9\-_]/', '_', $input);
-        
+
         // Limitar longitud
         if (strlen($safe) > 50) {
             $safe = substr($safe, 0, 50);
         }
-        
+
         // Eliminar guiones bajos y guiones múltiples
         $safe = preg_replace('/[_\-]+/', '_', $safe);
-        
+
         // Eliminar guiones bajos y guiones al inicio y final
         $safe = trim($safe, '_-');
-        
+
         return $safe ?: 'solicitud';
     }
 
@@ -479,11 +474,11 @@ class SolicitudXmlController extends Controller
 
             try {
                 $isValid = $this->xmlService->validarEstructuraXml($xmlContent);
-                
+
                 if ($isValid) {
                     // Intentar extraer datos para validación adicional
                     $extractedData = $this->xmlService->extractSolicitudCreditoDataFromXml($xmlContent, $strict);
-                    
+
                     Log::info('XML validado exitosamente', [
                         'data_extracted' => !empty($extractedData)
                     ]);
@@ -505,7 +500,6 @@ class SolicitudXmlController extends Controller
                         ]
                     ]);
                 }
-
             } catch (\Exception $e) {
                 Log::error('Error en validación XML', [
                     'error' => $e->getMessage()
@@ -519,7 +513,6 @@ class SolicitudXmlController extends Controller
                     ]
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error interno al validar XML', [
                 'error' => $e->getMessage(),
@@ -546,7 +539,7 @@ class SolicitudXmlController extends Controller
             Log::info('Listando archivos XML disponibles');
 
             $xmlDir = storage_path('app/xml');
-            
+
             if (!is_dir($xmlDir)) {
                 return response()->json([
                     'success' => true,
@@ -561,14 +554,14 @@ class SolicitudXmlController extends Controller
 
             $files = [];
             $iterator = new \DirectoryIterator($xmlDir);
-            
+
             foreach ($iterator as $fileInfo) {
                 if ($fileInfo->isDot() || !$fileInfo->isFile()) {
                     continue;
                 }
-                
+
                 $filename = $fileInfo->getFilename();
-                
+
                 if (Str::endsWith($filename, '.xml')) {
                     $files[] = [
                         'filename' => $filename,
@@ -597,7 +590,6 @@ class SolicitudXmlController extends Controller
                 ],
                 'message' => 'Archivos XML obtenidos exitosamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al listar archivos XML', [
                 'error' => $e->getMessage(),
@@ -681,7 +673,6 @@ class SolicitudXmlController extends Controller
                 'success' => true,
                 'message' => 'Archivo eliminado exitosamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al eliminar archivo XML', [
                 'filename' => $request->get('filename'),

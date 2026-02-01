@@ -21,7 +21,7 @@ class LineasInversionController extends Controller
 
     /**
      * Obtener todas las líneas de inversión disponibles.
-     * 
+     *
      * Response:
      * {
      *     "success": true,
@@ -49,10 +49,10 @@ class LineasInversionController extends Controller
 
             // Inicializar datos si es necesario
             $this->lineaService->initializeData();
-            
+
             // Obtener todas las líneas
             $lineas = $this->lineaService->getAllLineas();
-            
+
             Log::info('Líneas de inversión obtenidas exitosamente', [
                 'count' => count($lineas)
             ]);
@@ -62,7 +62,6 @@ class LineasInversionController extends Controller
                 'message' => 'Líneas de inversión obtenidas exitosamente',
                 'data' => $lineas
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener todas las líneas de inversión', [
                 'error' => $e->getMessage(),
@@ -81,10 +80,10 @@ class LineasInversionController extends Controller
 
     /**
      * Obtener una línea de inversión específica por su ID.
-     * 
+     *
      * Args:
      * linea_id: ID de la línea de inversión
-     * 
+     *
      * Response:
      * {
      *     "success": true,
@@ -109,13 +108,13 @@ class LineasInversionController extends Controller
                     'details' => []
                 ], 400);
             }
-            
+
             // Obtener la línea específica
             $linea = $this->lineaService->getLineaById($linea_id);
-            
+
             if (!$linea) {
                 Log::warning('Línea de inversión no encontrada', ['linea_id' => $linea_id]);
-                
+
                 return response()->json([
                     'success' => false,
                     'error' => 'Línea de inversión con ID ' . $linea_id . ' no encontrada',
@@ -133,7 +132,6 @@ class LineasInversionController extends Controller
                 'message' => 'Línea de inversión obtenida exitosamente',
                 'data' => $linea
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener línea de inversión por ID', [
                 'linea_id' => $linea_id,
@@ -152,10 +150,10 @@ class LineasInversionController extends Controller
 
     /**
      * Obtener líneas de inversión filtradas por categoría de tasa.
-     * 
+     *
      * Args:
      * categoria: Categoría ('A', 'B', 'C')
-     * 
+     *
      * Response:
      * {
      *     "success": true,
@@ -170,7 +168,7 @@ class LineasInversionController extends Controller
 
             // Validar categoría
             $categoriaUpper = strtoupper($categoria);
-            
+
             if (!in_array($categoriaUpper, ['A', 'B', 'C'])) {
                 return response()->json([
                     'success' => false,
@@ -178,10 +176,10 @@ class LineasInversionController extends Controller
                     'details' => []
                 ], 400);
             }
-            
+
             // Obtener líneas por categoría
             $lineas = $this->lineaService->getLineasByCategoria($categoriaUpper);
-            
+
             Log::info('Líneas de inversión por categoría obtenidas', [
                 'categoria' => $categoriaUpper,
                 'count' => count($lineas)
@@ -192,7 +190,6 @@ class LineasInversionController extends Controller
                 'message' => 'Líneas de inversión para categoría ' . $categoriaUpper . ' obtenidas exitosamente',
                 'data' => $lineas
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener líneas de inversión por categoría', [
                 'categoria' => $categoria,
@@ -212,7 +209,7 @@ class LineasInversionController extends Controller
     /**
      * Inicializar la colección de líneas de inversión con datos por defecto.
      * Este endpoint es principalmente para administración.
-     * 
+     *
      * Response:
      * {
      *     "success": true,
@@ -226,10 +223,10 @@ class LineasInversionController extends Controller
 
             // Crear índices si es necesario
             $this->lineaService->ensureIndex();
-            
+
             // Inicializar datos
             $success = $this->lineaService->initializeData();
-            
+
             if ($success) {
                 Log::info('Líneas de inversión inicializadas exitosamente');
 
@@ -246,7 +243,6 @@ class LineasInversionController extends Controller
                     'details' => []
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error al inicializar líneas de inversión', [
                 'error' => $e->getMessage(),
@@ -295,7 +291,6 @@ class LineasInversionController extends Controller
                 'message' => 'Estadísticas obtenidas exitosamente',
                 'data' => $estadisticas
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de líneas de inversión', [
                 'error' => $e->getMessage()
@@ -352,7 +347,7 @@ class LineasInversionController extends Controller
             $resultados = [];
             foreach ($lineas as $linea) {
                 $textoBusqueda = strtolower($linea['linea_credito'] . ' ' . ($linea['descripcion'] ?? ''));
-                
+
                 if (strpos($textoBusqueda, strtolower($termino)) !== false) {
                     // Si se especifica categoría, filtrar también por categoría
                     if ($categoria) {
@@ -382,7 +377,6 @@ class LineasInversionController extends Controller
                     'categoria' => $categoria
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al buscar líneas de inversión', [
                 'error' => $e->getMessage(),
@@ -468,7 +462,6 @@ class LineasInversionController extends Controller
                 'message' => 'Comparación completada',
                 'data' => $comparacion
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al comparar líneas de inversión', [
                 'error' => $e->getMessage(),
@@ -491,7 +484,7 @@ class LineasInversionController extends Controller
     private function obtenerMayorPlazo(array $lineas): string
     {
         $plazos = array_column($lineas, 'plazo_maximo');
-        
+
         // Extraer números de plazos (ej: "60 meses" -> 60)
         $valores = [];
         foreach ($plazos as $plazo) {
@@ -499,7 +492,7 @@ class LineasInversionController extends Controller
                 $valores[] = (int) $matches[1];
             }
         }
-        
+
         return !empty($valores) ? max($valores) . ' meses' : 'N/A';
     }
 
@@ -509,7 +502,7 @@ class LineasInversionController extends Controller
     private function obtenerMenorPlazo(array $lineas): string
     {
         $plazos = array_column($lineas, 'plazo_maximo');
-        
+
         // Extraer números de plazos (ej: "60 meses" -> 60)
         $valores = [];
         foreach ($plazos as $plazo) {
@@ -517,7 +510,7 @@ class LineasInversionController extends Controller
                 $valores[] = (int) $matches[1];
             }
         }
-        
+
         return !empty($valores) ? min($valores) . ' meses' : 'N/A';
     }
 

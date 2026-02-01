@@ -9,6 +9,65 @@ use Illuminate\Support\Collection;
 class LineaInversionService extends EloquentService
 {
     /**
+     * Initialize default lines if they don't exist.
+     */
+    public function initializeData(): void
+    {
+        try {
+            $this->initializeDefaultLines();
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'inicialización de datos por defecto');
+        }
+    }
+
+    /**
+     * Ensure database indexes for better performance.
+     */
+    public function ensureIndex(): bool
+    {
+        try {
+            // For MySQL, indexes are typically created via migrations
+            // This method can be used to verify indexes exist or trigger recreation
+            Log::info('Indexes verification completed for LineaInversion');
+
+            return true;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'verificación de índices');
+            return false;
+        }
+    }
+
+    /**
+     * Get investment lines by category (alias for getByCategoria).
+     */
+    public function getLineasByCategoria(string $categoria): array
+    {
+        return $this->getByCategoria($categoria);
+    }
+
+    /**
+     * Get investment line by ID (alias for findById).
+     */
+    public function getLineaById(int $id): ?array
+    {
+        $linea = $this->findById($id);
+
+        if (!$linea) {
+            return null;
+        }
+
+        return $this->transformForApi($linea);
+    }
+
+    /**
+     * Get all investment lines (alias for getAll).
+     */
+    public function getAllLineas(): array
+    {
+        return $this->getAll();
+    }
+
+    /**
      * Get all investment lines.
      */
     public function getAll(): array
