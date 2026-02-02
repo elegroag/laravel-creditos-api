@@ -9,6 +9,7 @@ use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class SolicitudService extends EloquentService
@@ -672,5 +673,53 @@ class SolicitudService extends EloquentService
         } while (SolicitudCredito::where('numero_solicitud', $numero)->exists());
 
         return $numero;
+    }
+
+    public function contarSolicitudesPorEstado(?string $username = null): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            if ($username) {
+                $query->where('owner_username', $username);
+            }
+
+            $resultados = $query->select('estado', DB::raw('count(*) as count'))
+                ->groupBy('estado')
+                ->get()
+                ->toArray();
+
+            return $resultados;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'conteo de solicitudes por estado');
+            return [];
+        }
+    }
+
+
+    public function listarSolicitudesCreditoPaginado($limit, $offset, $estado, ?string $username = null): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            if ($username) {
+                $query->where('owner_username', $username);
+            }
+
+            if ($estado) {
+                $query->where('estado', $estado);
+            }
+
+            $resultados = $query->orderBy('created_at', 'desc')
+                ->skip($offset)
+                ->take($limit)
+                ->get()
+                ->toArray();
+
+            return $resultados;
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'listado de solicitudes paginadas');
+            return [];
+        }
     }
 }

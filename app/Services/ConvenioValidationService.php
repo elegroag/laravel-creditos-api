@@ -45,11 +45,11 @@ class ConvenioValidationService
         }
 
         // 2. Verificar que el NIT del trabajador coincida con el proporcionado
-        $nitTrabajador = $trabajadorData['nit'] ?? null;
+        $nitTrabajador = $trabajadorData['empresa']['nit'] ?? null;
 
         if ((string)$nitTrabajador !== (string)$nitEmpresa) {
             throw new \Exception(
-                'El trabajador no pertenece a la empresa especificada'
+                'El trabajador no pertenece a la empresa especificada NIT ' . $nitTrabajador
             );
         }
 

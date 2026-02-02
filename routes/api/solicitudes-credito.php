@@ -19,6 +19,11 @@ Route::middleware('auth.jwt')->group(function () {
         // Endpoints adicionales (mejoras Laravel)
         Route::get('estadisticas', [SolicitudesCreditoController::class, 'obtenerEstadisticasSolicitudes']);
         Route::post('buscar', [SolicitudesCreditoController::class, 'buscarSolicitudes']);
+        // Endpoint para contar solicitudes por estado
+        Route::get('estados/count', [SolicitudesCreditoController::class, 'contarSolicitudesPorEstado']);
+
+        #http://localhost:5001/api/solicitudes-credito/paginado/20/0/@
+        Route::get('paginado/{limit}/{offset}/{estado}', [SolicitudesCreditoController::class, 'listarSolicitudesCreditoPaginado']);
     });
 
     //asi lo requiere el frontend no se puede cambiar la ruta /api/estados-solicitud

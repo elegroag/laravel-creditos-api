@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\EmpresaConvenio;
 use App\Services\TrabajadorService;
+use App\Services\ExternalApiService;
 use App\Exceptions\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
@@ -13,10 +14,12 @@ use Illuminate\Support\Collection;
 class ConvenioService extends EloquentService
 {
     private TrabajadorService $trabajadorService;
+    private ExternalApiService $externalApiService;
 
-    public function __construct(?TrabajadorService $trabajadorService = null)
+    public function __construct(TrabajadorService $trabajadorService, ExternalApiService $externalApiService)
     {
-        $this->trabajadorService = $trabajadorService ?: new TrabajadorService();
+        $this->trabajadorService = $trabajadorService;
+        $this->externalApiService = $externalApiService;
     }
 
     /**

@@ -38,7 +38,8 @@ class User extends Authenticatable
         'apellidos',
         'roles',
         'disabled',
-        'last_login'
+        'last_login',
+        'is_active'
     ];
 
     /**

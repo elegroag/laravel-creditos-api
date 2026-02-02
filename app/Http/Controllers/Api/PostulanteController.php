@@ -5,15 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
+use App\Services\ExternalApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 
 class PostulanteController extends Controller
 {
+    private ExternalApiService $externalApiService;
+
+    public function __construct(ExternalApiService $externalApiService)
+    {
+        $this->externalApiService = $externalApiService;
+    }
     /**
      * Consulta cónyuges de trabajador mediante API externa
      *
@@ -57,49 +63,29 @@ class PostulanteController extends Controller
                 'estado' => $estado
             ];
 
-            // Obtener URL de la API externa desde configuración
-            $externalApiUrl = config('services.external_api.url', 'https://api.example.com');
-            $timeout = config('services.external_api.timeout', 8);
-
-            // Realizar petición a la API externa
-            $response = Http::post($externalApiUrl . '/affiliation/listar_conyuges_trabajador', $apiPayload)->timeout($timeout);
-
-            // Verificar respuesta
-            if (!$response->successful()) {
-                Log::error('Error en respuesta de API externa de cónyuges', [
-                    'cedtra' => $cedtra,
-                    'status' => $response->status(),
-                    'response' => $response->body()
-                ]);
-
-                return ErrorResource::errorResponse('Error consultando cónyuges del trabajador', [
-                    'api_status' => $response->status(),
-                    'response' => $response->body()
-                ])->response()->setStatusCode(502);
-            }
-
-            $responseData = $response->json();
+            // Realizar petición a la API externa usando ExternalApiService
+            $response = $this->externalApiService->post('/affiliation/listar_conyuges_trabajador', $apiPayload);
 
             // Verificar si la respuesta contiene error
-            if (!$responseData['success'] ?? true || isset($responseData['error'])) {
+            if (!$response['success'] ?? true || isset($response['error'])) {
                 Log::warning('API externa retornó error para cónyuges', [
                     'cedtra' => $cedtra,
-                    'error' => $responseData['error'] ?? 'Error desconocido',
-                    'detail' => $responseData['detail'] ?? null
+                    'error' => $response['error'] ?? 'Error desconocido',
+                    'status_code' => $response['status_code'] ?? null
                 ]);
 
                 return ErrorResource::errorResponse('Error consultando cónyuges del trabajador', [
-                    'api_error' => $responseData['error'] ?? 'Error desconocido',
-                    'api_detail' => $responseData['detail'] ?? null
+                    'api_error' => $response['error'] ?? 'Error desconocido',
+                    'api_status_code' => $response['status_code'] ?? null
                 ])->response()->setStatusCode(502);
             }
 
             Log::info('Cónyuges consultados exitosamente', [
                 'cedtra' => $cedtra,
-                'count' => count($responseData['data'] ?? [])
+                'count' => count($response['data'] ?? [])
             ]);
 
-            return ApiResource::success($responseData['data'] ?? [], 'Cónyuges consultados exitosamente')->response();
+            return ApiResource::success($response['data'] ?? [], 'Cónyuges consultados exitosamente')->response();
         } catch (ValidationException $e) {
             Log::warning('Error de validación en buscarConyugeTrabajador', [
                 'errors' => $e->errors()

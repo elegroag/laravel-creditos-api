@@ -46,17 +46,17 @@ class AdminUsuariosController extends Controller
                 'page' => 'sometimes|integer|min:1',
                 'limit' => 'sometimes|integer|min:1|max:100',
                 'rol' => 'sometimes|string|max:50',
-                'estado' => 'sometimes|string|in:active,inactive,suspended',
                 'busqueda' => 'sometimes|string|max:100',
                 'tipo_documento' => 'sometimes|string|max:20',
-                'numero_documento' => 'sometimes|string|max:20'
+                'numero_documento' => 'sometimes|string|max:20',
+                'is_active' => 'sometimes|boolean'
             ], [
                 'page.integer' => 'La página debe ser un número entero',
                 'page.min' => 'La página debe ser al menos 1',
                 'limit.integer' => 'El límite debe ser un número entero',
                 'limit.min' => 'El límite debe ser al menos 1',
                 'limit.max' => 'El límite no puede exceder 100',
-                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+                'is_active.boolean' => 'El estado debe ser un valor booleano'
             ]);
 
             if ($validator->fails()) {
@@ -85,8 +85,8 @@ class AdminUsuariosController extends Controller
             }
 
             // Filtro por estado
-            if (!empty($params['estado'])) {
-                $query->where('estado', $params['estado']);
+            if (!empty($params['is_active'])) {
+                $query->where('is_active', $params['is_active']);
             }
 
             // Filtro por tipo de documento
@@ -176,7 +176,7 @@ class AdminUsuariosController extends Controller
     {
         try {
             // Validar UUID
-            if (!Str::isUuid($userId)) {
+            if (!$userId) {
                 return ErrorResource::errorResponse('ID de usuario inválido')
                     ->response()
                     ->setStatusCode(400);
@@ -346,7 +346,7 @@ class AdminUsuariosController extends Controller
                 'username' => 'sometimes|string|max:255|unique:users,username,' . $userId,
                 'password' => 'sometimes|string|min:8',
                 'roles' => 'sometimes|array',
-                'estado' => 'sometimes|string|in:active,inactive,suspended',
+                'is_active' => 'sometimes|boolean',
                 'telefono' => 'sometimes|string|max:20',
                 'nombre' => 'sometimes|string|max:100',
                 'apellido' => 'sometimes|string|max:100',
@@ -357,7 +357,7 @@ class AdminUsuariosController extends Controller
                 'email.unique' => 'El email ya está registrado',
                 'username.unique' => 'El nombre de usuario ya existe',
                 'password.min' => 'La contraseña debe tener al menos 8 caracteres',
-                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+                'is_active.boolean' => 'El is_active debe ser boolean'
             ]);
 
             if ($validator->fails()) {
@@ -384,7 +384,7 @@ class AdminUsuariosController extends Controller
             $updateData = ['updated_at' => Carbon::now()];
 
             // Campos actualizables
-            $camposUsuario = ['email', 'roles', 'estado'];
+            $camposUsuario = ['email', 'roles', 'is_active'];
             foreach ($camposUsuario as $campo) {
                 if (isset($data[$campo])) {
                     $updateData[$campo] = $data[$campo];
@@ -511,10 +511,10 @@ class AdminUsuariosController extends Controller
 
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
-                'estado' => 'required|string|in:active,inactive,suspended'
+                'is_active' => 'required|string|in:active,inactive,suspended'
             ], [
-                'estado.required' => 'El estado es requerido',
-                'estado.in' => 'El estado debe ser: active, inactive o suspended'
+                'is_active.required' => 'El is_active es requerido',
+                'is_active.in' => 'El is_active debe ser: active, inactive o suspended'
             ]);
 
             if ($validator->fails()) {
@@ -524,7 +524,7 @@ class AdminUsuariosController extends Controller
             }
 
             $data = $validator->validated();
-            $nuevoEstado = $data['estado'];
+            $nuevoEstado = $data['is_active'];
 
             Log::info('Cambiando estado de usuario', [
                 'user_id' => $userId,
@@ -540,7 +540,7 @@ class AdminUsuariosController extends Controller
 
             // Actualizar estado
             $usuario->update([
-                'estado' => $nuevoEstado,
+                'is_active' => $nuevoEstado,
                 'updated_at' => Carbon::now()
             ]);
 
@@ -802,9 +802,9 @@ class AdminUsuariosController extends Controller
      */
     private function obtenerConteoEstados(): array
     {
-        return User::selectRaw('estado, COUNT(*) as count')
-            ->groupBy('estado')
-            ->pluck('count', 'estado')
+        return User::selectRaw('is_active, COUNT(*) as count')
+            ->groupBy('is_active')
+            ->pluck('count', 'is_active')
             ->toArray();
     }
 

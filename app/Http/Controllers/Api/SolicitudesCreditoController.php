@@ -713,4 +713,83 @@ class SolicitudesCreditoController extends Controller
             ])->response();
         }
     }
+
+    public function contarSolicitudesPorEstado(Request $request)
+    {
+        try {
+
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            $userRoles = $userData['roles'] ?? [];
+            $isAdmin = in_array('administrator', $userRoles);
+
+            Log::info('Contando solicitudes por estado', [
+                'is_admin' => $isAdmin
+            ]);
+
+            $resultados = $this->solicitudService->contarSolicitudesPorEstado($isAdmin ? null : $username);
+
+            return ApiResource::success([
+                'solicitudes' => $resultados,
+                'total' => array_sum(array_column($resultados, 'count'))
+            ], 'Conteo completado')->response();
+        } catch (\Exception $e) {
+            Log::error('Error al contar solicitudes por estado', [
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al contar solicitudes por estado', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
+
+    public function listarSolicitudesCreditoPaginado($limit, $offset, $estado)
+    {
+        try {
+            $userData = $this->getAuthenticatedUser(request());
+            $username = $userData['username'];
+
+            $userRoles = $userData['roles'] ?? [];
+            $isAdmin = in_array('administrator', $userRoles);
+
+            Log::info('Listando solicitudes paginadas', [
+                'limit' => $limit,
+                'offset' => $offset,
+                'estado' => $estado,
+                'is_admin' => $isAdmin
+            ]);
+
+            $resultados = $this->solicitudService->listarSolicitudesCreditoPaginado($limit, $offset, $estado, $isAdmin ? null : $username);
+
+            return ApiResource::success([
+                'solicitudes' => $resultados,
+                'total' => count($resultados),
+                'limit' => $limit,
+                'offset' => $offset,
+                'estado' => $estado
+            ], 'Listado completado')->response();
+        } catch (\Exception $e) {
+            Log::error('Error al listar solicitudes paginadas', [
+                'error' => $e->getMessage(),
+                'data' => [
+                    'limit' => $limit,
+                    'offset' => $offset,
+                    'estado' => $estado
+                ],
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al listar solicitudes paginadas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
 }

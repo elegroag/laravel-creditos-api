@@ -20,3 +20,5 @@ Route::middleware('auth.jwt')->group(function () {
         Route::put('empresas-convenios/{id}/estado', [AdminConveniosController::class, 'toggleEstado']);
     });
 });
+
+# http://localhost:5001/api/admin/empresas-convenios?page=1&limit=20
