@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\EmpresaConvenio;
 use App\Services\ConvenioService;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +26,7 @@ class AdminConveniosController extends Controller
 
     /**
      * Obtener lista de empresas con convenios con paginación y filtros
-     * 
+     *
      * Query params:
      * - page: número de página (default: 1)
      * - limit: límite de resultados por página (default: 20)
@@ -45,11 +47,9 @@ class AdminConveniosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $page = (int) $request->get('page', 1);
@@ -81,10 +81,10 @@ class AdminConveniosController extends Controller
             if ($busqueda) {
                 $query->where(function ($q) use ($busqueda) {
                     $q->where('razon_social', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('nit', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('representante_nombre', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('representante_documento', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('correo', 'LIKE', "%{$busqueda}%");
+                        ->orWhere('nit', 'LIKE', "%{$busqueda}%")
+                        ->orWhere('representante_nombre', 'LIKE', "%{$busqueda}%")
+                        ->orWhere('representante_documento', 'LIKE', "%{$busqueda}%")
+                        ->orWhere('correo', 'LIKE', "%{$busqueda}%");
                 });
             }
 
@@ -137,30 +137,22 @@ class AdminConveniosController extends Controller
                 'conteo_estados' => $conteoEstados
             ];
 
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-                'message' => 'Empresas con convenios obtenidas exitosamente'
-            ]);
-
+            return ApiResource::success($data, 'Empresas con convenios obtenidas exitosamente')->response();
         } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Parámetros inválidos',
-                'details' => $e->errors()
-            ], 400);
-
+            return ErrorResource::validationError($e->errors(), 'Parámetros inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error al obtener empresas con convenios', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener empresas con convenios',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener empresas con convenios', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -171,13 +163,9 @@ class AdminConveniosController extends Controller
     {
         try {
             $empresa = EmpresaConvenio::find($id);
-            
+
             if (!$empresa) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Empresa con convenio no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Empresa con convenio no encontrada')->response();
             }
 
             $empresaFormateada = [
@@ -195,23 +183,18 @@ class AdminConveniosController extends Controller
                 'updated_at' => $empresa->updated_at,
             ];
 
-            return response()->json([
-                'success' => true,
-                'data' => $empresaFormateada,
-                'message' => 'Empresa con convenio obtenida exitosamente'
-            ]);
-
+            return ApiResource::success($empresaFormateada, 'Empresa con convenio obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener empresa con convenio', [
                 'id' => $id,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener empresa con convenio',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener empresa con convenio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -239,22 +222,18 @@ class AdminConveniosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
 
             // Verificar si la empresa ya existe por NIT
             if (EmpresaConvenio::where('nit', $data['nit'])->exists()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El NIT de la empresa ya está registrado',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El NIT de la empresa ya está registrado')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Crear empresa
@@ -276,30 +255,23 @@ class AdminConveniosController extends Controller
                 'razon_social' => $empresa->razon_social
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => ['id' => $empresa->id],
-                'message' => 'Empresa con convenio creada exitosamente'
-            ], 201);
-
+            return ApiResource::success(['id' => $empresa->id], 'Empresa con convenio creada exitosamente')->response()
+                ->setStatusCode(201);
         } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 400);
-
+            return ErrorResource::validationError($e->errors(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error al crear empresa con convenio', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al crear empresa con convenio',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al crear empresa con convenio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -310,13 +282,9 @@ class AdminConveniosController extends Controller
     {
         try {
             $empresa = EmpresaConvenio::find($id);
-            
+
             if (!$empresa) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Empresa con convenio no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Empresa con convenio no encontrada')->response();
             }
 
             $validator = Validator::make($request->all(), [
@@ -331,11 +299,9 @@ class AdminConveniosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -343,11 +309,9 @@ class AdminConveniosController extends Controller
             // Si se actualiza el NIT, verificar que no exista
             if (isset($data['nit']) && $data['nit'] !== $empresa->nit) {
                 if (EmpresaConvenio::where('nit', $data['nit'])->where('id', '!=', $id)->exists()) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'El NIT de la empresa ya está registrado',
-                        'details' => []
-                    ], 400);
+                    return ErrorResource::errorResponse('El NIT de la empresa ya está registrado')
+                        ->response()
+                        ->setStatusCode(400);
                 }
             }
 
@@ -360,18 +324,11 @@ class AdminConveniosController extends Controller
                 'updated_fields' => array_keys($data)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Empresa con convenio actualizada exitosamente'
-            ]);
-
+            return ApiResource::success(null, 'Empresa con convenio actualizada exitosamente')->response();
         } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 400);
-
+            return ErrorResource::validationError($e->errors(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error al actualizar empresa con convenio', [
                 'id' => $id,
@@ -379,11 +336,11 @@ class AdminConveniosController extends Controller
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al actualizar empresa con convenio',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al actualizar empresa con convenio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -394,13 +351,9 @@ class AdminConveniosController extends Controller
     {
         try {
             $empresa = EmpresaConvenio::find($id);
-            
+
             if (!$empresa) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Empresa con convenio no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Empresa con convenio no encontrada')->response();
             }
 
             $empresa->delete();
@@ -411,22 +364,18 @@ class AdminConveniosController extends Controller
                 'razon_social' => $empresa->razon_social
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Empresa con convenio eliminada exitosamente'
-            ]);
-
+            return ApiResource::success(null, 'Empresa con convenio eliminada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al eliminar empresa con convenio', [
                 'id' => $id,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar empresa con convenio',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar empresa con convenio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -437,13 +386,9 @@ class AdminConveniosController extends Controller
     {
         try {
             $empresa = EmpresaConvenio::find($id);
-            
+
             if (!$empresa) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Empresa con convenio no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Empresa con convenio no encontrada')->response();
             }
 
             $validator = Validator::make($request->all(), [
@@ -454,11 +399,9 @@ class AdminConveniosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -472,18 +415,16 @@ class AdminConveniosController extends Controller
                 'nuevo_estado' => $nuevoEstado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => "Estado de la empresa con convenio cambiado a {$nuevoEstado} exitosamente"
-            ]);
-
+            return ApiResource::success([
+                'id' => $empresa->id,
+                'nit' => $empresa->nit,
+                'razon_social' => $empresa->razon_social,
+                'nuevo_estado' => $nuevoEstado
+            ], "Estado de la empresa con convenio cambiado a {$nuevoEstado} exitosamente")->response();
         } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 400);
-
+            return ErrorResource::validationError($e->errors(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error al cambiar estado de empresa con convenio', [
                 'id' => $id,
@@ -491,11 +432,11 @@ class AdminConveniosController extends Controller
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al cambiar estado de la empresa con convenio',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al cambiar estado de la empresa con convenio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -506,12 +447,21 @@ class AdminConveniosController extends Controller
     {
         try {
             $empresas = EmpresaConvenio::orderBy('created_at', 'desc')->get();
-            
+
             $csvData = [];
             $csvData[] = [
-                'ID', 'NIT', 'Razón Social', 'Fecha Convenio', 'Fecha Vencimiento',
-                'Estado', 'Representante Documento', 'Representante Nombre',
-                'Teléfono', 'Correo', 'Fecha Creación', 'Fecha Actualización'
+                'ID',
+                'NIT',
+                'Razón Social',
+                'Fecha Convenio',
+                'Fecha Vencimiento',
+                'Estado',
+                'Representante Documento',
+                'Representante Nombre',
+                'Teléfono',
+                'Correo',
+                'Fecha Creación',
+                'Fecha Actualización'
             ];
 
             foreach ($empresas as $empresa) {
@@ -535,25 +485,20 @@ class AdminConveniosController extends Controller
                 'count' => $empresas->count()
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'csv_data' => $csvData,
-                    'filename' => 'empresas_convenios_export.csv'
-                ],
-                'message' => 'Datos exportados exitosamente'
-            ]);
-
+            return ApiResource::success([
+                'csv_data' => $csvData,
+                'filename' => 'empresas_convenios_export.csv'
+            ], 'Datos exportados exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al exportar empresas con convenios', [
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al exportar empresas con convenios',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al exportar empresas con convenios', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -566,33 +511,27 @@ class AdminConveniosController extends Controller
         try {
             // Validar que se envíe un archivo
             if (!$request->hasFile('file')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se proporcionó ningún archivo',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se proporcionó ningún archivo')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             $file = $request->file('file');
-            
+
             if (!$file->isValid()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Archivo inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Archivo inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar extensión del archivo
             $allowedExtensions = ['xlsx', 'xls', 'csv'];
             $extension = strtolower($file->getClientOriginalExtension());
-            
+
             if (!in_array($extension, $allowedExtensions)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El archivo debe ser de formato Excel (.xlsx, .xls) o CSV',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El archivo debe ser de formato Excel (.xlsx, .xls) o CSV')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             Log::info('Iniciando importación de empresas desde Excel', [
@@ -602,31 +541,26 @@ class AdminConveniosController extends Controller
 
             // Por ahora, retornamos una respuesta indicando que la funcionalidad está en desarrollo
             // ya que la importación de Excel requiere librerías adicionales
-            
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'total_filas' => 0,
-                    'procesadas' => 0,
-                    'creadas' => 0,
-                    'actualizadas' => 0,
-                    'errores' => [],
-                    'message' => 'Funcionalidad de importación en desarrollo. Por favor, use la API REST para crear/actualizar empresas.'
-                ],
-                'message' => 'Importación completada: 0 filas procesadas, 0 creadas, 0 actualizadas, 0 errores'
-            ]);
 
+            return ApiResource::success([
+                'total_filas' => 0,
+                'procesadas' => 0,
+                'creadas' => 0,
+                'actualizadas' => 0,
+                'errores' => [],
+                'message' => 'Funcionalidad de importación en desarrollo. Por favor, use la API REST para crear/actualizar empresas.'
+            ], 'Importación completada: 0 filas procesadas, 0 creadas, 0 actualizadas, 0 errores')->response();
         } catch (\Exception $e) {
             Log::error('Error al importar empresas desde Excel', [
                 'error' => $e->getMessage(),
                 'file' => $request->file('file')?->getClientOriginalName()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al importar empresas desde Excel',
-                'details' => []
-            ], 500);
+            return ErrorResource::serverError('Error interno al importar empresas desde Excel', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

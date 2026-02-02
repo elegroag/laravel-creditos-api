@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudXmlService;
 use App\Services\NumeroSolicitudService;
@@ -27,6 +29,15 @@ class SolicitudXmlController extends Controller
     }
 
     /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
      * Generar XML de solicitud de crédito
      * @deprecated - Usar el endpoint en FirmasController
      */
@@ -43,11 +54,9 @@ class SolicitudXmlController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -65,13 +74,9 @@ class SolicitudXmlController extends Controller
                     'data' => $data
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No fue posible generar el XML',
-                    'details' => [
-                        'internal_error' => $e->getMessage()
-                    ]
-                ], 500);
+                return ErrorResource::errorResponse('No fue posible generar el XML', [
+                    'internal_error' => $e->getMessage()
+                ])->response()->setStatusCode(500);
             }
 
             $savedFilename = null;
@@ -87,7 +92,7 @@ class SolicitudXmlController extends Controller
                     $savedFilename = $this->guardarXmlEnSistemaArchivos($xmlBytes, $numeroSolicitud);
 
                     // Guardar en base de datos
-                    $savedSolicitudId = $this->guardarSolicitudEnBaseDatos($data, $numeroSolicitud, $savedFilename);
+                    $savedSolicitudId = $this->guardarSolicitudEnBaseDatos($data, $numeroSolicitud, $savedFilename, $request);
 
                     Log::info('XML guardado exitosamente', [
                         'filename' => $savedFilename,
@@ -99,13 +104,11 @@ class SolicitudXmlController extends Controller
                         'trace' => $e->getTraceAsString()
                     ]);
 
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'No fue posible guardar el XML',
-                        'details' => [
-                            'internal_error' => $e->getMessage()
-                        ]
-                    ], 500);
+                    return ErrorResource::serverError('No fue posible guardar el XML', [
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => $e->getMessage()
+                    ])->response();
                 }
             }
 
@@ -135,13 +138,11 @@ class SolicitudXmlController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al generar XML',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al generar XML', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -163,11 +164,9 @@ class SolicitudXmlController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -181,11 +180,9 @@ class SolicitudXmlController extends Controller
 
             // Validar que el filename termine en .xml
             if (!Str::endsWith($filename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El archivo debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El archivo debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Construir ruta segura
@@ -194,20 +191,14 @@ class SolicitudXmlController extends Controller
 
             // Validar que la ruta sea segura
             if (!Str::startsWith(realpath($xmlPath), realpath($xmlDir))) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Ruta de archivo no permitida',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Ruta de archivo no permitida')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Verificar que el archivo exista
             if (!file_exists($xmlPath)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "No existe el archivo: {$filename}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("No existe el archivo: {$filename}")->response();
             }
 
             try {
@@ -218,34 +209,27 @@ class SolicitudXmlController extends Controller
                     'filename' => $filename
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'data' => $data
-                ]);
+                return ApiResource::success($data, 'Datos extraídos exitosamente del XML')->response();
             } catch (\ValueError $e) {
                 Log::error('XML inválido', [
                     'filename' => $filename,
                     'error' => $e->getMessage()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => "XML inválido: {$e->getMessage()}",
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse("XML inválido: {$e->getMessage()}")
+                    ->response()
+                    ->setStatusCode(400);
             } catch (\Exception $e) {
                 Log::error('Error al extraer datos del XML', [
                     'filename' => $filename,
                     'error' => $e->getMessage()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No fue posible extraer el XML',
-                    'details' => [
-                        'internal_error' => $e->getMessage()
-                    ]
-                ], 500);
+                return ErrorResource::serverError('No fue posible extraer el XML', [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getMessage()
+                ])->response();
             }
         } catch (\Exception $e) {
             Log::error('Error interno al extraer datos XML', [
@@ -254,13 +238,11 @@ class SolicitudXmlController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al extraer XML',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al extraer XML', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -331,15 +313,15 @@ class SolicitudXmlController extends Controller
     /**
      * Guardar solicitud en base de datos
      */
-    private function guardarSolicitudEnBaseDatos(array $data, string $numeroSolicitud, string $savedFilename): string
+    private function guardarSolicitudEnBaseDatos(array $data, string $numeroSolicitud, string $savedFilename, Request $request): string
     {
-        $user = Auth::user();
+        // Obtener datos del usuario desde el middleware JWT
+        $userData = $this->getAuthenticatedUser($request);
+        $username = $userData['username'];
 
-        if (!$user) {
+        if (!$username) {
             throw new \ValueError('Token inválido');
         }
-
-        $username = $user->username;
         $now = Carbon::now();
 
         // Preparar datos del solicitante
@@ -459,11 +441,9 @@ class SolicitudXmlController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -483,35 +463,25 @@ class SolicitudXmlController extends Controller
                         'data_extracted' => !empty($extractedData)
                     ]);
 
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'XML válido',
-                        'data' => [
-                            'valid' => true,
-                            'extracted_data' => $extractedData
-                        ]
-                    ]);
+                    return ApiResource::success([
+                        'valid' => true,
+                        'data_extracted' => !empty($extractedData)
+                    ], 'XML válido')->response();
                 } else {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'XML inválido',
-                        'data' => [
-                            'valid' => false
-                        ]
-                    ]);
+                    return ErrorResource::errorResponse('XML inválido', [
+                        'valid' => false
+                    ])->response()->setStatusCode(400);
                 }
             } catch (\Exception $e) {
                 Log::error('Error en validación XML', [
                     'error' => $e->getMessage()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al validar XML',
-                    'details' => [
-                        'internal_error' => $e->getMessage()
-                    ]
-                ], 500);
+                return ErrorResource::serverError('Error al validar XML', [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getMessage()
+                ])->response();
             }
         } catch (\Exception $e) {
             Log::error('Error interno al validar XML', [
@@ -520,13 +490,11 @@ class SolicitudXmlController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al validar XML',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al validar XML', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -541,15 +509,11 @@ class SolicitudXmlController extends Controller
             $xmlDir = storage_path('app/xml');
 
             if (!is_dir($xmlDir)) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'files' => [],
-                        'total' => 0,
-                        'directory' => $xmlDir
-                    ],
-                    'message' => 'Directorio de XML no existe'
-                ]);
+                return ApiResource::success([
+                    'files' => [],
+                    'total' => 0,
+                    'directory' => $xmlDir
+                ], 'Directorio de XML no existe')->response();
             }
 
             $files = [];
@@ -581,28 +545,24 @@ class SolicitudXmlController extends Controller
                 'total' => count($files)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'files' => $files,
-                    'total' => count($files),
-                    'directory' => $xmlDir
-                ],
-                'message' => 'Archivos XML obtenidos exitosamente'
-            ]);
+            $data = [
+                'files' => $files,
+                'total' => count($files),
+                'directory' => $xmlDir
+            ];
+
+            return ApiResource::success($data, 'Archivos XML listados exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar archivos XML', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar archivos XML',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar archivos XML', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -619,11 +579,9 @@ class SolicitudXmlController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -633,11 +591,9 @@ class SolicitudXmlController extends Controller
 
             // Validar que el filename termine en .xml
             if (!Str::endsWith($filename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El archivo debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El archivo debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Construir ruta segura
@@ -646,20 +602,14 @@ class SolicitudXmlController extends Controller
 
             // Validar que la ruta sea segura
             if (!Str::startsWith(realpath(dirname($xmlPath)), realpath($xmlDir))) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Ruta de archivo no permitida',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Ruta de archivo no permitida')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Verificar que el archivo exista
             if (!file_exists($xmlPath)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "No existe el archivo: {$filename}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("No existe el archivo: {$filename}")->response();
             }
 
             // Eliminar archivo
@@ -669,10 +619,7 @@ class SolicitudXmlController extends Controller
 
             Log::info('Archivo XML eliminado exitosamente', ['filename' => $filename]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Archivo eliminado exitosamente'
-            ]);
+            return ApiResource::success(null, 'Archivo eliminado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al eliminar archivo XML', [
                 'filename' => $request->get('filename'),
@@ -680,13 +627,11 @@ class SolicitudXmlController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar archivo',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar archivo', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

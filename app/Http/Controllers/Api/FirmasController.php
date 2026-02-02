@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\Postulacion;
 use App\Services\FirmaShareTokenService;
 use App\Services\FirmaXmlService;
@@ -41,11 +43,9 @@ class FirmasController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -54,40 +54,28 @@ class FirmasController extends Controller
 
             // Validar que termine en .xml
             if (!Str::endsWith($solicitudFilename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El campo solicitud_filename debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El campo solicitud_filename debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             if ($firmasFilename && !Str::endsWith($firmasFilename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El campo firmas_filename debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El campo firmas_filename debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar que existan los archivos
             $solicitudPath = $this->validarArchivoXML($solicitudFilename);
             if (!$solicitudPath) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No existe el XML de solicitud: ' . $solicitudFilename,
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('No existe el XML de solicitud: ' . $solicitudFilename)->response();
             }
 
             $firmasPath = null;
             if ($firmasFilename) {
                 $firmasPath = $this->validarArchivoXML($firmasFilename);
                 if (!$firmasPath) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'No existe el XML de firmas: ' . $firmasFilename,
-                        'details' => []
-                    ], 404);
+                    return ErrorResource::notFound('No existe el XML de firmas: ' . $firmasFilename)->response();
                 }
             }
 
@@ -104,28 +92,23 @@ class FirmasController extends Controller
                 'firmas_filename' => $firmasFilename
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token de firma creado exitosamente',
-                'data' => [
-                    'token' => $tokenObj->token,
-                    'solicitud_filename' => $tokenObj->solicitud_filename,
-                    'firmas_filename' => $tokenObj->firmas_filename,
-                    'expires_at' => $tokenObj->expires_at,
-                    'url_path' => '/firmas-share/' . $tokenObj->token
-                ]
-            ]);
+            return ApiResource::success([
+                'token' => $tokenObj->token,
+                'expires_at' => $tokenObj->expires_at->toISOString(),
+                'solicitud_filename' => $solicitudFilename,
+                'firmas_filename' => $firmasFilename
+            ], 'Token de firma creado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al crear token de firma', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al crear el token',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al crear el token', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -138,35 +121,27 @@ class FirmasController extends Controller
             $tokenObj = $this->tokenService->obtenerToken($token);
 
             if (!$tokenObj) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Token no encontrado o expirado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Token no encontrado o expirado')->response();
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token de firma obtenido exitosamente',
-                'data' => [
-                    'token' => $tokenObj->token,
-                    'solicitud_filename' => $tokenObj->solicitud_filename,
-                    'firmas_filename' => $tokenObj->firmas_filename,
-                    'expires_at' => $tokenObj->expires_at,
-                    'url_path' => '/firmas-share/' . $tokenObj->token
-                ]
-            ]);
+            return ApiResource::success([
+                'token' => $tokenObj->token,
+                'solicitud_filename' => $tokenObj->solicitud_filename,
+                'firmas_filename' => $tokenObj->firmas_filename,
+                'expires_at' => $tokenObj->expires_at,
+                'created_at' => $tokenObj->created_at
+            ], 'Token de firma obtenido exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener token de firma', [
                 'token' => $token,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al obtener el token',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al obtener el token', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -190,11 +165,9 @@ class FirmasController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -204,32 +177,22 @@ class FirmasController extends Controller
 
             // Para links compartidos, save_xml debe ser true
             if (!$saveXml) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Para link compartido, save_xml debe ser true',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Para link compartido, save_xml debe ser true')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar token
             $tokenObj = $this->tokenService->obtenerToken($token);
 
             if (!$tokenObj) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Token no encontrado o expirado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Token no encontrado o expirado')->response();
             }
 
             // Validar archivos
             $solicitudPath = $this->validarArchivoXML($tokenObj->solicitud_filename);
             if (!$solicitudPath) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No existe el XML de solicitud: ' . $tokenObj->solicitud_filename,
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('No existe el XML de solicitud: ' . $tokenObj->solicitud_filename)->response();
             }
 
             $firmasXmlBytes = null;
@@ -287,11 +250,11 @@ class FirmasController extends Controller
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al firmar el documento',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al firmar el documento', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -319,11 +282,9 @@ class FirmasController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -335,29 +296,21 @@ class FirmasController extends Controller
 
             // Validar que termine en .xml
             if (!Str::endsWith($solicitudFilename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El campo solicitud_filename debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El campo solicitud_filename debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             if ($firmasFilename && !Str::endsWith($firmasFilename, '.xml')) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El campo firmas_filename debe terminar en .xml',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('El campo firmas_filename debe terminar en .xml')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar que existan los archivos
             $solicitudPath = $this->validarArchivoXML($solicitudFilename);
             if (!$solicitudPath) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No existe el XML de solicitud: ' . $solicitudFilename,
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('No existe el XML de solicitud: ' . $solicitudFilename)->response();
             }
 
             $firmasXmlBytes = null;
@@ -399,28 +352,21 @@ class FirmasController extends Controller
             ]);
 
             if ($savedFilename) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Documento firmado exitosamente',
-                    'data' => ['saved_filename' => $savedFilename]
-                ]);
+                return ApiResource::success(['saved_filename' => $savedFilename], 'Documento firmado exitosamente')->response();
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Documento procesado exitosamente'
-            ]);
+            return ApiResource::success(null, 'Documento procesado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al firmar documento', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al firmar el documento',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al firmar el documento', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 

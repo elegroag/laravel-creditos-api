@@ -5,11 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
-use App\Services\AuthenticationService;
 use App\Services\UserService;
 use App\Services\TrabajadorService;
+use App\Services\AuthenticationService;
 use App\Services\SenderEmail;
+use App\Http\Resources\Auth\LoginResource;
+use App\Http\Resources\Auth\RegisterResource;
+use App\Http\Resources\Auth\VerifyResource;
+use App\Http\Resources\ErrorResource;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -51,9 +56,7 @@ class AuthController extends Controller
             $normalizedUsername = $this->authService->normalizeUsername($username);
 
             if (!$normalizedUsername || !$password) {
-                return response()->json([
-                    'error' => 'Credenciales inválidas'
-                ], 401);
+                throw new Exception('Credenciales inválidas', 401);
             }
 
             // Rate limiting by user
@@ -65,34 +68,18 @@ class AuthController extends Controller
             // Get additional trabajador data if user has documento
             $trabajadorData = null;
             if (isset($authResult['user']['numero_documento']) && $authResult['user']['numero_documento']) {
-                try {
-                    $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($authResult['user']['numero_documento']);
-                } catch (\Exception $e) {
-                    Log::warning("No se pudieron obtener datos del trabajador: " . $e->getMessage());
-                }
+                $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($authResult['user']['numero_documento']);
             }
 
-            // Add trabajador data if available
-            if ($trabajadorData) {
-                $authResult['user']['trabajador'] = $trabajadorData;
-            }
+            $authResult['user']['trabajador'] = $trabajadorData;
 
-            $authResult["message"] = "Login exitoso";
-            $authResult["success"] = true;
-            $authResult["timestamp"] = now();
-
-            return response()->json($authResult);
+            return LoginResource::loginResponse($authResult)->response();
         } catch (\Exception $e) {
-            Log::error('Error en login: ' . $e->getMessage(), [
-                'exception' => $e,
+            return ErrorResource::authError($e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'error' => 'Error de autenticación',
-                'success' => false,
-                'timestamp' => now(),
-                'message' => $e->getMessage()
-            ], 401);
+            ])->response()->setStatusCode(401);
         }
     }
 
@@ -107,8 +94,6 @@ class AuthController extends Controller
             // Rate limiting
             $this->authService->checkRateLimit('auth.register', 10, 60);
 
-            // Extract data
-            Log::info('Validated data: ' . json_encode($validated));
             $tipoDocumento = $validated['tipo_documento'];
             $numeroDocumento = $validated['numero_documento'];
             $nombres = $validated['nombres'];
@@ -120,9 +105,7 @@ class AuthController extends Controller
             $confirmar_password = $validated['confirmar_password'];
 
             if (!$this->authService->isValidUsername($username)) {
-                return response()->json([
-                    'error' => 'Usuario inválido'
-                ], 400);
+                throw new Exception("Usuario inválido", 401);
             }
 
             // Check if username already exists
@@ -200,63 +183,83 @@ class AuthController extends Controller
                 Log::error('Error al enviar el correo: ' . $e->getMessage());
             }
 
-            return response()->json([
+            return RegisterResource::registerResponse([
                 'access_token' => $authResult['access_token'],
                 'token_type' => $authResult['token_type'],
                 'expires_in' => $authResult['expires_in'],
                 'user' => $userResponse,
-                'success' => true,
-                'message' => "Proceso de registro completado"
-            ], 201);
+                'pin' => $pin,
+                'verification_required' => true
+            ])->response()->setStatusCode(201);
         } catch (\Exception $e) {
             Log::error('Error en registro: ' . $e->getMessage());
 
-            return response()->json([
-                'error' => 'Error al registrar usuario',
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
+            return ErrorResource::errorResponse('Error al registrar usuario', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ])->response()->setStatusCode(400);
         }
     }
 
     /**
      * Verify JWT token and return user info.
+     * Comportamiento idéntico al endpoint de Python.
      */
     public function verify(Request $request): JsonResponse
     {
         try {
-            // Rate limiting for token verification
-            $this->authService->checkRateLimit('auth.verify', 100, 60);
+            // Rate limiting para verificar tokens (100 por minuto por IP)
+            $this->authService->checkRateLimit('auth:verify:ip:' . $request->ip(), 100, 60);
 
-            // The middleware should already verify the token
-            $user = Auth::user();
+            // Extraer token del header Authorization
+            $token = $request->bearerToken();
 
-            if (!$user) {
+            if (!$token) {
                 return response()->json([
                     'error' => 'Token inválido'
                 ], 401);
             }
 
-            return response()->json([
+            // Verificar token usando el servicio de autenticación
+            $userData = $this->authService->verifyToken($token);
+
+            if (!$userData) {
+                return response()->json([
+                    'error' => 'Token inválido'
+                ], 401);
+            }
+
+            // Obtener usuario desde los datos del token
+            $user = $this->userService->getById($userData['user_id']);
+
+            if (!$user || $user->disabled || !$user->is_active) {
+                return ErrorResource::authError('Token inválido')->response()->setStatusCode(401);
+            }
+
+            $verifyData = [
                 'valid' => true,
                 'user' => [
                     'username' => $user->username,
+                    'roles' => $user->roles ?? [],
+                    'permissions' => $this->authService->getUserPermissions($user->roles ?? []),
+                    'id' => $user->id,
                     'email' => $user->email,
-                    'full_name' => $user->full_name,
-                    'roles' => $user->roles,
-                    'permissions' => $user->permissions ?? [],
                     'tipo_documento' => $user->tipo_documento,
-                    'numero_documento' => $user->numero_documento,
-                    'is_active' => $user->is_active,
-                    'disabled' => $user->disabled
-                ]
-            ]);
+                    'numero_documento' => $user->numero_documento
+                ],
+                'expires_at' => $userData['expires_at'] ?? null
+            ];
+
+            return VerifyResource::verifyResponse($verifyData)->response();
         } catch (\Exception $e) {
             Log::error('Error verificando token: ' . $e->getMessage());
 
-            return response()->json([
-                'error' => 'Token inválido'
-            ], 401);
+            return ErrorResource::authError('Token inválido', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ])->response()->setStatusCode(401);
         }
     }
 

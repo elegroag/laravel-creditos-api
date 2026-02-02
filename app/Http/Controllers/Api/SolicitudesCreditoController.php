@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\UserService;
@@ -26,22 +28,23 @@ class SolicitudesCreditoController extends Controller
     }
 
     /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
      * Crea una nueva solicitud de crédito con validación.
      */
     public function crearSolicitudCredito(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
@@ -74,11 +77,9 @@ class SolicitudesCreditoController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $solicitudData = $validator->validated();
@@ -97,11 +98,7 @@ class SolicitudesCreditoController extends Controller
                 'username' => $username
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Solicitud creada exitosamente',
-                'data' => $solicitud
-            ], 201);
+            return ApiResource::success($solicitud, 'Solicitud creada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al crear solicitud de crédito', [
                 'error' => $e->getMessage(),
@@ -109,13 +106,11 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al crear solicitud',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al crear solicitud', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -125,18 +120,10 @@ class SolicitudesCreditoController extends Controller
     public function listarSolicitudesCredito(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             // Validar parámetros de consulta
@@ -171,11 +158,9 @@ class SolicitudesCreditoController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $queryParams = $validator->validated();
@@ -262,18 +247,14 @@ class SolicitudesCreditoController extends Controller
                 );
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'items' => $solicitudes,
-                    'pagination' => [
-                        'skip' => $skip,
-                        'limit' => $limit,
-                        'count' => count($solicitudes)
-                    ]
-                ],
-                'message' => 'Solicitudes obtenidas exitosamente'
-            ]);
+            return ApiResource::success([
+                'items' => $solicitudes,
+                'pagination' => [
+                    'skip' => $skip,
+                    'limit' => $limit,
+                    'count' => count($solicitudes)
+                ]
+            ], 'Solicitudes obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar solicitudes de crédito', [
                 'error' => $e->getMessage(),
@@ -281,34 +262,24 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar solicitudes',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar solicitudes', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Lista todas las solicitudes de crédito sin paginación ni límites por usuario.
      */
-    public function listarSolicitudesCreditoForUser(): JsonResponse
+    public function listarSolicitudesCreditoForUser(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             Log::info('Listando todas las solicitudes de crédito', [
@@ -324,45 +295,31 @@ class SolicitudesCreditoController extends Controller
                 $solicitudes = $this->solicitudService->getByOwner($username, 0, 10000, null);
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => $solicitudes,
-                'message' => 'Todas las solicitudes obtenidas exitosamente'
-            ]);
+            return ApiResource::success($solicitudes, 'Todas las solicitudes obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar todas las solicitudes de crédito', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar solicitudes',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar solicitudes', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Obtiene una solicitud específica con validación.
      */
-    public function obtenerSolicitudCredito(string $solicitudId): JsonResponse
+    public function obtenerSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
             $isAdviser = in_array('adviser', $userRoles);
 
@@ -377,27 +334,15 @@ class SolicitudesCreditoController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos: admin, adviser o propietario
             if (!$isAdmin && !$isAdviser && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para ver esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Solicitud obtenida exitosamente',
-                'data' => $solicitud
-            ]);
+            return ApiResource::success($solicitud, 'Solicitud obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener solicitud de crédito', [
                 'solicitud_id' => $solicitudId,
@@ -405,13 +350,11 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener solicitud',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener solicitud', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -421,18 +364,10 @@ class SolicitudesCreditoController extends Controller
     public function actualizarSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             // Validar datos de entrada
@@ -457,11 +392,9 @@ class SolicitudesCreditoController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $updateData = $validator->validated();
@@ -477,20 +410,12 @@ class SolicitudesCreditoController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos: admin o propietario
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para modificar esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para modificar esta solicitud')->response();
             }
 
             // Actualizar solicitud
@@ -500,11 +425,7 @@ class SolicitudesCreditoController extends Controller
                 'solicitud_id' => $solicitudId
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Solicitud actualizada exitosamente',
-                'data' => $solicitudActualizada
-            ]);
+            return ApiResource::success($solicitudActualizada, 'Solicitud actualizada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al actualizar solicitud de crédito', [
                 'solicitud_id' => $solicitudId,
@@ -513,34 +434,24 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al actualizar solicitud',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al actualizar solicitud', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Elimina (desiste) una solicitud con validación.
      */
-    public function eliminarSolicitudCredito(string $solicitudId): JsonResponse
+    public function eliminarSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             Log::info('Eliminando solicitud de crédito', [
@@ -553,20 +464,12 @@ class SolicitudesCreditoController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos: admin o propietario
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para eliminar esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para eliminar esta solicitud')->response();
             }
 
             // Eliminar solicitud (cambia estado a 'Desiste')
@@ -577,16 +480,9 @@ class SolicitudesCreditoController extends Controller
                     'solicitud_id' => $solicitudId
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Solicitud eliminada exitosamente'
-                ]);
+                return ApiResource::success(null, 'Solicitud eliminada exitosamente')->response();
             } else {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se pudo eliminar la solicitud',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se pudo eliminar la solicitud')->response()->setStatusCode(400);
             }
         } catch (\Exception $e) {
             Log::error('Error al eliminar solicitud de crédito', [
@@ -595,34 +491,24 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar solicitud',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar solicitud', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Finaliza el proceso de una solicitud, cambiando el estado a 'ENVIADO_PENDIENTE_APROBACION'.
      */
-    public function finalizarProcesoSolicitud(string $solicitudId): JsonResponse
+    public function finalizarProcesoSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             Log::info('Finalizando proceso de solicitud', [
@@ -635,20 +521,12 @@ class SolicitudesCreditoController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos: admin o propietario
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para modificar esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para modificar esta solicitud')->response();
             }
 
             // Finalizar proceso - actualizar estado a 'ENVIADO_PENDIENTE_APROBACION'
@@ -693,11 +571,7 @@ class SolicitudesCreditoController extends Controller
             }
 
             if (!$solicitudActualizada) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se pudo finalizar el proceso',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se pudo finalizar el proceso')->response()->setStatusCode(400);
             }
 
             Log::info('Proceso de solicitud finalizado exitosamente', [
@@ -705,11 +579,7 @@ class SolicitudesCreditoController extends Controller
                 'nuevo_estado' => $solicitudActualizada['estado'] ?? 'Unknown'
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Proceso finalizado exitosamente. Solicitud enviada para aprobación.',
-                'data' => $solicitudActualizada
-            ]);
+            return ApiResource::success($solicitudActualizada, 'Proceso finalizado exitosamente. Solicitud enviada para aprobación.')->response();
         } catch (\Exception $e) {
             Log::error('Error al finalizar proceso de solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -717,13 +587,11 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al finalizar proceso',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al finalizar proceso', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -733,49 +601,28 @@ class SolicitudesCreditoController extends Controller
     public function obtenerEstadosSolicitud(): JsonResponse
     {
         try {
-            Log::info('Obteniendo estados de solicitud disponibles');
-
             $estados = $this->solicitudService->getEstadosDisponibles();
 
-            return response()->json([
-                'success' => true,
-                'data' => $estados,
-                'message' => 'Estados de solicitud obtenidos exitosamente'
-            ]);
+            return ApiResource::success($estados, 'Estados de solicitud obtenidos exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estados de solicitud', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estados',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::errorResponse('Error al obtener estados de solicitud', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response()->setStatusCode(400);
         }
     }
 
     /**
      * Obtener estadísticas de solicitudes
      */
-    public function obtenerEstadisticasSolicitudes(): JsonResponse
+    public function obtenerEstadisticasSolicitudes(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             Log::info('Obteniendo estadísticas de solicitudes', [
@@ -785,24 +632,18 @@ class SolicitudesCreditoController extends Controller
 
             $estadisticas = $this->solicitudService->getEstadisticas($isAdmin ? null : $username);
 
-            return response()->json([
-                'success' => true,
-                'data' => $estadisticas,
-                'message' => 'Estadísticas obtenidas exitosamente'
-            ]);
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de solicitudes', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -812,18 +653,10 @@ class SolicitudesCreditoController extends Controller
     public function buscarSolicitudes(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
-            }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
             // Validar parámetros
@@ -841,11 +674,9 @@ class SolicitudesCreditoController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -862,16 +693,12 @@ class SolicitudesCreditoController extends Controller
 
             $resultados = $this->solicitudService->buscar($termino, $limit, $estado, $isAdmin ? null : $username);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'solicitudes' => $resultados,
-                    'total' => count($resultados),
-                    'termino' => $termino,
-                    'estado' => $estado
-                ],
-                'message' => 'Búsqueda completada'
-            ]);
+            return ApiResource::success([
+                'solicitudes' => $resultados,
+                'total' => count($resultados),
+                'termino' => $termino,
+                'estado' => $estado
+            ], 'Búsqueda completada')->response();
         } catch (\Exception $e) {
             Log::error('Error al buscar solicitudes', [
                 'error' => $e->getMessage(),
@@ -879,13 +706,11 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al buscar solicitudes',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al buscar solicitudes', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

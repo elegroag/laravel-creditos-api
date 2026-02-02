@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -35,11 +37,9 @@ class PostulanteController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -72,14 +72,10 @@ class PostulanteController extends Controller
                     'response' => $response->body()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error consultando cónyuges del trabajador',
-                    'details' => [
-                        'external_error' => 'Error en el servicio externo',
-                        'status_code' => $response->status()
-                    ]
-                ], 500);
+                return ErrorResource::errorResponse('Error consultando cónyuges del trabajador', [
+                    'api_status' => $response->status(),
+                    'response' => $response->body()
+                ])->response()->setStatusCode(502);
             }
 
             $responseData = $response->json();
@@ -92,14 +88,10 @@ class PostulanteController extends Controller
                     'detail' => $responseData['detail'] ?? null
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error consultando cónyuges del trabajador',
-                    'details' => [
-                        'external_error' => $responseData['error'] ?? 'Error desconocido',
-                        'external_detail' => $responseData['detail'] ?? null
-                    ]
-                ], 400);
+                return ErrorResource::errorResponse('Error consultando cónyuges del trabajador', [
+                    'api_error' => $responseData['error'] ?? 'Error desconocido',
+                    'api_detail' => $responseData['detail'] ?? null
+                ])->response()->setStatusCode(502);
             }
 
             Log::info('Cónyuges consultados exitosamente', [
@@ -107,34 +99,26 @@ class PostulanteController extends Controller
                 'count' => count($responseData['data'] ?? [])
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Cónyuges consultados exitosamente',
-                'data' => $responseData['data'] ?? []
-            ]);
+            return ApiResource::success($responseData['data'] ?? [], 'Cónyuges consultados exitosamente')->response();
         } catch (ValidationException $e) {
             Log::warning('Error de validación en buscarConyugeTrabajador', [
                 'errors' => $e->errors()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 400);
+            return ErrorResource::validationError($e->errors(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error inesperado en buscarConyugeTrabajador', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al consultar cónyuges',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al consultar cónyuges', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

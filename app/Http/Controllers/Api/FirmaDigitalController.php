@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\Postulacion;
 use App\Services\FirmaPlusService;
 use Illuminate\Http\JsonResponse;
@@ -23,10 +25,10 @@ class FirmaDigitalController extends Controller
 
     /**
      * Inicia el proceso de firmado digital enviando el PDF a FirmaPlus.
-     * 
+     *
      * Args:
      * solicitud_id: ID de la solicitud
-     * 
+     *
      * Returns:
      * 200: Proceso de firmado iniciado exitosamente
      * 404: Solicitud o PDF no encontrado
@@ -37,32 +39,24 @@ class FirmaDigitalController extends Controller
         try {
             // Validar solicitud_id
             if (!Str::isUuid($solicitud_id)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de solicitud inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de solicitud inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Obtener solicitud
             $solicitud = Postulacion::find($solicitud_id);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Solicitud no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Solicitud no encontrada')->response();
             }
 
             // Verificar que tenga PDF generado
             $pdfData = $solicitud->pdf_generado;
             if (!$pdfData || !isset($pdfData['path'])) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La solicitud no tiene un PDF generado. Genere el PDF primero.',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('La solicitud no tiene un PDF generado. Genere el PDF primero.')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             $pdfPath = $pdfData['path'];
@@ -70,11 +64,9 @@ class FirmaDigitalController extends Controller
             // Verificar que existan firmantes
             $firmantes = $solicitud->firmantes ?? [];
             if (empty($firmantes)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La solicitud no tiene firmantes definidos',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('La solicitud no tiene firmantes definidos')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             Log::info('Iniciando proceso de firmado digital', [
@@ -136,19 +128,14 @@ class FirmaDigitalController extends Controller
                 'transaccion_id' => $transaccionId
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'solicitud_id' => $solicitud_id,
-                    'transaccion_id' => $transaccionId,
-                    'estado' => 'PENDIENTE_FIRMADO',
-                    'urls_firma' => $resultado['url_firmantes'] ?? [],
-                    'firmantes' => count($firmantes),
-                    'mensaje' => 'Proceso de firmado iniciado exitosamente'
-                ],
-                'message' => 'Documento enviado para firma digital'
-            ]);
-
+            return ApiResource::success([
+                'solicitud_id' => $solicitud_id,
+                'transaccion_id' => $transaccionId,
+                'estado' => 'PENDIENTE_FIRMADO',
+                'urls_firma' => $resultado['url_firmantes'] ?? [],
+                'firmantes' => count($firmantes),
+                'mensaje' => 'Proceso de firmado iniciado exitosamente'
+            ], 'Documento enviado para firma digital')->response();
         } catch (\Exception $e) {
             Log::error('Error al iniciar proceso de firmado', [
                 'solicitud_id' => $solicitud_id,
@@ -156,20 +143,20 @@ class FirmaDigitalController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al iniciar el proceso de firmado',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al iniciar el proceso de firmado', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Consulta el estado actual del proceso de firmado en FirmaPlus.
-     * 
+     *
      * Args:
      * solicitud_id: ID de la solicitud
-     * 
+     *
      * Returns:
      * 200: Estado del proceso de firmado
      * 404: Solicitud no encontrada o sin proceso de firmado
@@ -179,31 +166,23 @@ class FirmaDigitalController extends Controller
         try {
             // Validar solicitud_id
             if (!Str::isUuid($solicitud_id)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de solicitud inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de solicitud inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             $solicitud = Postulacion::find($solicitud_id);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Solicitud no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Solicitud no encontrada')->response();
             }
 
             $procesoFirmado = $solicitud->proceso_firmado;
-            
+
             if (!$procesoFirmado) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La solicitud no tiene un proceso de firmado iniciado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::errorResponse('La solicitud no tiene un proceso de firmado iniciado')
+                    ->response()
+                    ->setStatusCode(404);
             }
 
             $transaccionId = $procesoFirmado['transaccion_id'] ?? null;
@@ -222,39 +201,34 @@ class FirmaDigitalController extends Controller
                 ]);
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'solicitud_id' => $solicitud_id,
-                    'transaccion_id' => $transaccionId,
-                    'estado' => $estadoActual['estado'] ?? null,
-                    'firmantes_completados' => $estadoActual['firmantes_completados'] ?? 0,
-                    'firmantes_pendientes' => $estadoActual['firmantes_pendientes'] ?? 0,
-                    'fecha_consulta' => Carbon::now()->toISOString()
-                ],
-                'message' => 'Estado consultado exitosamente'
-            ]);
-
+            return ApiResource::success([
+                'solicitud_id' => $solicitud_id,
+                'transaccion_id' => $transaccionId,
+                'estado' => $estadoActual['estado'] ?? null,
+                'firmantes_completados' => $estadoActual['firmantes_completados'] ?? 0,
+                'firmantes_pendientes' => $estadoActual['firmantes_pendientes'] ?? 0,
+                'fecha_consulta' => Carbon::now()->toISOString()
+            ], 'Estado consultado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error consultando estado de firmado', [
                 'solicitud_id' => $solicitud_id,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al consultar el estado',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error al consultar el estado', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Webhook para recibir notificaciones de FirmaPlus cuando se completa el firmado.
-     * 
+     *
      * Este endpoint NO requiere autenticación JWT ya que es llamado por FirmaPlus.
      * La autenticación se valida mediante token en el body o headers.
-     * 
+     *
      * Body esperado:
      * {
      *     "transaccion_id": "string",
@@ -263,7 +237,7 @@ class FirmaDigitalController extends Controller
      *     "firmantes_completados": number,
      *     "documento_firmado_url": "string" (opcional)
      * }
-     * 
+     *
      * Returns:
      * 200: Webhook procesado correctamente
      * 401: Token de autenticación inválido
@@ -276,16 +250,14 @@ class FirmaDigitalController extends Controller
             $data = $request->json()->all();
 
             if (empty($data)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se proporcionaron datos',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se proporcionaron datos')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar token de autenticación del webhook
             $webhookToken = $data['token'] ?? $request->header('X-Webhook-Token');
-            
+
             // TODO: Validar token contra configuración
             // if (!$this->validarWebhookToken($webhookToken)) {
             //     return response()->json([
@@ -300,11 +272,9 @@ class FirmaDigitalController extends Controller
             $nuevoEstado = $data['estado'] ?? null;
 
             if (!$transaccionId || !$solicitudId || !$nuevoEstado) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Faltan campos requeridos: transaccion_id, solicitud_id, estado',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Faltan campos requeridos: transaccion_id, solicitud_id, estado')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             Log::info('Webhook de FirmaPlus recibido', [
@@ -315,22 +285,16 @@ class FirmaDigitalController extends Controller
 
             // Validar solicitud_id
             if (!Str::isUuid($solicitudId)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'solicitud_id inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('solicitud_id inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Buscar solicitud
             $solicitud = Postulacion::find($solicitudId);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Solicitud no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Solicitud no encontrada')->response();
             }
 
             // Si el documento está firmado, descargar PDF
@@ -349,7 +313,6 @@ class FirmaDigitalController extends Controller
                         'solicitud_id' => $solicitudId,
                         'path' => $pdfFirmadoPath
                     ]);
-
                 } catch (\Exception $e) {
                     Log::error('Error descargando PDF firmado', [
                         'transaccion_id' => $transaccionId,
@@ -402,27 +365,22 @@ class FirmaDigitalController extends Controller
                 'estado' => $nuevoEstado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'procesado' => true,
-                    'solicitud_id' => $solicitudId,
-                    'estado' => $nuevoEstado
-                ],
-                'message' => 'Webhook procesado correctamente'
-            ]);
-
+            return ApiResource::success([
+                'procesado' => true,
+                'solicitud_id' => $solicitudId,
+                'estado' => $nuevoEstado
+            ], 'Webhook procesado correctamente')->response();
         } catch (\Exception $e) {
             Log::error('Error procesando webhook de FirmaPlus', [
                 'error' => $e->getMessage(),
                 'data' => $request->json()->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error procesando webhook',
-                'details' => ['error' => $e->getMessage()]
-            ], 500);
+            return ErrorResource::serverError('Error procesando webhook', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 

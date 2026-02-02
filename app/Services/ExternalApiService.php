@@ -33,20 +33,17 @@ class ExternalApiService
             ]);
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
+
+            $httpRequest = Http::withBasicAuth($this->username, $this->password)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json'
+                ]);
+
             if (!empty($params)) {
-                $response = Http::get($url, $params)
-                    ->withBasicAuth($this->username, $this->password)
-                    ->withHeaders([
-                        'Accept' => 'application/json',
-                        'Content-Type' => 'application/json'
-                    ]);
+                $response = $httpRequest->get($url, $params);
             } else {
-                $response = Http::get($url)
-                    ->withBasicAuth($this->username, $this->password)
-                    ->withHeaders([
-                        'Accept' => 'application/json',
-                        'Content-Type' => 'application/json'
-                    ]);
+                $response = $httpRequest->get($url);
             }
 
             if (!$response->successful()) {
@@ -98,12 +95,12 @@ class ExternalApiService
 
             $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
 
-            $response = Http::post($url, $data)
-                ->withBasicAuth($this->username, $this->password)
+            $response = Http::withBasicAuth($this->username, $this->password)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json'
-                ]);
+                ])
+                ->post($url, $data);
 
 
             if (!$response->successful()) {

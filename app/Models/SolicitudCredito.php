@@ -53,7 +53,7 @@ class SolicitudCredito extends Model
         'tasa_interes',
         'destino_credito',
         'descripcion',
-        'estado_codigo'
+        'estado'
     ];
 
     /**
@@ -86,7 +86,7 @@ class SolicitudCredito extends Model
      */
     public function estado()
     {
-        return $this->belongsTo(EstadoSolicitud::class, 'estado_codigo', 'codigo');
+        return $this->belongsTo(EstadoSolicitud::class, 'estado', 'codigo');
     }
 
     /**
@@ -150,7 +150,7 @@ class SolicitudCredito extends Model
      */
     public function scopeByStatus($query, string $status)
     {
-        return $query->where('estado_codigo', $status);
+        return $query->where('estado', $status);
     }
 
     /**
@@ -188,7 +188,7 @@ class SolicitudCredito extends Model
      */
     public function isApproved(): bool
     {
-        return $this->estado_codigo === 'APROBADO';
+        return $this->estado === 'APROBADO';
     }
 
     /**
@@ -196,7 +196,7 @@ class SolicitudCredito extends Model
      */
     public function isRejected(): bool
     {
-        return $this->estado_codigo === 'RECHAZADO';
+        return $this->estado === 'RECHAZADO';
     }
 
     /**
@@ -205,7 +205,7 @@ class SolicitudCredito extends Model
     public function isActive(): bool
     {
         $finalStates = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
-        return !in_array($this->estado_codigo, $finalStates);
+        return !in_array($this->estado, $finalStates);
     }
 
     /**
@@ -251,7 +251,7 @@ class SolicitudCredito extends Model
     public function addTimelineEntry(string $estado, string $detalle, string $usuarioUsername = null, bool $automatico = false): void
     {
         $this->timeline()->create([
-            'estado_codigo' => $estado,
+            'estado' => $estado,
             'detalle' => $detalle,
             'usuario_username' => $usuarioUsername,
             'automatico' => $automatico
@@ -263,13 +263,13 @@ class SolicitudCredito extends Model
      */
     public function changeStatus(string $newEstado, string $detalle, string $usuarioUsername = null): bool
     {
-        $oldEstado = $this->estado_codigo;
+        $oldEstado = $this->estado;
 
         if ($oldEstado === $newEstado) {
             return false;
         }
 
-        $this->update(['estado_codigo' => $newEstado]);
+        $this->update(['estado' => $newEstado]);
         $this->addTimelineEntry($newEstado, $detalle, $usuarioUsername, false);
 
         return true;
@@ -294,8 +294,8 @@ class SolicitudCredito extends Model
     public function getStatusWithColorAttribute(): array
     {
         return [
-            'codigo' => $this->estado_codigo,
-            'nombre' => $this->estado?->nombre ?? $this->estado_codigo,
+            'codigo' => $this->estado,
+            'nombre' => $this->estado?->nombre ?? $this->estado,
             'color' => $this->estado?->color ?? '#6B7280'
         ];
     }
@@ -318,7 +318,7 @@ class SolicitudCredito extends Model
      */
     public function updateEstadoValidado(string $nuevoEstado, string $detalle, ?string $usuario = null): void
     {
-        $estadoActual = $this->estado_codigo;
+        $estadoActual = $this->estado;
 
         if ($estadoActual === $nuevoEstado) {
             return; // No change needed
@@ -337,7 +337,7 @@ class SolicitudCredito extends Model
         }
 
         // Update estado
-        $this->update(['estado_codigo' => $nuevoEstado]);
+        $this->update(['estado' => $nuevoEstado]);
 
         // Add timeline entry
         $this->addTimelineEntry($nuevoEstado, $detalle, $usuario, false);
@@ -403,7 +403,7 @@ class SolicitudCredito extends Model
     public static function getStatistics(): array
     {
         $total = static::count();
-        $byStatus = EstadoSolicitud::leftJoin('solicitudes_credito', 'estados_solicitud.codigo', '=', 'solicitudes_credito.estado_codigo')
+        $byStatus = EstadoSolicitud::leftJoin('solicitudes_credito', 'estados_solicitud.codigo', '=', 'solicitudes_credito.estado')
             ->groupBy('estados_solicitud.codigo', 'estados_solicitud.nombre', 'estados_solicitud.color')
             ->selectRaw('
                 estados_solicitud.codigo,

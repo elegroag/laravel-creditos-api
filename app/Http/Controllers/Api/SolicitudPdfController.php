@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -26,20 +26,27 @@ class SolicitudPdfController extends Controller
     }
 
     /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
      * Genera el PDF de una solicitud de crédito con soporte para convenios y firmantes.
      * Este endpoint reemplaza el antiguo '/api/solicitud-credito/xml' (deprecado).
      */
     public function generarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             // Validar parámetros opcionales
@@ -52,56 +59,47 @@ class SolicitudPdfController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
             $incluirConvenio = $data['incluir_convenio'] ?? true;
             $incluirFirmantes = $data['incluir_firmantes'] ?? true;
 
+            $userRoles = $userData['roles'] ?? [];
+            $isAdmin = in_array('admin', $userRoles);
+
             Log::info('Generando PDF de solicitud', [
                 'solicitud_id' => $solicitudId,
                 'incluir_convenio' => $incluirConvenio,
                 'incluir_firmantes' => $incluirFirmantes,
-                'username' => $user->username
+                'username' => $username
             ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos (admin o propietario)
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-            
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $user->username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para generar PDF de esta solicitud',
-                    'details' => []
-                ], 403);
+
+            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+                return ErrorResource::forbidden('No autorizado para generar PDF de esta solicitud')->response();
             }
 
             // Generar PDF usando script Python
             $resultado = $this->generarPdfConScript($solicitudId, $incluirConvenio, $incluirFirmantes);
 
             if (!$resultado['success']) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al generar PDF',
-                    'details' => $resultado['error'] ?? []
-                ], 500);
+                return ErrorResource::errorResponse('Error al generar PDF', $resultado['error'] ?? [])
+                    ->response()
+                    ->setStatusCode(500);
             }
 
             // Actualizar estado de la solicitud a ENVIADO_VALIDACION
@@ -116,7 +114,6 @@ class SolicitudPdfController extends Controller
                     'solicitud_id' => $solicitudId,
                     'nuevo_estado' => 'ENVIADO_VALIDACION'
                 ]);
-
             } catch (\Exception $e) {
                 Log::warning('No se pudo actualizar el estado de la solicitud', [
                     'solicitud_id' => $solicitudId,
@@ -124,12 +121,7 @@ class SolicitudPdfController extends Controller
                 ]);
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'PDF generado exitosamente y solicitud enviada para validación',
-                'data' => $resultado['data']
-            ]);
-
+            return ApiResource::success($resultado['data'], 'PDF generado exitosamente y solicitud enviada para validación')->response();
         } catch (\Exception $e) {
             Log::error('Error inesperado al generar PDF', [
                 'solicitud_id' => $solicitudId,
@@ -137,69 +129,55 @@ class SolicitudPdfController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al generar el PDF',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al generar el PDF', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Descarga el PDF previamente generado de una solicitud.
      */
-    public function descargarPdfSolicitud(string $solicitudId): JsonResponse
+    public function descargarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             Log::info('Descargando PDF de solicitud', [
                 'solicitud_id' => $solicitudId,
-                'username' => $user->username
+                'username' => $username
             ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos (admin o propietario)
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-            
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $user->username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para descargar PDF de esta solicitud',
-                    'details' => []
-                ], 403);
+
+            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+                return ErrorResource::forbidden('No autorizado para descargar PDF de esta solicitud')->response();
             }
 
             // Verificar si tiene PDF generado
             $pdfData = $solicitud['pdf_generado'] ?? null;
 
             if (!$pdfData || empty($pdfData['path'])) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La solicitud no tiene un PDF generado. Use el endpoint /generar-pdf primero.',
-                    'details' => []
-                ], 404);
+                return ErrorResource::errorResponse('La solicitud no tiene un PDF generado. Use el endpoint /generar-pdf primero.')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             $pdfPath = $pdfData['path'];
@@ -211,11 +189,9 @@ class SolicitudPdfController extends Controller
                     'pdf_path' => $pdfPath
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El archivo PDF no se encuentra en el servidor',
-                    'details' => []
-                ], 404);
+                return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor')
+                    ->response()
+                    ->setStatusCode(404);
             }
 
             // Generar URL de descarga
@@ -228,16 +204,10 @@ class SolicitudPdfController extends Controller
                 'filename' => $filename
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'URL de descarga generada',
-                'data' => [
-                    'download_url' => $downloadUrl,
-                    'filename' => $filename,
-                    'content_type' => 'application/pdf'
-                ]
-            ]);
-
+            return ApiResource::success([
+                'download_url' => $downloadUrl,
+                'filename' => $filename
+            ], 'URL de descarga generada')->response();
         } catch (\Exception $e) {
             Log::error('Error al descargar PDF', [
                 'solicitud_id' => $solicitudId,
@@ -245,58 +215,46 @@ class SolicitudPdfController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al descargar el PDF',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error al descargar el PDF', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Verifica si una solicitud tiene PDF generado y retorna su estado.
      */
-    public function verificarEstadoPdf(string $solicitudId): JsonResponse
+    public function verificarEstadoPdf(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             Log::info('Verificando estado del PDF', [
                 'solicitud_id' => $solicitudId,
-                'username' => $user->username
+                'username' => $username
             ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos (admin o propietario)
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-            
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $user->username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para verificar estado de PDF de esta solicitud',
-                    'details' => []
-                ], 403);
+
+            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+                return ErrorResource::forbidden('No autorizado para verificar estado de PDF de esta solicitud')->response();
             }
 
             $pdfData = $solicitud['pdf_generado'] ?? null;
@@ -321,12 +279,7 @@ class SolicitudPdfController extends Controller
                 ];
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estado del PDF obtenido exitosamente',
-                'data' => $estado
-            ]);
-
+            return ApiResource::success($estado, 'Estado del PDF obtenido exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error verificando estado del PDF', [
                 'solicitud_id' => $solicitudId,
@@ -334,13 +287,11 @@ class SolicitudPdfController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al verificar el estado del PDF',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error al verificar el estado del PDF', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -352,7 +303,7 @@ class SolicitudPdfController extends Controller
         try {
             // Ruta al script Python
             $scriptPath = base_path('scripts/generate_pdf.py');
-            
+
             if (!file_exists($scriptPath)) {
                 Log::error('Script Python no encontrado', ['script_path' => $scriptPath]);
                 return [
@@ -444,7 +395,6 @@ class SolicitudPdfController extends Controller
                 'success' => true,
                 'data' => $resultado['data'] ?? []
             ];
-
         } catch (ProcessFailedException $e) {
             Log::error('Excepción al ejecutar script Python', [
                 'error' => $e->getMessage(),
@@ -456,7 +406,6 @@ class SolicitudPdfController extends Controller
                 'error' => 'Error al ejecutar script Python',
                 'details' => ['exception' => $e->getMessage()]
             ];
-
         } catch (\Exception $e) {
             Log::error('Error inesperado al generar PDF con script', [
                 'solicitud_id' => $solicitudId,
@@ -479,7 +428,7 @@ class SolicitudPdfController extends Controller
     {
         try {
             $solicitud = SolicitudCredito::find($solicitudId);
-            
+
             if (!$solicitud) {
                 Log::warning('No se encontró la solicitud para guardar info del PDF', [
                     'solicitud_id' => $solicitudId
@@ -505,7 +454,6 @@ class SolicitudPdfController extends Controller
                 'solicitud_id' => $solicitudId,
                 'pdf_info' => $pdfInfo
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al guardar información del PDF en solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -517,45 +465,35 @@ class SolicitudPdfController extends Controller
     /**
      * Eliminar PDF de una solicitud
      */
-    public function eliminarPdfSolicitud(string $solicitudId): JsonResponse
+    public function eliminarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             Log::info('Eliminando PDF de solicitud', [
                 'solicitud_id' => $solicitudId,
-                'username' => $user->username
+                'username' => $username
             ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
-            
+
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             // Verificar permisos (admin o propietario)
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-            
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $user->username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para eliminar PDF de esta solicitud',
-                    'details' => []
-                ], 403);
+
+            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+                return ErrorResource::forbidden('No autorizado para eliminar PDF de esta solicitud')->response();
             }
 
             // Eliminar archivo PDF si existe
@@ -575,11 +513,7 @@ class SolicitudPdfController extends Controller
                 'updated_at' => Carbon::now()
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'PDF eliminado exitosamente'
-            ]);
-
+            return ApiResource::success(null, 'PDF eliminado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al eliminar PDF de solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -587,34 +521,29 @@ class SolicitudPdfController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar PDF',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar PDF', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Obtener estadísticas de PDFs generados
      */
-    public function obtenerEstadisticasPdf(): JsonResponse
+    public function obtenerEstadisticasPdf(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Obteniendo estadísticas de PDFs', [
@@ -630,7 +559,7 @@ class SolicitudPdfController extends Controller
             }
 
             $solicitudes = $query->get();
-            
+
             $estadisticas = [
                 'total_solicitudes' => $solicitudes->count(),
                 'con_pdf' => 0,
@@ -646,19 +575,19 @@ class SolicitudPdfController extends Controller
 
             foreach ($solicitudes as $solicitud) {
                 $pdfData = $solicitud->pdf_generado ?? null;
-                
+
                 if ($pdfData) {
                     $estadisticas['con_pdf']++;
                     $estadisticas['tamano_total'] += $pdfData['tamano'] ?? 0;
-                    
+
                     if ($pdfData['incluir_convenio'] ?? false) {
                         $estadisticas['tipos_incluidos']['con_convenio']++;
                     }
-                    
+
                     if ($pdfData['incluir_firmantes'] ?? false) {
                         $estadisticas['tipos_incluidos']['con_firmantes']++;
                     }
-                    
+
                     // Agrupar por fecha
                     $fecha = Carbon::parse($pdfData['generado_en'])->format('Y-m-d');
                     if (!isset($estadisticas['por_fecha'][$fecha])) {
@@ -677,25 +606,18 @@ class SolicitudPdfController extends Controller
             // Ordenar por fecha
             krsort($estadisticas['por_fecha']);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estadísticas de PDFs obtenidas exitosamente',
-                'data' => $estadisticas
-            ]);
-
+            return ApiResource::success($estadisticas, 'Estadísticas de PDFs obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de PDFs', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

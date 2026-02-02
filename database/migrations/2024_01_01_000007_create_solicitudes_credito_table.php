@@ -21,16 +21,16 @@ return new class extends Migration
             $table->decimal('tasa_interes', 5, 2);
             $table->string('destino_credito', 255)->nullable();
             $table->text('descripcion')->nullable();
-            $table->string('estado_codigo', 50);
+            $table->string('estado', 50);
             $table->timestamps();
 
             // Foreign keys
             $table->foreign('owner_username')->references('username')->on('users')->onDelete('cascade');
-            $table->foreign('estado_codigo')->references('codigo')->on('estados_solicitud');
+            $table->foreign('estado')->references('codigo')->on('estados_solicitud');
 
             // Índices
             $table->index('owner_username');
-            $table->index('estado_codigo');
+            $table->index('estado');
             $table->index('created_at');
         });
     }

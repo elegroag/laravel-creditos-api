@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Services\LineaInversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,24 +59,18 @@ class LineasInversionController extends Controller
                 'count' => count($lineas)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Líneas de inversión obtenidas exitosamente',
-                'data' => $lineas
-            ]);
+            return ApiResource::success($lineas, 'Líneas de inversión obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener todas las líneas de inversión', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener líneas de inversión',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener líneas de inversión', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -102,11 +98,9 @@ class LineasInversionController extends Controller
 
             // Validar que el ID sea positivo
             if ($linea_id <= 0) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de línea de inversión inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de línea de inversión inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Obtener la línea específica
@@ -115,11 +109,7 @@ class LineasInversionController extends Controller
             if (!$linea) {
                 Log::warning('Línea de inversión no encontrada', ['linea_id' => $linea_id]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Línea de inversión con ID ' . $linea_id . ' no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Línea de inversión con ID ' . $linea_id . ' no encontrada')->response();
             }
 
             Log::info('Línea de inversión obtenida exitosamente', [
@@ -127,24 +117,18 @@ class LineasInversionController extends Controller
                 'linea_credito' => $linea['linea_credito'] ?? 'N/A'
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Línea de inversión obtenida exitosamente',
-                'data' => $linea
-            ]);
+            return ApiResource::success($linea, 'Línea de inversión obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener línea de inversión por ID', [
                 'linea_id' => $linea_id,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener línea de inversión',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener línea de inversión', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -170,11 +154,9 @@ class LineasInversionController extends Controller
             $categoriaUpper = strtoupper($categoria);
 
             if (!in_array($categoriaUpper, ['A', 'B', 'C'])) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Categoría inválida. Debe ser A, B o C',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('Categoría inválida. Debe ser A, B o C')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Obtener líneas por categoría
@@ -185,24 +167,18 @@ class LineasInversionController extends Controller
                 'count' => count($lineas)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Líneas de inversión para categoría ' . $categoriaUpper . ' obtenidas exitosamente',
-                'data' => $lineas
-            ]);
+            return ApiResource::success($lineas, 'Líneas de inversión para categoría ' . $categoriaUpper . ' obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener líneas de inversión por categoría', [
                 'categoria' => $categoria,
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener líneas por categoría',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener líneas por categoría', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -230,18 +206,13 @@ class LineasInversionController extends Controller
             if ($success) {
                 Log::info('Líneas de inversión inicializadas exitosamente');
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Líneas de inversión inicializadas exitosamente'
-                ]);
+                return ApiResource::success(null, 'Líneas de inversión inicializadas exitosamente')->response();
             } else {
                 Log::error('Error al inicializar las líneas de inversión');
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al inicializar las líneas de inversión',
-                    'details' => []
-                ], 500);
+                return ErrorResource::errorResponse('Error al inicializar las líneas de inversión')
+                    ->response()
+                    ->setStatusCode(500);
             }
         } catch (\Exception $e) {
             Log::error('Error al inicializar líneas de inversión', [
@@ -249,13 +220,11 @@ class LineasInversionController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al inicializar líneas de inversión',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al inicializar líneas de inversión', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -286,23 +255,17 @@ class LineasInversionController extends Controller
 
             Log::info('Estadísticas de líneas de inversión calculadas', $estadisticas);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estadísticas obtenidas exitosamente',
-                'data' => $estadisticas
-            ]);
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de líneas de inversión', [
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -323,11 +286,9 @@ class LineasInversionController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -367,29 +328,23 @@ class LineasInversionController extends Controller
                 'resultados_count' => count($resultados)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Búsqueda completada',
-                'data' => [
-                    'resultados' => $resultados,
-                    'total' => count($resultados),
-                    'termino' => $termino,
-                    'categoria' => $categoria
-                ]
-            ]);
+            return ApiResource::success([
+                'resultados' => $resultados,
+                'total' => count($resultados),
+                'termino' => $termino,
+                'categoria' => $categoria
+            ], 'Búsqueda completada')->response();
         } catch (\Exception $e) {
             Log::error('Error al buscar líneas de inversión', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al buscar líneas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al buscar líneas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -411,11 +366,9 @@ class LineasInversionController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -433,11 +386,9 @@ class LineasInversionController extends Controller
             }
 
             if (count($lineasComparar) < 2) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se encontraron suficientes líneas válidas para comparar',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se encontraron suficientes líneas válidas para comparar')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Preparar datos de comparación
@@ -457,24 +408,18 @@ class LineasInversionController extends Controller
                 'lineas_comparadas' => count($lineasComparar)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Comparación completada',
-                'data' => $comparacion
-            ]);
+            return ApiResource::success($comparacion, 'Comparación completada')->response();
         } catch (\Exception $e) {
             Log::error('Error al comparar líneas de inversión', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al comparar líneas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al comparar líneas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 

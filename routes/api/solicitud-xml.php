@@ -3,14 +3,14 @@
 use App\Http\Controllers\Api\SolicitudXmlController;
 use Illuminate\Support\Facades\Route;
 
-// Solicitud XML routes
-Route::prefix('solicitud-credito/xml')->group(function () {
-    // Protected routes (require authentication)
-    Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.jwt')->group(function () {
+    // Solicitud XML routes
+    Route::prefix('solicitud-credito/xml')->group(function () {
+        // Protected routes (require authentication)
         // Endpoints principales (Python original - deprecated)
         Route::post('/', [SolicitudXmlController::class, 'generarXmlSolicitud']);
         Route::post('extract', [SolicitudXmlController::class, 'extraerDatosXml']);
-        
+
         // Endpoints adicionales (mejoras Laravel)
         Route::post('validar', [SolicitudXmlController::class, 'validarXml']);
         Route::get('archivos', [SolicitudXmlController::class, 'listarArchivosXml']);

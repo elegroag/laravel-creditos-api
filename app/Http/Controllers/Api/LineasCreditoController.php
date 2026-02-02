@@ -3,25 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
+use App\Services\ExternalApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Config;
 
 class LineasCreditoController extends Controller
 {
-    protected string $externalApiUrl;
-    protected string $externalApiUser;
-    protected string $externalApiPassword;
-    protected int $timeout;
+    protected ExternalApiService $externalApiService;
 
-    public function __construct()
+    public function __construct(ExternalApiService $externalApiService)
     {
-        $this->externalApiUrl = config('services.external_api.url', 'https://api.example.com');
-        $this->externalApiUser = config('services.external_api.user', '');
-        $this->externalApiPassword = config('services.external_api.password', '');
-        $this->timeout = config('services.external_api.timeout', 8);
+        $this->externalApiService = $externalApiService;
     }
 
     /**
@@ -30,78 +26,53 @@ class LineasCreditoController extends Controller
     public function obtenerParametros(): JsonResponse
     {
         try {
-            Log::info('Consultando parámetros generales de líneas de crédito');
-
-            // Preparar headers
-            $headers = [
-                'accept' => 'application/json',
-                'X-CSRF-TOKEN' => '',
-                'Content-Type' => 'application/json'
-            ];
-
             // Realizar la consulta a la API externa
-            $response = Http::post($this->externalApiUrl . '/creditos/datos_generales')->timeout($this->timeout)
-                ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->withHeaders($headers);
+            $response = $this->externalApiService->post('/creditos/datos_generales');
 
             // Verificar si la respuesta fue exitosa
-            if (!$response->successful()) {
-                Log::error('Error en respuesta de API externa - parámetros', [
-                    'status' => $response->status(),
-                    'response' => $response->body()
-                ]);
+            $isSuccess = ($response['success'] ?? true) && !isset($response['error']);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al consultar datos generales',
-                    'details' => [
-                        'external_error' => 'Error en el servicio externo',
-                        'status_code' => $response->status()
-                    ]
-                ], 500);
+            if (!$isSuccess) {
+                return ErrorResource::errorResponse('Error al consultar parámetros generales', [
+                    'external_error' => $response['error'] ?? 'Error en el servicio externo',
+                    'status_code' => $response['status_code'] ?? 500
+                ])->response()->setStatusCode(500);
             }
 
-            $responseData = $response->json();
+            $responseData = $response;
 
-            // Verificar si la respuesta contiene error
-            if (!$responseData['success'] ?? true) {
+            // Verificar si la respuesta contiene error (para respuestas directas de API externa)
+            if (isset($responseData['error']) && $responseData['error']) {
                 Log::warning('API externa retornó error - parámetros', [
                     'error' => $responseData['error'] ?? 'Error desconocido',
                     'detail' => $responseData['detail'] ?? null
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al consultar datos generales',
-                    'details' => [
-                        'external_error' => $responseData['error'] ?? 'Error desconocido',
-                        'external_detail' => $responseData['detail'] ?? null
-                    ]
-                ], 400);
+                return ErrorResource::errorResponse('Error al consultar datos generales', [
+                    'external_error' => $responseData['error'] ?? 'Error desconocido',
+                    'external_detail' => $responseData['detail'] ?? null
+                ])->response()->setStatusCode(400);
             }
 
             Log::info('Parámetros generales obtenidos exitosamente', [
                 'data_keys' => array_keys($responseData['data'] ?? [])
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Datos generales obtenidos exitosamente',
-                'data' => $responseData['data'] ?? []
-            ]);
+            return ApiResource::success(
+                $responseData['data'] ?? [],
+                'Datos generales obtenidos exitosamente'
+            )->response();
         } catch (\Exception $e) {
             Log::error('Error al consultar parámetros generales', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al consultar datos generales',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al consultar datos generales', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -111,54 +82,37 @@ class LineasCreditoController extends Controller
     public function obtenerTiposCreditos(): JsonResponse
     {
         try {
-            Log::info('Consultando tipos de crédito disponibles');
-
-            // Preparar headers
-            $headers = [
-                'accept' => 'application/json',
-                'X-CSRF-TOKEN' => '',
-                'Content-Type' => 'application/json'
-            ];
-
             // Realizar la consulta a la API externa
-            $response = Http::post($this->externalApiUrl . '/creditos/tipo_creditos')->timeout($this->timeout)
-                ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->withHeaders($headers);
+            $response = $this->externalApiService->post('/creditos/tipo_creditos');
 
+            Log::info('tip creditos', $response);
             // Verificar si la respuesta fue exitosa
-            if (!$response->successful()) {
-                Log::error('Error en respuesta de API externa - tipos crédito', [
-                    'status' => $response->status(),
-                    'response' => $response->body()
-                ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al consultar tipos de crédito',
-                    'details' => [
-                        'external_error' => 'Error en el servicio externo',
-                        'status_code' => $response->status()
+            //aqui se valida con status no con success
+            $isSuccess = ($response['status'] ?? true) && !isset($response['error']);
+
+            if (!$isSuccess) {
+                return ErrorResource::errorResponse('Error al consultar tipos de crédito', [
+                    'trace' => [
+                        'external_error' => $response['error'] ?? 'Error en el servicio externo',
+                        'status_code' => $response['status_code'] ?? 500
                     ]
-                ], 500);
+                ])->response()->setStatusCode(500);
             }
 
-            $responseData = $response->json();
+            $responseData = $response;
 
-            // Verificar si la respuesta contiene error
-            if (!$responseData['success'] ?? true) {
+            // Verificar si la respuesta contiene error (para respuestas directas de API externa)
+            if (isset($responseData['error']) && $responseData['error']) {
                 Log::warning('API externa retornó error - tipos crédito', [
                     'error' => $responseData['error'] ?? 'Error desconocido',
                     'detail' => $responseData['detail'] ?? null
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al consultar tipos de crédito',
-                    'details' => [
-                        'external_error' => $responseData['error'] ?? 'Error desconocido',
-                        'external_detail' => $responseData['detail'] ?? null
-                    ]
-                ], 400);
+                return ErrorResource::errorResponse('Error al consultar tipos de crédito', [
+                    'external_error' => $responseData['error'] ?? 'Error desconocido',
+                    'external_detail' => $responseData['detail'] ?? null
+                ])->response()->setStatusCode(400);
             }
 
             Log::info('Tipos de crédito obtenidos exitosamente', [
@@ -166,24 +120,17 @@ class LineasCreditoController extends Controller
                 'count' => count($responseData['data'] ?? [])
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Tipos de crédito obtenidos exitosamente',
-                'data' => $responseData['data'] ?? []
-            ]);
+            return ApiResource::success(
+                $responseData['data'] ?? [],
+                'Tipos de crédito obtenidos exitosamente'
+            )
+                ->response();
         } catch (\Exception $e) {
-            Log::error('Error al consultar tipos de crédito', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al consultar tipos de crédito',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::errorResponse('Error interno al consultar tipos de crédito', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response()->setStatusCode(400);
         }
     }
 
@@ -222,11 +169,9 @@ class LineasCreditoController extends Controller
                     $errors['tipos_creditos'] = $tiposData['error'] ?? 'Error desconocido';
                 }
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al obtener información completa',
-                    'details' => $errors
-                ], 500);
+                return ErrorResource::errorResponse('Error al obtener información completa', $errors)
+                    ->response()
+                    ->setStatusCode(500);
             }
 
             Log::info('Información completa de líneas de crédito obtenida', [
@@ -234,24 +179,18 @@ class LineasCreditoController extends Controller
                 'tipos_count' => count($combinedData['tipos_creditos'])
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Información de líneas de crédito obtenida exitosamente',
-                'data' => $combinedData
-            ]);
+            return ApiResource::success($combinedData, 'Información de líneas de crédito obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al consultar información completa de líneas de crédito', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al consultar líneas de crédito',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al consultar líneas de crédito', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -266,42 +205,34 @@ class LineasCreditoController extends Controller
             $startTime = microtime(true);
 
             // Intentar una consulta simple
-            $response = Http::get($this->externalApiUrl . '/health')
-                ->withBasicAuth($this->externalApiUser, $this->externalApiPassword)
-                ->timeout(5);
+            $response = $this->externalApiService->get('/health');
 
             $responseTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            $isAvailable = $response->successful();
+            $isAvailable = $response['success'] ?? true;
 
             Log::info('Verificación de disponibilidad completada', [
                 'available' => $isAvailable,
                 'response_time' => $responseTime,
-                'status' => $response->status()
+                'status' => $response['status_code'] ?? 500
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => $isAvailable ? 'Servicio disponible' : 'Servicio no disponible',
-                'data' => [
-                    'available' => $isAvailable,
-                    'response_time_ms' => $responseTime,
-                    'status_code' => $response->status(),
-                    'timestamp' => now()->toISOString()
-                ]
-            ]);
+            return ApiResource::success([
+                'available' => $isAvailable,
+                'response_time_ms' => $responseTime,
+                'status_code' => $response['status_code'] ?? 500,
+                'timestamp' => now()->toISOString()
+            ], $isAvailable ? 'Servicio disponible' : 'Servicio no disponible')->response();
         } catch (\Exception $e) {
             Log::error('Error al verificar disponibilidad del servicio', [
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error al verificar disponibilidad del servicio',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error al verificar disponibilidad del servicio', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -338,23 +269,17 @@ class LineasCreditoController extends Controller
 
             Log::info('Estadísticas de líneas de crédito calculadas', $estadisticas);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estadísticas obtenidas exitosamente',
-                'data' => $estadisticas
-            ]);
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de líneas de crédito', [
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

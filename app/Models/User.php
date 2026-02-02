@@ -42,16 +42,6 @@ class User extends Authenticatable
     ];
 
     /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
-    protected $hidden = [
-        'password_hash',
-        'remember_token'
-    ];
-
-    /**
      * The attributes that should be cast.
      *
      * @return array<string, string>
@@ -73,7 +63,7 @@ class User extends Authenticatable
      */
     public function getAuthPassword(): string
     {
-        return $this->password_hash ?? $this->password;
+        return $this->password_hash ?? null;
     }
 
     /**

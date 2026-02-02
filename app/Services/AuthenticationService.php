@@ -39,21 +39,12 @@ class AuthenticationService extends EloquentService
             ->orWhere('email', $identifier)
             ->first();
 
-        if (!$user) {
-            return null;
-        }
+        if (!$user) return null;
 
-        // Check if user is disabled or inactive
-        if ($user->disabled || !$user->is_active) {
-            return null;
-        }
+        if ($user->disabled || !$user->is_active) return null;
 
-        // Verify password
-        if (!Hash::check($password, $user->password)) {
-            return null;
-        }
+        if (!Hash::check($password, $user->password_hash)) return null;
 
-        // Update last login
         $user->update(['last_login_at' => now()]);
 
         return $user;
@@ -148,7 +139,7 @@ class AuthenticationService extends EloquentService
         // Authenticate user
         $user = $this->authenticate($identifier, $password);
         if (!$user) {
-            throw new ValidationException('Credenciales inválidas');
+            throw new ValidationException('No es posible la autenticación');
         }
 
         // Generate token
@@ -189,7 +180,7 @@ class AuthenticationService extends EloquentService
     /**
      * Verify JWT token and return payload.
      */
-    public function verifyToken(string $token): array
+    public function verifyToken(string $token): ?array
     {
         try {
             $payload = $this->decodeToken($token);
@@ -198,17 +189,18 @@ class AuthenticationService extends EloquentService
             $user = $this->getUserById($payload['sub']);
 
             if (!$user || $user->disabled || !$user->is_active) {
-                throw new ValidationException('Token inválido o usuario deshabilitado');
+                return null;
             }
 
             return [
                 'valid' => true,
                 'user' => $this->transformUserForApi($user),
-                'expires_at' => Carbon::createFromTimestamp($payload['exp'])->toISOString()
+                'expires_at' => Carbon::createFromTimestamp($payload['exp'])->toISOString(),
+                'user_id' => $payload['sub']
             ];
         } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'verificación de token');
-            throw new ValidationException('Token inválido: ' . $e->getMessage());
+            Log::error('Error verificando token: ' . $e->getMessage());
+            return null;
         }
     }
 
@@ -388,7 +380,7 @@ class AuthenticationService extends EloquentService
     /**
      * Get user permissions based on roles.
      */
-    private function getUserPermissions(array $userRoles): array
+    public function getUserPermissions(array $userRoles): array
     {
         $permissions = [];
 

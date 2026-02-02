@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\UserService;
@@ -27,23 +29,28 @@ class SolicitudDocumentosController extends Controller
     }
 
     /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
      * Lista los documentos requeridos para una solicitud según el tipo de crédito.
      */
-    public function listarDocumentosRequeridos(string $solicitudId): JsonResponse
+    public function listarDocumentosRequeridos(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Listando documentos requeridos', [
@@ -56,19 +63,11 @@ class SolicitudDocumentosController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para ver esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
             // Obtener tipo de crédito desde el payload
@@ -87,11 +86,7 @@ class SolicitudDocumentosController extends Controller
                 'total_documentos' => count($documentosRequeridos)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Documentos requeridos obtenidos exitosamente',
-                'data' => $documentosRequeridos
-            ]);
+            return ApiResource::success($documentosRequeridos, 'Documentos requeridos obtenidos exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar documentos requeridos', [
                 'solicitud_id' => $solicitudId,
@@ -99,34 +94,28 @@ class SolicitudDocumentosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar documentos requeridos',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar documentos requeridos', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Lista los documentos de una solicitud.
      */
-    public function listarDocumentosSolicitud(string $solicitudId): JsonResponse
+    public function listarDocumentosSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Listando documentos de solicitud', [
@@ -139,19 +128,11 @@ class SolicitudDocumentosController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para ver esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
             // Obtener documentos
@@ -162,11 +143,7 @@ class SolicitudDocumentosController extends Controller
                 'total_documentos' => count($documentos)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Documentos obtenidos exitosamente',
-                'data' => $documentos
-            ]);
+            return ApiResource::success($documentos, 'Documentos obtenidos exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar documentos de solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -174,13 +151,11 @@ class SolicitudDocumentosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar documentos',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar documentos', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -190,18 +165,14 @@ class SolicitudDocumentosController extends Controller
     public function agregarDocumentoSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             // Validar datos de entrada
@@ -216,11 +187,9 @@ class SolicitudDocumentosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -239,19 +208,11 @@ class SolicitudDocumentosController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para modificar esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para modificar esta solicitud')->response();
             }
 
             // Preparar datos del documento
@@ -285,11 +246,7 @@ class SolicitudDocumentosController extends Controller
                 'ruta_archivo' => $filePath
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Documento agregado exitosamente',
-                'data' => $solicitudActualizada
-            ]);
+            return ApiResource::success($solicitudActualizada, 'Documento agregado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al agregar documento a solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -298,34 +255,28 @@ class SolicitudDocumentosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al agregar documento',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al agregar documento', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Elimina un documento de una solicitud.
      */
-    public function eliminarDocumentoSolicitud(string $solicitudId, string $documentoId): JsonResponse
+    public function eliminarDocumentoSolicitud(Request $request, string $solicitudId, string $documentoId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Eliminando documento de solicitud', [
@@ -339,30 +290,18 @@ class SolicitudDocumentosController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para modificar esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para modificar esta solicitud')->response();
             }
 
             // Eliminar documento
             $solicitudActualizada = $this->eliminarDocumentoDeSolicitud($solicitudId, $documentoId);
 
             if (!$solicitudActualizada) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Documento no encontrado: {$documentoId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
             }
 
             Log::info('Documento eliminado exitosamente', [
@@ -370,11 +309,7 @@ class SolicitudDocumentosController extends Controller
                 'documento_id' => $documentoId
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Documento eliminado exitosamente',
-                'data' => $solicitudActualizada
-            ]);
+            return ApiResource::success($solicitudActualizada, 'Documento eliminado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al eliminar documento de solicitud', [
                 'solicitud_id' => $solicitudId,
@@ -383,34 +318,28 @@ class SolicitudDocumentosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar documento',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar documento', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Descargar un documento de una solicitud
      */
-    public function descargarDocumento(string $solicitudId, string $documentoId): JsonResponse
+    public function descargarDocumento(Request $request, string $solicitudId, string $documentoId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Descargando documento de solicitud', [
@@ -423,19 +352,11 @@ class SolicitudDocumentosController extends Controller
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Solicitud no encontrada: {$solicitudId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No autorizado para ver esta solicitud',
-                    'details' => []
-                ], 403);
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
             // Buscar documento
@@ -450,22 +371,16 @@ class SolicitudDocumentosController extends Controller
             }
 
             if (!$documento) {
-                return response()->json([
-                    'success' => false,
-                    'error' => "Documento no encontrado: {$documentoId}",
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
             }
 
             // Verificar que el archivo exista
             $filePath = $documento['ruta_archivo'] ?? '';
 
             if (!Storage::disk('public')->exists($filePath)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Archivo no encontrado en el sistema',
-                    'details' => []
-                ], 404);
+                return ErrorResource::errorResponse('Archivo no encontrado en el sistema')
+                    ->response()
+                    ->setStatusCode(404);
             }
 
             // Obtener URL de descarga
@@ -477,16 +392,12 @@ class SolicitudDocumentosController extends Controller
                 'download_url' => $downloadUrl
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'URL de descarga generada',
-                'data' => [
-                    'download_url' => $downloadUrl,
-                    'nombre_original' => $documento['nombre_original'] ?? '',
-                    'tipo_mime' => $documento['tipo_mime'] ?? '',
-                    'tamano' => $documento['tamano'] ?? 0
-                ]
-            ]);
+            return ApiResource::success([
+                'download_url' => $downloadUrl,
+                'nombre_original' => $documento['nombre_original'] ?? '',
+                'tipo_mime' => $documento['tipo_mime'] ?? '',
+                'tamano' => $documento['tamano'] ?? 0
+            ], 'URL de descarga generada')->response();
         } catch (\Exception $e) {
             Log::error('Error al descargar documento', [
                 'solicitud_id' => $solicitudId,
@@ -495,13 +406,11 @@ class SolicitudDocumentosController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al descargar documento',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al descargar documento', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -701,21 +610,17 @@ class SolicitudDocumentosController extends Controller
     /**
      * Obtener estadísticas de documentos
      */
-    public function obtenerEstadisticasDocumentos(): JsonResponse
+    public function obtenerEstadisticasDocumentos(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
-            $userRoles = $user->roles ?? [];
+            $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
             Log::info('Obteniendo estadísticas de documentos', [
@@ -766,24 +671,18 @@ class SolicitudDocumentosController extends Controller
                 $estadisticas['tamano_promedio'] = round($estadisticas['tamano_total'] / $estadisticas['total_documentos'], 2);
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estadísticas obtenidas exitosamente',
-                'data' => $estadisticas
-            ]);
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de documentos', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

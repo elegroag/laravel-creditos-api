@@ -3,13 +3,14 @@
 use App\Http\Controllers\Api\FirmasController;
 use Illuminate\Support\Facades\Route;
 
-// Firmas routes
-Route::prefix('solicitud-credito')->group(function () {
-    // Protected routes (require authentication and permissions)
-    Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.jwt')->group(function () {
+    // Firmas routes
+    Route::prefix('solicitud-credito')->group(function () {
+        // Protected routes (require authentication and permissions)
+
         // Gestión de firmas
         Route::post('firmas', [FirmasController::class, 'firmarDocumento']);
-        
+
         // Tokens para compartir firmas
         Route::post('firmas/share', [FirmasController::class, 'crearTokenShare']);
         Route::get('firmas/share/{token}', [FirmasController::class, 'obtenerTokenShare']);

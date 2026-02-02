@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Models\Postulacion;
 use App\Services\PostulacionService;
 use Illuminate\Http\JsonResponse;
@@ -55,15 +57,13 @@ class PostulacionesController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
-            
+
             Log::info('Creando nueva postulación', [
                 'monto_solicitado' => $data['monto_solicitado'],
                 'plazo_meses' => $data['plazo_meses']
@@ -103,14 +103,9 @@ class PostulacionesController extends Controller
                 'estado' => $estado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'postulacion' => $this->formatearPostulacion($postulacion)
-                ],
-                'message' => 'Postulación creada exitosamente'
-            ], 201);
-
+            return ApiResource::success([
+                'postulacion' => $this->formatearPostulacion($postulacion)
+            ], 'Postulación creada exitosamente')->response()->setStatusCode(201);
         } catch (\Exception $e) {
             Log::error('Error al crear postulación', [
                 'error' => $e->getMessage(),
@@ -118,13 +113,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al crear postulación',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al crear postulación', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -148,11 +141,9 @@ class PostulacionesController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $params = $validator->validated();
@@ -175,8 +166,8 @@ class PostulacionesController extends Controller
 
             // Obtener postulaciones
             $postulaciones = $query->orderBy('created_at', 'desc')
-                                   ->limit($limit)
-                                   ->get();
+                ->limit($limit)
+                ->get();
 
             // Formatear resultados
             $resultados = [];
@@ -189,12 +180,7 @@ class PostulacionesController extends Controller
                 'estado' => $estado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $resultados,
-                'message' => 'Postulaciones obtenidas exitosamente'
-            ]);
-
+            return ApiResource::success($resultados, 'Postulaciones obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al listar postulaciones', [
                 'error' => $e->getMessage(),
@@ -202,13 +188,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al listar postulaciones',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al listar postulaciones', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -220,11 +204,9 @@ class PostulacionesController extends Controller
         try {
             // Validar UUID
             if (!Str::isUuid($postulacionId)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de postulación inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de postulación inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             Log::info('Obteniendo postulación', ['postulacion_id' => $postulacionId]);
@@ -233,11 +215,7 @@ class PostulacionesController extends Controller
             $postulacion = Postulacion::find($postulacionId);
 
             if (!$postulacion) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Postulación no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Postulación no encontrada')->response();
             }
 
             Log::info('Postulación obtenida exitosamente', [
@@ -245,14 +223,9 @@ class PostulacionesController extends Controller
                 'estado' => $postulacion->estado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'postulacion' => $this->formatearPostulacion($postulacion)
-                ],
-                'message' => 'Postulación obtenida exitosamente'
-            ]);
-
+            return ApiResource::success([
+                'postulacion' => $this->formatearPostulacion($postulacion)
+            ], 'Postulación obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener postulación', [
                 'postulacion_id' => $postulacionId,
@@ -260,13 +233,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener postulación',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener postulación', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -278,11 +249,9 @@ class PostulacionesController extends Controller
         try {
             // Validar UUID
             if (!Str::isUuid($postulacionId)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de postulación inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de postulación inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Validar datos de entrada
@@ -297,11 +266,9 @@ class PostulacionesController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -318,11 +285,7 @@ class PostulacionesController extends Controller
             $postulacion = Postulacion::find($postulacionId);
 
             if (!$postulacion) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Postulación no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Postulación no encontrada')->response();
             }
 
             // Actualizar estado y timeline
@@ -348,14 +311,9 @@ class PostulacionesController extends Controller
                 'nuevo_estado' => $nuevoEstado
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'postulacion' => $this->formatearPostulacion($postulacion)
-                ],
-                'message' => 'Estado actualizado exitosamente'
-            ]);
-
+            return ApiResource::success([
+                'postulacion' => $this->formatearPostulacion($postulacion)
+            ], 'Estado actualizado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al actualizar estado de postulación', [
                 'postulacion_id' => $postulacionId,
@@ -364,13 +322,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al actualizar estado',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al actualizar estado', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -382,11 +338,9 @@ class PostulacionesController extends Controller
         try {
             // Validar UUID
             if (!Str::isUuid($postulacionId)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'ID de postulación inválido',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('ID de postulación inválido')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             Log::info('Eliminando postulación', ['postulacion_id' => $postulacionId]);
@@ -395,11 +349,7 @@ class PostulacionesController extends Controller
             $postulacion = Postulacion::find($postulacionId);
 
             if (!$postulacion) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Postulación no encontrada',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Postulación no encontrada')->response();
             }
 
             // Eliminar postulación
@@ -409,11 +359,7 @@ class PostulacionesController extends Controller
                 'postulacion_id' => $postulacionId
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Postulación eliminada exitosamente'
-            ]);
-
+            return ApiResource::success(null, 'Postulación eliminada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al eliminar postulación', [
                 'postulacion_id' => $postulacionId,
@@ -421,13 +367,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al eliminar postulación',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al eliminar postulación', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -441,14 +385,14 @@ class PostulacionesController extends Controller
 
             // Obtener conteos por estado
             $conteoEstados = Postulacion::selectRaw('estado, COUNT(*) as count')
-                                   ->groupBy('estado')
-                                   ->pluck('count', 'estado')
-                                   ->toArray();
+                ->groupBy('estado')
+                ->pluck('count', 'estado')
+                ->toArray();
 
             // Obtener postulaciones recientes
             $postulacionesRecientes = Postulacion::orderBy('created_at', 'desc')
-                                              ->limit(10)
-                                              ->get();
+                ->limit(10)
+                ->get();
 
             // Calcular montos totales
             $montoTotal = Postulacion::sum('monto_solicitado') ?? 0;
@@ -482,25 +426,18 @@ class PostulacionesController extends Controller
                 'total_postulaciones' => $estadisticas['total_postulaciones']
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $estadisticas,
-                'message' => 'Estadísticas obtenidas exitosamente'
-            ]);
-
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas de postulaciones', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -525,11 +462,9 @@ class PostulacionesController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -546,9 +481,9 @@ class PostulacionesController extends Controller
             // Construir búsqueda
             $query = Postulacion::where(function ($q) use ($termino) {
                 $q->where('solicitante->nombre', 'LIKE', '%' . $termino . '%')
-                  ->orWhere('solicitante->apellido', 'LIKE', '%' . $termino . '%')
-                  ->orWhere('solicitante->email', 'LIKE', '%' . $termino . '%')
-                  ->orWhere('solicitante->numero_documento', 'LIKE', '%' . $termino . '%');
+                    ->orWhere('solicitante->apellido', 'LIKE', '%' . $termino . '%')
+                    ->orWhere('solicitante->email', 'LIKE', '%' . $termino . '%')
+                    ->orWhere('solicitante->numero_documento', 'LIKE', '%' . $termino . '%');
             });
 
             if ($estado) {
@@ -556,8 +491,8 @@ class PostulacionesController extends Controller
             }
 
             $postulaciones = $query->orderBy('created_at', 'desc')
-                                   ->limit($limit)
-                                   ->get();
+                ->limit($limit)
+                ->get();
 
             // Formatear resultados
             $resultados = [];
@@ -570,17 +505,12 @@ class PostulacionesController extends Controller
                 'resultados' => count($resultados)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'postulaciones' => $resultados,
-                    'total' => count($resultados),
-                    'termino' => $termino,
-                    'estado' => $estado
-                ],
-                'message' => 'Búsqueda completada'
-            ]);
-
+            return ApiResource::success([
+                'postulaciones' => $resultados,
+                'total' => count($resultados),
+                'termino' => $termino,
+                'estado' => $estado
+            ], 'Búsqueda completada')->response();
         } catch (\Exception $e) {
             Log::error('Error al buscar postulaciones', [
                 'error' => $e->getMessage(),
@@ -588,13 +518,11 @@ class PostulacionesController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al buscar postulaciones',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al buscar postulaciones', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -678,11 +606,9 @@ class PostulacionesController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -696,27 +622,20 @@ class PostulacionesController extends Controller
             // En una implementación real, esto uniría al usuario a una sala WebSocket
             // join_room("postulacion:{$postulacionId}");
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Unido a la sala de postulación',
-                'data' => [
-                    'room' => "postulacion:{$postulacionId}"
-                ]
-            ]);
-
+            return ApiResource::success([
+                'room' => "postulacion:{$postulacionId}"
+            ], 'Unido a la sala de postulación')->response();
         } catch (\Exception $e) {
             Log::error('Error al unirse a sala de postulación', [
                 'error' => $e->getMessage(),
                 'data' => $request->all()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al unirse a la sala',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al unirse a la sala', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }

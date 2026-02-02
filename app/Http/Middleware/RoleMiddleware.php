@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class RoleMiddleware
@@ -19,7 +18,10 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, ...$roles)
     {
-        if (!Auth::check()) {
+        // Obtener datos del usuario autenticado desde JWT middleware
+        $authenticatedUser = $request->get('authenticated_user');
+
+        if (!$authenticatedUser) {
             return response()->json([
                 'success' => false,
                 'error' => 'No autenticado',
@@ -28,8 +30,10 @@ class RoleMiddleware
             ], 401);
         }
 
-        $user = Auth::user();
-        $userRoles = $this->getUserRoles($user);
+        // Extraer datos del usuario
+        $userData = $authenticatedUser['user'] ?? [];
+        $userId = $authenticatedUser['user_id'] ?? null;
+        $userRoles = $this->getUserRoles($userData);
 
         // Verificar si el usuario tiene alguno de los roles requeridos
         $hasRequiredRole = false;
@@ -42,8 +46,8 @@ class RoleMiddleware
 
         if (!$hasRequiredRole) {
             Log::warning('Acceso denegado: roles requeridos', [
-                'user_id' => $user->id,
-                'username' => $user->username,
+                'user_id' => $userId,
+                'username' => $userData['username'] ?? 'unknown',
                 'required_roles' => $roles,
                 'user_roles' => $userRoles
             ]);
@@ -63,13 +67,10 @@ class RoleMiddleware
     }
 
     /**
-     * Obtiene los roles del usuario
+     * Obtiene los roles del usuario desde datos JWT
      */
-    private function getUserRoles($user): array
+    private function getUserRoles(array $userData): array
     {
-        if (isset($user->roles)) {
-            return is_array($user->roles) ? $user->roles : json_decode($user->roles, true) ?? [];
-        }
-        return [];
+        return $userData['roles'] ?? [];
     }
 }

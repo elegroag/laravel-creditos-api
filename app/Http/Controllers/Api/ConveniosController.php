@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Services\ConvenioValidationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,11 +49,7 @@ class ConveniosController extends Controller
                 'cedula_trabajador' => $cedula_trabajador
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $resultado,
-                'message' => 'Validación exitosa: el trabajador es elegible para solicitar crédito bajo convenio'
-            ]);
+            return ApiResource::success($resultado, 'Validación exitosa: el trabajador es elegible para solicitar crédito bajo convenio')->response();
         } catch (\Exception $e) {
             Log::warning('Endpoint validar convenio - error', [
                 'nit_empresa' => $nit_empresa,
@@ -84,11 +82,18 @@ class ConveniosController extends Controller
                 $statusCode = 404;
             }
 
-            return response()->json([
-                'success' => false,
-                'error' => $message,
-                'details' => []
-            ], $statusCode);
+            // Usar ErrorResource según el tipo de error
+            if ($statusCode === 404) {
+                return ErrorResource::notFound($message)->response();
+            } elseif ($statusCode === 400) {
+                return ErrorResource::errorResponse($message)->response()->setStatusCode(400);
+            } else {
+                return ErrorResource::serverError($message, [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getMessage()
+                ])->response();
+            }
         }
     }
 
@@ -115,11 +120,9 @@ class ConveniosController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -129,11 +132,7 @@ class ConveniosController extends Controller
             // Reutilizar la lógica del GET
             $resultado = $this->convenioService->validarConvenioTrabajador($nit_empresa, $cedula_trabajador);
 
-            return response()->json([
-                'success' => true,
-                'data' => $resultado,
-                'message' => 'Validación exitosa: el trabajador es elegible para solicitar crédito bajo convenio'
-            ]);
+            return ApiResource::success($resultado, 'Validación exitosa: el trabajador es elegible para solicitar crédito bajo convenio')->response();
         } catch (\Exception $e) {
             Log::error('Error en validar_convenio_post', [
                 'error' => $e->getMessage()
@@ -164,11 +163,18 @@ class ConveniosController extends Controller
                 $statusCode = 404;
             }
 
-            return response()->json([
-                'success' => false,
-                'error' => $message,
-                'details' => []
-            ], $statusCode);
+            // Usar ErrorResource según el tipo de error
+            if ($statusCode === 404) {
+                return ErrorResource::notFound($message)->response();
+            } elseif ($statusCode === 400) {
+                return ErrorResource::errorResponse($message)->response()->setStatusCode(400);
+            } else {
+                return ErrorResource::serverError($message, [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getMessage()
+                ])->response();
+            }
         }
     }
 }

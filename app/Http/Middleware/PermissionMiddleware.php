@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class PermissionMiddleware
@@ -19,7 +18,10 @@ class PermissionMiddleware
      */
     public function handle(Request $request, Closure $next, ...$permissions)
     {
-        if (!Auth::check()) {
+        // Obtener datos del usuario autenticado desde JWT middleware
+        $authenticatedUser = $request->get('authenticated_user');
+
+        if (!$authenticatedUser) {
             return response()->json([
                 'success' => false,
                 'error' => 'No autenticado',
@@ -28,14 +30,16 @@ class PermissionMiddleware
             ], 401);
         }
 
-        $user = Auth::user();
+        // Extraer datos del usuario
+        $userData = $authenticatedUser['user'] ?? [];
+        $userId = $authenticatedUser['user_id'] ?? null;
 
         // Los administradores tienen todos los permisos
-        if ($this->isAdmin($user)) {
+        if ($this->isAdmin($userData)) {
             return $next($request);
         }
 
-        $userPermissions = $this->getUserPermissions($user);
+        $userPermissions = $this->getUserPermissions($userData);
 
         // Verificar si el usuario tiene alguno de los permisos requeridos
         $hasRequiredPermission = false;
@@ -48,8 +52,8 @@ class PermissionMiddleware
 
         if (!$hasRequiredPermission) {
             Log::warning('Acceso denegado: permisos requeridos', [
-                'user_id' => $user->id,
-                'username' => $user->username,
+                'user_id' => $userId,
+                'username' => $userData['username'] ?? 'unknown',
                 'required_permissions' => $permissions,
                 'user_permissions' => $userPermissions
             ]);
@@ -69,33 +73,27 @@ class PermissionMiddleware
     }
 
     /**
-     * Obtiene los permisos del usuario
+     * Obtiene los permisos del usuario desde datos JWT
      */
-    private function getUserPermissions($user): array
+    private function getUserPermissions(array $userData): array
     {
-        if (isset($user->permissions)) {
-            return is_array($user->permissions) ? $user->permissions : json_decode($user->permissions, true) ?? [];
-        }
-        return [];
+        return $userData['permissions'] ?? [];
     }
 
     /**
-     * Verifica si el usuario es administrador
+     * Verifica si el usuario es administrador desde datos JWT
      */
-    private function isAdmin($user): bool
+    private function isAdmin(array $userData): bool
     {
-        $userRoles = $this->getUserRoles($user);
+        $userRoles = $this->getUserRoles($userData);
         return in_array('administrator', $userRoles) || in_array('admin', $userRoles);
     }
 
     /**
-     * Obtiene los roles del usuario
+     * Obtiene los roles del usuario desde datos JWT
      */
-    private function getUserRoles($user): array
+    private function getUserRoles(array $userData): array
     {
-        if (isset($user->roles)) {
-            return is_array($user->roles) ? $user->roles : json_decode($user->roles, true) ?? [];
-        }
-        return [];
+        return $userData['roles'] ?? [];
     }
 }

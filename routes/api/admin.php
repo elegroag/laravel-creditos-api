@@ -4,9 +4,9 @@ use App\Http\Controllers\Api\AdminConveniosController;
 use Illuminate\Support\Facades\Route;
 
 // Admin Convenios routes
-Route::prefix('admin')->group(function () {
-    // Protected routes (require authentication)
-    Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.jwt')->group(function () {
+    Route::prefix('admin')->group(function () {
+
         // Operaciones específicas (deben ir antes de las rutas con parámetros)
         Route::get('empresas-convenios/export', [AdminConveniosController::class, 'export']);
         Route::post('empresas-convenios/import', [AdminConveniosController::class, 'import']);

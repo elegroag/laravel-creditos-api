@@ -6,16 +6,15 @@ use App\Models\Trabajador;
 use App\Models\EmpresaConvenio;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use App\Exceptions\ValidationException;
 
 class TrabajadorService extends EloquentService
 {
-    private string $externalApiUrl;
+    private ExternalApiService $externalApiService;
 
-    public function __construct()
+    public function __construct(ExternalApiService $externalApiService)
     {
-        $this->externalApiUrl = config('services.external_api.url', 'https://api.example.com');
+        $this->externalApiService = $externalApiService;
     }
 
     /**
@@ -426,30 +425,22 @@ class TrabajadorService extends EloquentService
     private function searchWorkersExternal(array $criteria): array
     {
         try {
-            $response = Http::post("{$this->externalApiUrl}/company/buscar_trabajadores", $criteria);
-            if (!$response->successful()) {
+            $response = $this->externalApiService->post('company/buscar_trabajadores', $criteria);
+
+            if (!$response['success']) {
                 Log::error('Search workers API error', [
                     'criteria' => $criteria,
-                    'status' => $response->status()
+                    'response' => $response
                 ]);
-                return [];
+                return ['success' => false, 'message' => 'Error en búsqueda externa'];
             }
 
-            $data = $response->json();
-
-            if (!$data['success'] ?? false) {
-                return [];
-            }
-
-            $externalWorkers = $data['data'] ?? [];
-
-            // Store in database and return
-            return array_map(function ($worker) {
-                $trabajador = $this->createWorkerFromExternal($worker);
-                return $trabajador->toApiArray();
-            }, $externalWorkers);
+            return [
+                'success' => true,
+                'data' => $response['data'] ?? []
+            ];
         } catch (\Exception $e) {
-            Log::error('Exception searching workers externally', [
+            Log::error('Error searching workers externally', [
                 'criteria' => $criteria,
                 'error' => $e->getMessage()
             ]);
@@ -463,10 +454,10 @@ class TrabajadorService extends EloquentService
     public function obtenerDatosUsuarioSisu(User $user): ?array
     {
         try {
-            $response = Http::get($this->externalApiUrl . "/usuarios/trae_usuario/" . $user->username);
+            $response = $this->externalApiService->get("usuarios/trae_usuario/" . $user->username);
 
-            if ($response->successful() && $response->json('success') && $response->json('data')) {
-                $data = $response->json('data');
+            if ($response['success'] && isset($response['data'])) {
+                $data = $response['data'];
 
                 if ($data['estado'] === 'A') {
                     return [
@@ -497,10 +488,10 @@ class TrabajadorService extends EloquentService
     public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
     {
         try {
-            $response = Http::get($this->externalApiUrl . "/puntos/asesores/" . $user->username);
+            $response = $this->externalApiService->get("puntos/asesores/" . $user->username);
 
-            if ($response->successful() && $response->json('success') && $response->json('data')) {
-                return $response->json('data');
+            if ($response['success'] && isset($response['data'])) {
+                return $response['data'];
             }
 
             Log::warning("No se pudieron obtener puntos del asesor {$user->username}");
@@ -517,12 +508,12 @@ class TrabajadorService extends EloquentService
     public function obtenerDatosTrabajador(string $numeroDocumento): ?array
     {
         try {
-            $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
-                'json' => ['cedtra' => $numeroDocumento]
+            $response = $this->externalApiService->post("company/informacion_trabajador", [
+                'cedtra' => $numeroDocumento
             ]);
 
-            if ($response->successful() && $response->json('success') && $response->json('data')) {
-                return $this->extractRelevantData($response->json('data'));
+            if ($response['success'] && isset($response['data'])) {
+                return $this->extractRelevantData($response['data']);
             }
 
             Log::warning("No se pudieron obtener datos del trabajador con documento: {$numeroDocumento}");
@@ -539,34 +530,19 @@ class TrabajadorService extends EloquentService
     public function getWorkerData(string $cedula): ?array
     {
         try {
-            $response = Http::post("{$this->externalApiUrl}/company/informacion_trabajador", [
+            $response = $this->externalApiService->post("company/informacion_trabajador", [
                 'cedtra' => $cedula
             ]);
 
-            if (!$response->successful()) {
+            if (!$response['success']) {
                 Log::error('External API error', [
                     'cedula' => $cedula,
-                    'status' => $response->status(),
-                    'response' => $response->body()
+                    'response' => $response
                 ]);
                 return null;
             }
 
-            $data = $response->json();
-
-            if (!$data['success'] ?? false) {
-                Log::error('External API returned error', [
-                    'cedula' => $cedula,
-                    'error' => $data['error'] ?? 'Unknown error'
-                ]);
-                return null;
-            }
-
-            Log::info('Worker data retrieved successfully', [
-                'cedula' => $cedula
-            ]);
-
-            return $data['data'] ?? null;
+            return $this->extractRelevantData($response['data'] ?? []);
         } catch (\Exception $e) {
             Log::error('Exception getting worker data', [
                 'cedula' => $cedula,

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Services\UserService;
 use App\Services\MobileAuthService;
 use Illuminate\Http\JsonResponse;
@@ -35,11 +37,7 @@ class MovileController extends Controller
             $user = Auth::user();
 
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Sesión no válida',
-                    'details' => []
-                ], 401);
+                return ErrorResource::authError('Sesión no válida')->response();
             }
 
             $username = $user->username;
@@ -68,32 +66,26 @@ class MovileController extends Controller
                 'expires_at' => $expiresAt->toISOString()
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token QR generado exitosamente',
-                'data' => [
-                    'qr_token' => $tempToken,
-                    'expires_at' => $authPayload['exp'],
-                    'user' => [
-                        'username' => $username,
-                        'nombres' => $user->nombres ?? '',
-                        'apellidos' => $user->apellidos ?? ''
-                    ]
+            return ApiResource::success([
+                'qr_token' => $tempToken,
+                'expires_at' => $authPayload['exp'],
+                'user' => [
+                    'username' => $username,
+                    'nombres' => $user->nombres ?? '',
+                    'apellidos' => $user->apellidos ?? ''
                 ]
-            ]);
+            ], 'Token QR generado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al generar token QR', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al generar token QR',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al generar token QR', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -112,11 +104,9 @@ class MovileController extends Controller
                 $decoded = JWTAuth::parseToken($token);
 
                 if ($decoded->get('type') !== 'mobile_auth') {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'Tipo de token inválido',
-                        'details' => []
-                    ], 401);
+                    return ErrorResource::errorResponse('Tipo de token inválido')
+                        ->response()
+                        ->setStatusCode(401);
                 }
 
                 $username = $decoded->get('sub');
@@ -132,40 +122,28 @@ class MovileController extends Controller
                     'auth_result' => array_keys($authResult)
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Autorización procesada y notificada',
-                    'data' => [
-                        'token' => $authResult['access_token'] ?? '',
-                        'token_type' => $authResult['token_type'] ?? 'bearer',
-                        'user' => $authResult['user'] ?? [],
-                        'api_host_url' => env('API_HOST_URL', '')
-                    ]
-                ]);
+                return ApiResource::success([
+                    'username' => $username,
+                    'auth_result' => array_keys($authResult)
+                ], 'Autorización procesada y notificada')->response();
             } catch (JWTException $e) {
                 Log::warning('Error en token de autorización móvil', [
                     'error' => $e->getMessage(),
                     'token_preview' => substr($token, 0, 20) . '...'
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'El token ha expirado',
-                    'details' => []
-                ], 401);
+                return ErrorResource::errorResponse('El token ha expirado')
+                    ->response()
+                    ->setStatusCode(401);
             } catch (\Exception $e) {
                 Log::error('Error al procesar autorización móvil', [
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Token inválido',
-                    'details' => [
-                        'internal_error' => $e->getMessage()
-                    ]
-                ], 401);
+                return ErrorResource::errorResponse('Token inválido', [
+                    'error' => $e->getMessage()
+                ])->response()->setStatusCode(401);
             }
         } catch (\Exception $e) {
             Log::error('Error inesperado en autorización móvil', [
@@ -173,13 +151,11 @@ class MovileController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al procesar autorización',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al procesar autorización', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -212,11 +188,9 @@ class MovileController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $data = $validator->validated();
@@ -231,11 +205,7 @@ class MovileController extends Controller
             // Emitir evento por socket para notificar al frontend
             $this->emitirEventoConfirmaCapturas($username, $capturas);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Confirmación de capturas exitosa de los documentos.',
-                'data' => $data
-            ]);
+            return ApiResource::success($data, 'Confirmación de capturas exitosa de los documentos.')->response();
         } catch (\Exception $e) {
             Log::error('Error al confirmar capturas', [
                 'error' => $e->getMessage(),
@@ -243,13 +213,11 @@ class MovileController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al confirmar capturas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al confirmar capturas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -262,11 +230,7 @@ class MovileController extends Controller
             $user = Auth::user();
 
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+                return ErrorResource::authError('Usuario no autenticado')->response();
             }
 
             Log::info('Verificando estado de autenticación móvil', [
@@ -277,33 +241,27 @@ class MovileController extends Controller
             $userRoles = $user->roles ?? [];
             $hasMobileAccess = in_array('mobile', $userRoles) || in_array('user_trabajador', $userRoles);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estado de autenticación móvil obtenido',
-                'data' => [
-                    'authenticated' => true,
-                    'username' => $user->username,
-                    'nombres' => $user->nombres ?? '',
-                    'apellidos' => $user->apellidos ?? '',
-                    'roles' => $userRoles,
-                    'has_mobile_access' => $hasMobileAccess,
-                    'qr_token_available' => true,
-                    'qr_token_expires_in' => '20 minutos'
-                ]
-            ]);
+            return ApiResource::success([
+                'authenticated' => true,
+                'username' => $user->username,
+                'nombres' => $user->nombres ?? '',
+                'apellidos' => $user->apellidos ?? '',
+                'roles' => $userRoles,
+                'has_mobile_access' => $hasMobileAccess,
+                'qr_token_available' => true,
+                'qr_token_expires_in' => '20 minutos'
+            ], 'Estado de autenticación móvil obtenido')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estado de autenticación móvil', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estado',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estado', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -316,11 +274,7 @@ class MovileController extends Controller
             $user = Auth::user();
 
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+                return ErrorResource::authError('Usuario no autenticado')->response();
             }
 
             Log::info('Revocando token QR', [
@@ -331,27 +285,21 @@ class MovileController extends Controller
             // Por ahora, simplemente informamos que el token ha sido revocado
             // En una implementación real, se podría usar una lista negra de tokens
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token QR revocado exitosamente',
-                'data' => [
-                    'revoked_at' => Carbon::now()->toISOString(),
-                    'username' => $user->username
-                ]
-            ]);
+            return ApiResource::success([
+                'revoked_at' => Carbon::now()->toISOString(),
+                'username' => $user->username
+            ], 'Token QR revocado exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al revocar token QR', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al revocar token',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al revocar token', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -364,11 +312,7 @@ class MovileController extends Controller
             $user = Auth::user();
 
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+                return ErrorResource::authError('Usuario no autenticado')->response();
             }
 
             Log::info('Obteniendo información del dispositivo móvil', [
@@ -385,31 +329,25 @@ class MovileController extends Controller
                 'timestamp' => Carbon::now()->toISOString()
             ];
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Información del dispositivo obtenida',
-                'data' => [
-                    'user' => [
-                        'username' => $user->username,
-                        'nombres' => $user->nombres ?? '',
-                        'apellidos' => $user->apellidos ?? ''
-                    ],
-                    'device' => $deviceInfo
-                ]
-            ]);
+            return ApiResource::success([
+                'user' => [
+                    'username' => $user->username,
+                    'nombres' => $user->nombres ?? '',
+                    'apellidos' => $user->apellidos ?? ''
+                ],
+                'device' => $deviceInfo
+            ], 'Información del dispositivo obtenida')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener información del dispositivo', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener información del dispositivo',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener información del dispositivo', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -429,11 +367,9 @@ class MovileController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $qrToken = $validator->validated()['qr_token'];
@@ -446,54 +382,42 @@ class MovileController extends Controller
                 $decoded = JWTAuth::parseToken($qrToken);
 
                 if ($decoded->get('type') !== 'mobile_auth') {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'Tipo de token inválido',
-                        'details' => []
-                    ], 401);
+                    return ErrorResource::errorResponse('Tipo de token inválido')
+                        ->response()
+                        ->setStatusCode(401);
                 }
 
                 $username = $decoded->get('sub');
                 $expiresAt = Carbon::createFromTimestamp($decoded->get('exp'));
                 $isExpired = $expiresAt->isPast();
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Token QR validado',
-                    'data' => [
-                        'valid' => !$isExpired,
-                        'username' => $username,
-                        'expires_at' => $expiresAt->toISOString(),
-                        'expires_in_minutes' => $expiresAt->diffInMinutes(Carbon::now())->getValue(),
-                        'type' => 'mobile_auth'
-                    ]
-                ]);
+                return ApiResource::success([
+                    'valid' => !$isExpired,
+                    'username' => $username,
+                    'expires_at' => $expiresAt->toISOString(),
+                    'expires_in_minutes' => $expiresAt->diffInMinutes(Carbon::now()),
+                    'type' => 'mobile_auth'
+                ], 'Token QR validado')->response();
             } catch (JWTException $e) {
                 Log::warning('Token QR inválido', [
                     'error' => $e->getMessage(),
                     'token_preview' => substr($qrToken, 0, 20) . '...'
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Token inválido o expirado',
-                    'details' => [
-                        'error' => $e->getMessage()
-                    ]
-                ], 401);
+                return ErrorResource::errorResponse('Token inválido o expirado', [
+                    'error' => $e->getMessage()
+                ])->response()->setStatusCode(401);
             } catch (\Exception $e) {
                 Log::error('Error al validar token QR', [
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Error al validar token',
-                    'details' => [
-                        'internal_error' => $e->getMessage()
-                    ]
-                ], 500);
+                return ErrorResource::serverError('Error al validar token', [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getMessage()
+                ])->response();
             }
         } catch (\Exception $e) {
             Log::error('Error en validación de token QR', [
@@ -502,13 +426,11 @@ class MovileController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al validar token',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al validar token', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ApiResource;
+use App\Http\Resources\ErrorResource;
 use App\Services\UserService;
 use App\Services\SolicitudService;
 use Illuminate\Http\JsonResponse;
@@ -25,25 +27,30 @@ class PerfilController extends Controller
     }
 
     /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
      * Obtiene el perfil del usuario autenticado.
      *
      * Returns:
      *     Datos del perfil del usuario
      */
-    public function obtenerPerfil(): JsonResponse
+    public function obtenerPerfil(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
 
             Log::info('Obteniendo perfil para usuario', ['username' => $username]);
 
@@ -51,11 +58,7 @@ class PerfilController extends Controller
             $usuario = $this->userService->getByUsername($username);
 
             if (!$usuario) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no encontrado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Usuario no encontrado')->response();
             }
 
             // Construir full_name
@@ -85,24 +88,18 @@ class PerfilController extends Controller
 
             Log::info('Perfil obtenido exitosamente', ['username' => $username]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $perfilData,
-                'message' => 'Perfil obtenido exitosamente'
-            ]);
+            return ApiResource::success($perfilData, 'Perfil obtenido exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error obteniendo perfil', [
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener perfil',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener perfil', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -118,17 +115,13 @@ class PerfilController extends Controller
     public function actualizarPerfil(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
 
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
@@ -152,11 +145,9 @@ class PerfilController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $updateData = $validator->validated();
@@ -169,11 +160,7 @@ class PerfilController extends Controller
             $usuario = $this->userService->getByUsername($username);
 
             if (!$usuario) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no encontrado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Usuario no encontrado')->response();
             }
 
             // Preparar datos para actualización con manejo robusto de roles
@@ -195,11 +182,9 @@ class PerfilController extends Controller
             $usuarioActualizado = $this->userService->update($usuario->id, $updateDataClean);
 
             if (!$usuarioActualizado) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No se pudo actualizar el perfil',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('No se pudo actualizar el perfil')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Construir full_name
@@ -229,22 +214,16 @@ class PerfilController extends Controller
 
             Log::info('Perfil actualizado exitosamente', ['username' => $username]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $perfilData,
-                'message' => 'Perfil actualizado exitosamente'
-            ]);
+            return ApiResource::success($perfilData, 'Perfil actualizado exitosamente')->response();
         } catch (ValidationException $e) {
             Log::error('Error de validación al actualizar perfil', [
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Datos inválidos',
-                'details' => $e->errors()
-            ], 400);
+            return ErrorResource::validationError($e->errors(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
         } catch (\Exception $e) {
             Log::error('Error actualizando perfil', [
                 'error' => $e->getMessage(),
@@ -252,13 +231,11 @@ class PerfilController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al actualizar perfil',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al actualizar perfil', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -274,14 +251,12 @@ class PerfilController extends Controller
     public function cambiarPassword(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             // Validar datos de entrada
@@ -300,51 +275,40 @@ class PerfilController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $passwordData = $validator->validated();
             $currentPassword = $passwordData['current_password'];
             $newPassword = $passwordData['new_password'];
 
-            Log::info('Intentando cambiar contraseña', ['username' => $user->username]);
+            Log::info('Intentando cambiar contraseña', ['username' => $username]);
 
             // Obtener usuario para verificar que existe
-            $usuario = $this->userService->getByUsername($user->username);
+            $usuario = $this->userService->getByUsername($username);
 
             if (!$usuario) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no encontrado',
-                    'details' => []
-                ], 404);
+                return ErrorResource::notFound('Usuario no encontrado')->response();
             }
 
             // Verificar contraseña actual
             if (!Hash::check($currentPassword, $usuario->password)) {
-                Log::warning('Contraseña actual incorrecta', ['username' => $user->username]);
+                Log::warning('Contraseña actual incorrecta', ['username' => $username]);
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'La contraseña actual es incorrecta',
-                    'details' => []
-                ], 400);
+                return ErrorResource::errorResponse('La contraseña actual es incorrecta')
+                    ->response()
+                    ->setStatusCode(400);
             }
 
             // Cambiar contraseña
             $usuario->password = Hash::make($newPassword);
             $usuario->save();
 
-            Log::info('Contraseña cambiada exitosamente', ['username' => $user->username]);
+            Log::info('Contraseña cambiada exitosamente', ['username' => $username]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Contraseña cambiada exitosamente'
-            ]);
+            return ApiResource::success(null, 'Contraseña cambiada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al cambiar contraseña', [
                 'error' => $e->getMessage(),
@@ -352,13 +316,11 @@ class PerfilController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al cambiar contraseña',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al cambiar contraseña', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -374,14 +336,12 @@ class PerfilController extends Controller
     public function obtenerActividadUsuario(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             // Validar parámetros de consulta
@@ -399,11 +359,9 @@ class PerfilController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Parámetros inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $queryParams = $validator->validated();
@@ -412,14 +370,14 @@ class PerfilController extends Controller
             $type = $queryParams['type'] ?? 'todos';
 
             Log::info('Obteniendo actividad del usuario', [
-                'username' => $user->username,
+                'username' => $username,
                 'limit' => $limit,
                 'skip' => $skip,
                 'type' => $type
             ]);
 
             // Obtener solicitudes recientes del usuario
-            $solicitudes = $this->solicitudService->getByOwner($user->username, $skip, $limit);
+            $solicitudes = $this->solicitudService->getByOwner($username, $skip, $limit);
 
             // Formatear como actividad
             $actividad = [];
@@ -427,11 +385,11 @@ class PerfilController extends Controller
             foreach ($solicitudes as $solicitud) {
                 $actividad[] = [
                     'type' => 'solicitud',
-                    'id' => $solicitud['id'],
+                    'id' => $solicitud['id'] ?? 'unknown',
                     'titulo' => 'Solicitud de crédito - ' . ($solicitud['payload']['solicitud']['tipcre'] ?? 'N/A'),
-                    'estado' => $solicitud['estado'],
-                    'fecha' => $solicitud['created_at'],
-                    'descripcion' => 'Estado: ' . $solicitud['estado']
+                    'estado' => $solicitud['estado'] ?? 'desconocido',
+                    'fecha' => $solicitud['created_at'] ?? null,
+                    'descripcion' => 'Estado: ' . ($solicitud['estado'] ?? 'desconocido')
                 ];
             }
 
@@ -444,15 +402,11 @@ class PerfilController extends Controller
             ];
 
             Log::info('Actividad del usuario obtenida', [
-                'username' => $user->username,
+                'username' => $username,
                 'total' => count($actividad)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Actividad obtenida exitosamente',
-                'data' => $activityData
-            ]);
+            return ApiResource::success($activityData, 'Actividad obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener actividad del usuario', [
                 'error' => $e->getMessage(),
@@ -460,53 +414,50 @@ class PerfilController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener actividad',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener actividad', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
     /**
      * Obtiene estadísticas del perfil del usuario
      */
-    public function obtenerEstadisticasPerfil(): JsonResponse
+    public function obtenerEstadisticasPerfil(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            $username = $user->username;
 
             Log::info('Obteniendo estadísticas del perfil', ['username' => $username]);
 
             // Obtener estadísticas básicas
             $solicitudes = $this->solicitudService->getByOwner($username, 0, 1000);
 
+            // Obtener datos del usuario para fechas y roles
+            $usuario = $this->userService->getByUsername($username);
+
             $estadisticas = [
                 'total_solicitudes' => count($solicitudes),
                 'solicitudes_por_estado' => [],
                 'ultima_actividad' => null,
-                'fecha_registro' => $user->created_at?->toISOString(),
-                'ultima_actualizacion' => $user->updated_at?->toISOString(),
-                'roles' => $user->roles ?? [],
-                'perfil_completo' => $this->verificarPerfilCompleto($user)
+                'fecha_registro' => $usuario->created_at?->toISOString(),
+                'ultima_actualizacion' => $usuario->updated_at?->toISOString(),
+                'roles' => $usuario->roles ?? [],
+                'perfil_completo' => $this->verificarPerfilCompleto($usuario)
             ];
 
             // Agrupar solicitudes por estado
             $estados = [];
             foreach ($solicitudes as $solicitud) {
-                $estado = $solicitud['estado'];
+                $estado = $solicitud['estado'] ?? 'desconocido';
                 if (!isset($estados[$estado])) {
                     $estados[$estado] = 0;
                 }
@@ -515,12 +466,12 @@ class PerfilController extends Controller
             $estadisticas['solicitudes_por_estado'] = $estados;
 
             // Última actividad
-            if (!empty($solicitudes)) {
+            if (!empty($solicitudes) && is_array($solicitudes) && isset($solicitudes[0])) {
                 $ultimaSolicitud = $solicitudes[0];
                 $estadisticas['ultima_actividad'] = [
                     'tipo' => 'solicitud',
-                    'fecha' => $ultimaSolicitud['created_at'],
-                    'descripcion' => 'Última solicitud: ' . $ultimaSolicitud['estado']
+                    'fecha' => $ultimaSolicitud['created_at'] ?? null,
+                    'descripcion' => 'Última solicitud: ' . ($ultimaSolicitud['estado'] ?? 'desconocido')
                 ];
             }
 
@@ -529,11 +480,7 @@ class PerfilController extends Controller
                 'total_solicitudes' => $estadisticas['total_solicitudes']
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Estadísticas obtenidas exitosamente',
-                'data' => $estadisticas
-            ]);
+            return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener estadísticas del perfil', [
                 'error' => $e->getMessage(),
@@ -541,13 +488,11 @@ class PerfilController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener estadísticas',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener estadísticas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -570,17 +515,15 @@ class PerfilController extends Controller
     /**
      * Obtiene configuración del perfil (preferencias, etc.)
      */
-    public function obtenerConfiguracionPerfil(): JsonResponse
+    public function obtenerConfiguracionPerfil(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             // Configuración por defecto (podría venir de base de datos)
@@ -604,26 +547,20 @@ class PerfilController extends Controller
                 ]
             ];
 
-            Log::info('Configuración del perfil obtenida', ['username' => $user->username]);
+            Log::info('Configuración del perfil obtenida', ['username' => $username]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Configuración obtenida exitosamente',
-                'data' => $configuracion
-            ]);
+            return ApiResource::success($configuracion, 'Configuración obtenida exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al obtener configuración del perfil', [
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al obtener configuración',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al obtener configuración', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 
@@ -633,14 +570,12 @@ class PerfilController extends Controller
     public function actualizarConfiguracionPerfil(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            // Obtener datos del usuario desde el middleware JWT
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Usuario no autenticado',
-                    'details' => []
-                ], 401);
+            if (!$username) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
             // Validar datos de entrada
@@ -652,28 +587,24 @@ class PerfilController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Datos inválidos',
-                    'details' => $validator->errors()
-                ], 400);
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
             }
 
             $configData = $validator->validated();
 
             Log::info('Actualizando configuración del perfil', [
-                'username' => $user->username,
+                'username' => $username,
                 'config_keys' => array_keys($configData)
             ]);
 
             // Aquí se guardaría la configuración en la base de datos
             // Por ahora, solo retornamos confirmación
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Configuración actualizada exitosamente',
-                'data' => $configData
-            ]);
+            $configuracion = $configData;
+
+            return ApiResource::success($configuracion, 'Configuración actualizada exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al actualizar configuración del perfil', [
                 'error' => $e->getMessage(),
@@ -681,13 +612,11 @@ class PerfilController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Error interno al actualizar configuración',
-                'details' => [
-                    'internal_error' => 'Error interno del servidor'
-                ]
-            ], 500);
+            return ErrorResource::serverError('Error interno al actualizar configuración', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
         }
     }
 }
