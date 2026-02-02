@@ -6,11 +6,13 @@ use App\Models\SolicitudCredito;
 use App\Models\NumeroSolicitud;
 use App\Models\EstadoSolicitud;
 use App\Exceptions\ValidationException;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class SolicitudService extends EloquentService
 {
@@ -721,5 +723,106 @@ class SolicitudService extends EloquentService
             $this->handleDatabaseError($e, 'listado de solicitudes paginadas');
             return [];
         }
+    }
+
+    /**
+     * Generar número de solicitud si es necesario
+     */
+    public function generarNumeroSolicitudSiEsNecesario(array &$solicitudPayload): string
+    {
+        $numeroSolicitud = $solicitudPayload['numero_solicitud'] ?? '';
+        $numeroSolicitudService = new NumeroSolicitudService();
+
+        if (!is_string($numeroSolicitud) || empty(trim($numeroSolicitud))) {
+            // Obtener línea de crédito para generar el número
+            $lineaCredito = $solicitudPayload['tipcre'] ?? '03';
+
+            if (is_string($lineaCredito) && !empty(trim($lineaCredito))) {
+                $numeroSolicitud = $numeroSolicitudService->generarNumeroSolicitud(trim($lineaCredito));
+                $solicitudPayload['numero_solicitud'] = $numeroSolicitud;
+            } else {
+                $numeroSolicitud = '';
+            }
+        } else {
+            $numeroSolicitud = trim($numeroSolicitud);
+        }
+
+        return $numeroSolicitud;
+    }
+
+    /**
+     * Guardar solicitud en base de datos
+     */
+    public function guardarSolicitudEnBaseDatos(array $data, string $numeroSolicitud, string $username): string
+    {
+        $now = Carbon::now();
+
+        // Preparar datos del solicitante
+        $solicitantePayload = $data['solicitante'] ?? [];
+        $solicitudPayload = $data['solicitud'] ?? [];
+
+        $montoSolicitado = $solicitudPayload['valor_solicitado'] ?? $solicitudPayload['valor_solicitud'] ?? 0;
+
+        $plazoMeses = $solicitudPayload['plazo_meses'] ?? 0;
+        $estado = 'POSTULADO';
+
+        // Buscar solicitud existente
+        $query = SolicitudCredito::where('owner_username', $username);
+
+        if (!empty($numeroSolicitud)) {
+            $query->where('numero_solicitud', $numeroSolicitud);
+        }
+
+        $existing = $query->first(['numero_solicitud', 'estado']);
+        $estadoDoc = $existing?->estado ?? $estado;
+
+        // Preparar datos para actualización/creación
+        $updateData = [
+            'owner_username' => $username,
+            'numero_solicitud' => $numeroSolicitud,
+            'monto_solicitado' => $montoSolicitado,
+            'plazo_meses' => is_numeric($plazoMeses) ? (int)$plazoMeses : 0,
+            'solicitante' => [
+                'tipo_identificacion' => $solicitantePayload['tipo_identificacion'] ?? null,
+                'numero_identificacion' => $solicitantePayload['numero_identificacion'] ?? null,
+                'nombres_apellidos' => $solicitantePayload['nombres_apellidos'] ?? null,
+                'email' => $solicitantePayload['email'] ?? null,
+                'telefono_movil' => $solicitantePayload['telefono_movil'] ?? null,
+            ],
+            'xml_filename' => '',
+            'payload' => $data,
+            'updated_at' => $now,
+            'tasa_interes' => 0.10,
+        ];
+
+        if ($existing) {
+            // Actualizar solicitud existente
+            $existing->update($updateData);
+
+            // Agregar al timeline
+            $timeline = $existing->timeline ?? [];
+            $timeline[] = [
+                'estado' => $estadoDoc,
+                'fecha' => $now->toISOString(),
+                'detalle' => 'Actualización por guardado de solicitud'
+            ];
+            $existing->update(['timeline' => $timeline]);
+        } else {
+            // Crear nueva solicitud
+            $updateData['created_at'] = $now;
+            $updateData['documentos'] = [];
+            $updateData['estado'] = $estado;
+            $updateData['timeline'] = [
+                [
+                    'estado' => $estadoDoc,
+                    'fecha' => $now->toISOString(),
+                    'detalle' => 'Creación por guardado de solicitud'
+                ]
+            ];
+
+            $solicitud = SolicitudCredito::create($updateData);
+        }
+
+        return $solicitud->numero_solicitud;
     }
 }

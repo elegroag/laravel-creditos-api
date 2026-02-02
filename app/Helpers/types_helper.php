@@ -132,3 +132,28 @@ if (!function_exists('tipo_cotizantes_array')) {
         ];
     }
 }
+
+/**
+ * Generar componente de nombre de archivo seguro
+ */
+if (!function_exists('safe_filename_component')) {
+
+    function safe_filename_component(string $input): string
+    {
+        // Reemplazar caracteres no seguros
+        $safe = preg_replace('/[^a-zA-Z0-9\-_]/', '_', $input);
+
+        // Limitar longitud
+        if (strlen($safe) > 50) {
+            $safe = substr($safe, 0, 50);
+        }
+
+        // Eliminar guiones bajos y guiones múltiples
+        $safe = preg_replace('/[_\-]+/', '_', $safe);
+
+        // Eliminar guiones bajos y guiones al inicio y final
+        $safe = trim($safe, '_-');
+
+        return $safe ?: 'solicitud';
+    }
+};

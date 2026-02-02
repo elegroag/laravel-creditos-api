@@ -289,10 +289,12 @@ class SolicitudesCreditoController extends Controller
 
             if ($isAdmin) {
                 // Admin puede ver todas las solicitudes
-                $solicitudes = $this->solicitudService->list(0, 10000, []);
+                $paginado = $this->solicitudService->list(0, 10000, []);
+                $solicitudes = $paginado['solicitudes'];
             } else {
                 // Usuario normal solo ve sus solicitudes
-                $solicitudes = $this->solicitudService->getByOwner($username, 0, 10000, null);
+                $consulta = $this->solicitudService->getByOwner($username, 0, 10000, null);
+                $solicitudes = $consulta['solicitudes'];
             }
 
             return ApiResource::success($solicitudes, 'Todas las solicitudes obtenidas exitosamente')->response();
@@ -786,6 +788,68 @@ class SolicitudesCreditoController extends Controller
             ]);
 
             return ErrorResource::serverError('Error interno al listar solicitudes paginadas', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
+
+    /**
+     * Guardar solicitud
+     */
+    public function guardarSolicitud(Request $request)
+    {
+        try {
+            $userData = $this->getAuthenticatedUser($request);
+
+            if (!$userData['username']) {
+                throw new \ValueError('Token inválido');
+            }
+            // Validar datos de entrada
+            $validator = Validator::make($request->all(), [
+                'solicitud' => 'sometimes|array',
+                'solicitante' => 'sometimes|array'
+            ]);
+
+            if ($validator->fails()) {
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
+            }
+
+            $data = $validator->validated();
+
+            $activosDir = storage_path('app/storage/activos');
+            // Crear directorio si no existe
+            if (!is_dir($activosDir)) {
+                mkdir($activosDir, 0775, true);
+            }
+
+            $base = !empty($numeroSolicitud) ? safe_filename_component($numeroSolicitud) : 'solicitud';
+            $timestamp = Carbon::now()->format('Ymd-His');
+            $candidate = "{$base}-{$timestamp}.pdf";
+
+            // Generar número de solicitud si se va a guardar
+            $solicitudPayload = $data['solicitud'] ?? [];
+            $numeroSolicitud = $this->solicitudService->generarNumeroSolicitudSiEsNecesario($solicitudPayload);
+
+            // Guardar en base de datos
+            $savedSolicitudId = $this->solicitudService->guardarSolicitudEnBaseDatos($data, $numeroSolicitud, $userData['username']);
+
+            return ApiResource::success([
+                'solicitud_id' => $savedSolicitudId,
+                'filename' => $candidate
+            ], 'Solicitud guardada exitosamente')
+                ->response();
+        } catch (\Exception $e) {
+            Log::error('Error interno al generar PDF de solicitud', [
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al generar PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'trace' => $e->getMessage()

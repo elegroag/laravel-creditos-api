@@ -26,6 +26,9 @@ Route::middleware('auth.jwt')->group(function () {
         Route::get('paginado/{limit}/{offset}/{estado}', [SolicitudesCreditoController::class, 'listarSolicitudesCreditoPaginado']);
     });
 
+    //no cambiar esta ruta es  requerida por el frontend del sistema
+    Route::post('solicitud-credito/guardar', [SolicitudesCreditoController::class, 'guardarSolicitud']);
+
     //asi lo requiere el frontend no se puede cambiar la ruta /api/estados-solicitud
     Route::get('estados-solicitud', [SolicitudesCreditoController::class, 'obtenerEstadosSolicitud']);
 });

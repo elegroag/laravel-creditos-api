@@ -13,9 +13,7 @@ class EstadosSolicitudSeeder extends Seeder
      */
     public function run(): void
     {
-        // Limpiar tabla antes de insertar
-        DB::table('estados_solicitud')->delete();
-
+        // Insertar estados sin duplicar (usar insertOrIgnore para evitar conflictos)
         $estados = [
             [
                 'codigo' => 'POSTULADO',
@@ -115,9 +113,8 @@ class EstadosSolicitudSeeder extends Seeder
             ]
         ];
 
-        foreach ($estados as $estado) {
-            EstadoSolicitud::create($estado);
-        }
+        // Insertar estados usando insertOrIgnore para evitar duplicados
+        DB::table('estados_solicitud')->insertOrIgnore($estados);
 
         $this->command->info('Estados de solicitud creados exitosamente');
         $this->command->info('');
