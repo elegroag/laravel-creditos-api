@@ -36,26 +36,12 @@ class ConveniosController extends Controller
     public function validarConvenioTrabajador(string $nit_empresa, string $cedula_trabajador): JsonResponse
     {
         try {
-            Log::info('Endpoint validar convenio - inicio', [
-                'nit_empresa' => $nit_empresa,
-                'cedula_trabajador' => $cedula_trabajador
-            ]);
 
             // Instanciar servicio y validar
             $resultado = $this->convenioService->validarConvenioTrabajador($nit_empresa, $cedula_trabajador);
 
-            Log::info('Endpoint validar convenio - exitoso', [
-                'nit_empresa' => $nit_empresa,
-                'cedula_trabajador' => $cedula_trabajador
-            ]);
-
             return ApiResource::success($resultado, 'Validación exitosa: el trabajador es elegible para solicitar crédito bajo convenio')->response();
         } catch (\Exception $e) {
-            Log::warning('Endpoint validar convenio - error', [
-                'nit_empresa' => $nit_empresa,
-                'cedula_trabajador' => $cedula_trabajador,
-                'error' => $e->getMessage()
-            ]);
 
             // Determinar el código de estado según el tipo de error
             $statusCode = 500;

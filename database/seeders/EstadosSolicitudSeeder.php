@@ -16,99 +16,91 @@ class EstadosSolicitudSeeder extends Seeder
         // Insertar estados sin duplicar (usar insertOrIgnore para evitar conflictos)
         $estados = [
             [
-                'codigo' => 'POSTULADO',
+                'id' => 'POSTULADO',
                 'nombre' => 'Postulado',
-                'descripcion' => 'Solicitud recién creada y enviada para revisión inicial',
+                'descripcion' => 'Solicitud recién creada y postulada',
                 'orden' => 1,
+                'color' => '#6B7280',
+                'activo' => true
+            ],
+            [
+                'id' => 'DOCUMENTOS_CARGADOS',
+                'nombre' => 'Documentos cargados',
+                'descripcion' => 'Todos los documentos han sido cargados',
+                'orden' => 2,
                 'color' => '#3B82F6',
                 'activo' => true
             ],
             [
-                'codigo' => 'EN_REVISION',
-                'nombre' => 'En Revisión',
-                'descripcion' => 'Solicitud siendo revisada por el equipo de crédito',
-                'orden' => 2,
+                'id' => 'ENVIADO_VALIDACION',
+                'nombre' => 'Enviado para validación',
+                'descripcion' => 'Enviado para validación de asesores',
+                'orden' => 3,
                 'color' => '#F59E0B',
                 'activo' => true
             ],
             [
-                'codigo' => 'REQUIERE_DOCUMENTOS',
-                'nombre' => 'Requiere Documentos',
-                'descripcion' => 'Se solicitan documentos adicionales para continuar el proceso',
-                'orden' => 3,
-                'color' => '#EF4444',
+                'id' => 'PENDIENTE_FIRMADO',
+                'nombre' => 'Pendiente de firmado',
+                'descripcion' => 'Solicitud en proceso de firmado de solicitud de crédito',
+                'orden' => 4,
+                'color' => '#f5e20bff',
                 'activo' => true
             ],
             [
-                'codigo' => 'PRE_APROBADO',
-                'nombre' => 'Pre-Aprobado',
-                'descripcion' => 'Solicitud aprobada preliminarmente, pendiente de verificación final',
-                'orden' => 4,
+                'id' => 'FIRMADO',
+                'nombre' => 'Firmado',
+                'descripcion' => 'Documentos de crédito firmados',
+                'orden' => 5,
+                'color' => '#0D9488',
+                'activo' => true
+            ],
+            [
+                'id' => 'ENVIADO_PENDIENTE_APROBACION',
+                'nombre' => 'Enviado (pendiente de aprobación)',
+                'descripcion' => 'Solicitud enviada y pendiente de aprobación',
+                'orden' => 6,
                 'color' => '#8B5CF6',
                 'activo' => true
             ],
             [
-                'codigo' => 'EN_VERIFICACION',
-                'nombre' => 'En Verificación',
-                'descripcion' => 'Verificación final de documentos y requisitos',
-                'orden' => 5,
-                'color' => '#06B6D4',
-                'activo' => true
-            ],
-            [
-                'codigo' => 'APROBADO',
-                'nombre' => 'Aprobado',
-                'descripcion' => 'Solicitud aprobada y lista para desembolso',
-                'orden' => 6,
+                'id' => 'APROBADA',
+                'nombre' => 'Aprobada',
+                'descripcion' => 'Solicitud de crédito aprobada',
+                'orden' => 7,
                 'color' => '#10B981',
                 'activo' => true
             ],
             [
-                'codigo' => 'RECHAZADO',
-                'nombre' => 'Rechazado',
-                'descripcion' => 'Solicitud rechazada por no cumplir requisitos',
-                'orden' => 7,
+                'id' => 'RECHAZADA',
+                'nombre' => 'Rechazada',
+                'descripcion' => 'Solicitud de crédito rechazada',
+                'orden' => 8,
                 'color' => '#EF4444',
                 'activo' => true
             ],
             [
-                'codigo' => 'CANCELADO',
-                'nombre' => 'Cancelado',
+                'id' => 'DESESTIMADA',
+                'nombre' => 'Desestimada',
+                'descripcion' => 'Solicitud desestimada por falta de requisitos',
+                'orden' => 9,
+                'color' => '#F97316',
+                'activo' => true
+            ],
+            [
+                'id' => 'CANCELADA',
+                'nombre' => 'Cancelada',
                 'descripcion' => 'Solicitud cancelada por el solicitante',
-                'orden' => 8,
+                'orden' => 10,
                 'color' => '#6B7280',
                 'activo' => true
             ],
             [
-                'codigo' => 'DESISTE',
+                'id' => 'DESISTE',
                 'nombre' => 'Desiste',
                 'descripcion' => 'El solicitante desiste de continuar con el proceso',
-                'orden' => 9,
-                'color' => '#6B7280',
-                'activo' => true
-            ],
-            [
-                'codigo' => 'FINALIZADO',
-                'nombre' => 'Finalizado',
-                'descripcion' => 'Crédito desembolsado y proceso completado',
-                'orden' => 10,
-                'color' => '#059669',
-                'activo' => true
-            ],
-            [
-                'codigo' => 'EN_MORA',
-                'nombre' => 'En Mora',
-                'descripcion' => 'Crédito con pagos atrasados',
                 'orden' => 11,
-                'color' => '#DC2626',
-                'activo' => true
-            ],
-            [
-                'codigo' => 'CASTIGADO',
-                'nombre' => 'Castigado',
-                'descripcion' => 'Crédito castigado por incumplimiento grave',
-                'orden' => 12,
-                'color' => '#7C2D12',
+                'color' => '#6B7280',
                 'activo' => true
             ]
         ];
@@ -119,10 +111,8 @@ class EstadosSolicitudSeeder extends Seeder
         $this->command->info('Estados de solicitud creados exitosamente');
         $this->command->info('');
         $this->command->info('Flujo de estados del sistema:');
-        $this->command->info('1. POSTULADO → EN_REVISION → PRE_APROBADO → EN_VERIFICACION → APROBADO → FINALIZADO');
-        $this->command->info('2. POSTULADO → REQUIERE_DOCUMENTOS → EN_REVISION → ...');
-        $this->command->info('3. Cualquier estado → RECHAZADO / CANCELADO / DESISTE');
-        $this->command->info('4. APROBADO → FINALIZADO → EN_MORA → CASTIGADO');
+        $this->command->info('1. POSTULADO → DOCUMENTOS_CARGADOS → ENVIADO_VALIDACION → PENDIENTE_FIRMADO → FIRMADO → ENVIADO_PENDIENTE_APROBACION → APROBADA');
+        $this->command->info('2. Cualquier estado → RECHAZADA / DESESTIMADA / CANCELADA / DESISTE');
         $this->command->info('');
         $this->command->info('Total de estados configurados: ' . count($estados));
     }

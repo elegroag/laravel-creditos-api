@@ -3,16 +3,14 @@
 namespace App\Services;
 
 use App\Models\SolicitudCredito;
-use App\Models\NumeroSolicitud;
 use App\Models\EstadoSolicitud;
+use App\Models\SolicitudPayload;
+use App\Models\SolicitudSolicitante;
+use App\Models\SolicitudTimeline;
 use App\Exceptions\ValidationException;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 class SolicitudService extends EloquentService
 {
@@ -224,45 +222,11 @@ class SolicitudService extends EloquentService
      */
     public function getEstadosDisponibles(): array
     {
-        try {
-            // Get distinct estados from database
-            $estados = SolicitudCredito::distinct('estado')
-                ->pluck('estado')
-                ->filter()
-                ->toArray();
-
-            // Default estados if none found
-            if (empty($estados)) {
-                $estados = [
-                    'NUEVA',
-                    'ENVIADO_VALIDACION',
-                    'EN_VALIDACION',
-                    'ENVIADO_PENDIENTE_APROBACION',
-                    'PENDIENTE_APROBACION',
-                    'APROBADA',
-                    'RECHAZADA',
-                    'DESESTIMADA',
-                    'CANCELADA',
-                    'DESISTE'
-                ];
-            }
-
-            return $estados;
-        } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'obtención de estados disponibles');
-            return [
-                'NUEVA',
-                'ENVIADO_VALIDACION',
-                'EN_VALIDACION',
-                'ENVIADO_PENDIENTE_APROBACION',
-                'PENDIENTE_APROBACION',
-                'APROBADA',
-                'RECHAZADA',
-                'DESESTIMADA',
-                'CANCELADA',
-                'DESISTE'
-            ];
-        }
+        // Get distinct estados from database
+        return  EstadoSolicitud::all()
+            ->pluck('nombre')
+            ->filter()
+            ->toArray();
     }
 
     /**
@@ -288,7 +252,7 @@ class SolicitudService extends EloquentService
             $query->orderBy('created_at', 'desc');
 
             // Apply pagination
-            $solicitudes = $query->skip($skip)->limit($limit)->get();
+            $solicitudes = $query->skip($skip)->limit($limit)->with('payload')->get();
 
             return [
                 'solicitudes' => $solicitudes->toArray(),
@@ -384,6 +348,7 @@ class SolicitudService extends EloquentService
             $solicitudes = $query->orderBy('created_at', 'desc')
                 ->skip($skip)
                 ->limit($limit)
+                ->with('payload')
                 ->get();
 
             return [
@@ -799,6 +764,12 @@ class SolicitudService extends EloquentService
             // Actualizar solicitud existente
             $existing->update($updateData);
 
+            // Actualizar SolicitudPayload
+            $this->guardarOActualizarPayload($numeroSolicitud, $data);
+
+            // Actualizar SolicitudSolicitante
+            $this->guardarOActualizarSolicitante($numeroSolicitud, $solicitantePayload);
+
             // Agregar al timeline
             $timeline = $existing->timeline ?? [];
             $timeline[] = [
@@ -821,8 +792,166 @@ class SolicitudService extends EloquentService
             ];
 
             $solicitud = SolicitudCredito::create($updateData);
+
+            // Crear SolicitudPayload
+            $this->guardarOActualizarPayload($numeroSolicitud, $data);
+
+            // Crear SolicitudSolicitante
+            $this->guardarOActualizarSolicitante($numeroSolicitud, $solicitantePayload);
+
+            // Crear timeline inicial
+            $this->crearTimelineInicial($numeroSolicitud, $username);
         }
 
         return $solicitud->numero_solicitud;
+    }
+
+    /**
+     * Guardar o actualizar SolicitudPayload
+     */
+    private function guardarOActualizarPayload(string $numeroSolicitud, array $data): void
+    {
+        $externalApiService = new ExternalApiService();
+        $response = $externalApiService->post('/creditos/tipo_creditos');
+        $isSuccess = ($response['status'] ?? true) && !isset($response['error']);
+
+        $tasa_mes = 0;
+        $tasa_facfin = 0;
+        $tasa_facmor = 0;
+        if ($isSuccess) {
+            $collection = collect($response['data']);
+            $lineaCredito = $collection->where('tipcre', $data['linea_credito']['tipcre'])->first();
+            $categorias = $lineaCredito['categorias'];
+            $collectionCategorias = collect($categorias);
+            $categoria = $collectionCategorias->where('codcat', $data['solicitante']['codigo_categoria'])->first();
+            $tasa_mes = round($categoria['facfin'] / 12, 2) - 0.01;
+            $tasa_facfin = $categoria['facfin'];
+            $tasa_facmor = $categoria['facmor'];
+        }
+
+        $encabezado = [
+            'ip_origen' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
+            'fecha_radicado' => Carbon::now()->toDateTimeString(),
+            'usuario_radica' => $data['solicitante']['numero_documento'] ?? 'Unknown',
+        ];
+
+        $payloadData = [
+            'solicitud_id' => $numeroSolicitud,
+            'version' => '1.0',
+            'encabezado' => $encabezado,
+            'solicitud' => $data['solicitud'] ?? null,
+            'producto_solicitado' => $data['producto_solicitado'] ?? null,
+            'solicitante' => $data['solicitante'] ?? null,
+            'informacion_laboral' => $data['informacion_laboral'] ?? null,
+            'ingresos_descuentos' => $data['ingresos_descuentos'] ?? null,
+            'informacion_economica' => $data['informacion_economica'] ?? null,
+            'propiedades' => $data['propiedades'] ?? null,
+            'deudas' => $data['deudas'] ?? null,
+            'referencias' => $data['referencias'] ?? null,
+            'save_xml' => $data['save_xml'] ?? true,
+            'linea_credito' => [
+                "tipcre" => $data['linea_credito']['tipcre'],
+                "modxml4" => $data['linea_credito']['modxml4'],
+                "numero_cuotas" => $data['linea_credito']['numero_cuotas'],
+                "tasa_categoria" => $data['solicitante']['codigo_categoria'],
+                "tasa_mes" => $tasa_mes,
+                "tasa_facfin" => $tasa_facfin,
+                "tasa_facmor" => $tasa_facmor,
+                "detalle_modalidad" => $data['linea_credito']['detalle_modalidad'],
+            ],
+        ];
+
+        // Buscar payload existente
+        $existingPayload = SolicitudPayload::where('solicitud_id', $numeroSolicitud)
+            ->where('version', '1.0')
+            ->first();
+
+        if ($existingPayload) {
+            $existingPayload->update($payloadData);
+        } else {
+            SolicitudPayload::create($payloadData);
+        }
+    }
+
+    /**
+     * Guardar o actualizar SolicitudSolicitante
+     */
+    private function guardarOActualizarSolicitante(string $numeroSolicitud, array $solicitantePayload): void
+    {
+        if (empty($solicitantePayload)) {
+            return;
+        }
+
+        $antiguedadMeses = $this->calcularAntiguedadMeses($solicitantePayload['fecha_vinculacion'] ?? null);
+
+        $solicitanteData = [
+            'solicitud_id' => $numeroSolicitud,
+            'tipo_persona' => 'natural', // Por defecto persona natural
+            'tipo_documento' => $solicitantePayload['tipo_identificacion'] ?? null,
+            'numero_documento' => $solicitantePayload['numero_identificacion'] ?? null,
+            'nombres' => $solicitantePayload['nombres_apellidos'] ?? null,
+            'email' => $solicitantePayload['email'] ?? null,
+            'telefono' => $solicitantePayload['telefono_fijo'] ?? null,
+            'celular' => $solicitantePayload['telefono_movil'] ?? null,
+            'genero' => $solicitantePayload['sexo'] ?? null,
+            'fecha_nacimiento' => $solicitantePayload['fecha_nacimiento'] ?? null,
+            'estado_civil' => $solicitantePayload['estado_civil'] ?? null,
+            'nivel_educativo' => $solicitantePayload['nivel_educativo'] ?? null,
+            'profesion' => $solicitantePayload['profesion_ocupacion'] ?? null,
+            'barrio' => $solicitantePayload['barrio_residencia'] ?? null,
+            'ciudad' => $solicitantePayload['ciudad_residencia'] ?? null,
+            'departamento' => $solicitantePayload['pais_residencia'] ?? null,
+            'cargo' => $solicitantePayload['profesion_ocupacion'] ?? null,
+            'salario' => $solicitantePayload['salario'] ?? null,
+            'antiguedad_meses' => $antiguedadMeses,
+            'tipo_contrato' => null,
+            'sector_economico' => null,
+            'nit' => $solicitantePayload['empresa_nit'] ?? null,
+            'razon_social' => $solicitantePayload['empresa_razon_social'] ?? null,
+        ];
+
+        // Buscar solicitante existente
+        $existingSolicitante = SolicitudSolicitante::where('solicitud_id', $numeroSolicitud)->first();
+
+        if ($existingSolicitante) {
+            $existingSolicitante->update($solicitanteData);
+        } else {
+            SolicitudSolicitante::create($solicitanteData);
+        }
+    }
+
+    /**
+     * Calcular antigüedad en meses desde la fecha de vinculación
+     */
+    private function calcularAntiguedadMeses(?string $fechaVinculacion): int
+    {
+        if (!$fechaVinculacion) {
+            return 1; // Por defecto 1 mes si no hay fecha
+        }
+
+        try {
+            $fechaVinculacion = Carbon::createFromFormat('Y-m-d', $fechaVinculacion);
+            $fechaActual = Carbon::now();
+
+            return $fechaVinculacion->diffInMonths($fechaActual);
+        } catch (\Exception $e) {
+            return 1; // Por defecto 1 mes si hay error en el cálculo
+        }
+    }
+
+    /**
+     * Crear timeline inicial para nueva solicitud
+     */
+    private function crearTimelineInicial(string $numeroSolicitud, string $username): void
+    {
+        SolicitudTimeline::create([
+            'solicitud_id' => $numeroSolicitud,
+            'estado' => 'POSTULADO',
+            'fecha' => Carbon::now(),
+            'detalle' => "Solicitud {$numeroSolicitud} creada exitosamente en el sistema",
+            'usuario_username' => $username,
+            'automatico' => true
+        ]);
     }
 }

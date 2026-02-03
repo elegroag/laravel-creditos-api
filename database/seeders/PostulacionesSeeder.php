@@ -46,7 +46,7 @@ class PostulacionesSeeder extends Seeder
     private function generarPostulacionParaUsuario(User $user, $empresas): array
     {
         $username = $user->username;
-        $roles = json_decode($user->roles ?? '[]', true);
+        $roles = $user->roles ?? [];
 
         // Determinar tipo de postulante según rol
         if (in_array('user_empresa', $roles)) {

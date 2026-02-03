@@ -111,6 +111,25 @@ class EmpresasConvenioSeeder extends Seeder
                 'tipo_empresa' => 'Sociedad Anónima',
                 'descripcion' => 'Empresa de transporte de carga y logística',
                 'notas_internas' => 'Convenio vencido, pendiente renovación'
+            ],
+            [
+                'nit' => 891190047,
+                'razon_social' => 'CAJA DE COMPENSACION FAMILIAR DEL CAQUETA',
+                'fecha_convenio' => '2021-09-01',
+                'fecha_vencimiento' => '2028-09-01',
+                'estado' => 'Activo',
+                'representante_documento' => '17689152',
+                'representante_nombre' => 'GUILLERMO ALFONSO PERDOMO ROJAS"',
+                'telefono' => '3003334444',
+                'correo' => 'logistica@transporterapida.com',
+                'direccion' => 'Kilómetro 10 Vía al Mar',
+                'ciudad' => 'Barranquilla',
+                'departamento' => 'Atlántico',
+                'sector_economico' => 'Transporte',
+                'numero_empleados' => 200,
+                'tipo_empresa' => 'Sociedad Anónima',
+                'descripcion' => 'Empresa de transporte de carga y logística',
+                'notas_internas' => 'Convenio vencido, pendiente renovación'
             ]
         ];
 

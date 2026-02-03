@@ -512,7 +512,7 @@ class TrabajadorService extends EloquentService
                 'cedtra' => $numeroDocumento
             ]);
 
-            if ($response['success'] && isset($response['data'])) {
+            if ($response['success'] && isset($response['data']) && is_array($response['data'])) {
                 return $this->extractRelevantData($response['data']);
             }
 

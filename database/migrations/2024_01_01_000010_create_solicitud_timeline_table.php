@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('solicitud_timeline', function (Blueprint $table) {
             $table->id();
             $table->string('solicitud_id', 20); // Cambiar a string para coincidir con numero_solicitud
-            $table->string('estado_codigo', 50);
+            $table->string('estado', 50);
             $table->timestamp('fecha')->useCurrent();
             $table->text('detalle')->nullable();
             $table->string('usuario_username', 100)->nullable();
@@ -23,12 +23,12 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('solicitud_id')->references('numero_solicitud')->on('solicitudes_credito')->onDelete('cascade');
-            $table->foreign('estado_codigo')->references('codigo')->on('estados_solicitud');
+            $table->foreign('estado')->references('id')->on('estados_solicitud');
             $table->foreign('usuario_username')->references('username')->on('users')->onDelete('set null');
 
             // Índices
             $table->index('solicitud_id');
-            $table->index('estado_codigo');
+            $table->index('estado');
             $table->index('fecha');
             $table->index('usuario_username');
         });

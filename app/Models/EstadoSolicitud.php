@@ -10,6 +10,20 @@ class EstadoSolicitud extends Model
     use HasFactory;
 
     /**
+     * Indicates if the IDs are auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
+    /**
+     * The "type" of the auto-incrementing ID.
+     *
+     * @var string
+     */
+    protected $keyType = 'string';
+
+    /**
      * The table associated with the model.
      *
      * @var string
@@ -22,7 +36,7 @@ class EstadoSolicitud extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'codigo',
+        'id',
         'nombre',
         'descripcion',
         'orden',
@@ -64,9 +78,9 @@ class EstadoSolicitud extends Model
     /**
      * Find state by code.
      */
-    public static function findByCode(string $code): ?self
+    public static function findById(string $id): ?self
     {
-        return static::where('codigo', $code)->first();
+        return static::where('id', $id)->first();
     }
 
     /**
@@ -74,7 +88,7 @@ class EstadoSolicitud extends Model
      */
     public function solicitudes()
     {
-        return $this->hasMany(SolicitudCredito::class, 'estado_codigo', 'codigo');
+        return $this->hasMany(SolicitudCredito::class, 'estado_id', 'id');
     }
 
     /**
@@ -82,7 +96,7 @@ class EstadoSolicitud extends Model
      */
     public function timelineEntries()
     {
-        return $this->hasMany(SolicitudTimeline::class, 'estado_codigo', 'codigo');
+        return $this->hasMany(SolicitudTimeline::class, 'estado_id', 'id');
     }
 
     /**
@@ -98,8 +112,8 @@ class EstadoSolicitud extends Model
      */
     public static function getFinalStates(): \Illuminate\Database\Eloquent\Collection
     {
-        $finalStateCodes = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
-        return static::whereIn('codigo', $finalStateCodes)->active()->get();
+        $finalStateIds = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
+        return static::whereIn('id', $finalStateIds)->active()->get();
     }
 
     /**
@@ -123,8 +137,8 @@ class EstadoSolicitud extends Model
      */
     public function isFinal(): bool
     {
-        $finalStateCodes = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
-        return in_array($this->codigo, $finalStateCodes);
+        $finalStateIds = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
+        return in_array($this->id, $finalStateIds);
     }
 
     /**
@@ -133,7 +147,7 @@ class EstadoSolicitud extends Model
     public function requiresAction(): bool
     {
         $actionStates = ['ENVIADO_VALIDACION', 'REQUIRE_CORRECCION'];
-        return in_array($this->codigo, $actionStates);
+        return in_array($this->id, $actionStates);
     }
 
     /**
@@ -142,7 +156,7 @@ class EstadoSolicitud extends Model
     public function isActive(): bool
     {
         $inactiveStates = ['FINALIZADO', 'RECHAZADO', 'DESISTE'];
-        return !in_array($this->codigo, $inactiveStates);
+        return !in_array($this->id, $inactiveStates);
     }
 
     /**
@@ -173,7 +187,7 @@ class EstadoSolicitud extends Model
     public function canTransitionTo(self $targetState): bool
     {
         // Can always transition to the same state
-        if ($this->codigo === $targetState->codigo) {
+        if ($this->id === $targetState->id) {
             return true;
         }
 
@@ -193,7 +207,6 @@ class EstadoSolicitud extends Model
     {
         return [
             'id' => $this->id,
-            'codigo' => $this->codigo,
             'nombre' => $this->nombre,
             'descripcion' => $this->descripcion,
             'orden' => $this->orden,
@@ -205,14 +218,14 @@ class EstadoSolicitud extends Model
             'is_active' => $this->isActive(),
             'next_states' => $this->getNextStates()->map(function ($state) {
                 return [
-                    'codigo' => $state->codigo,
+                    'id' => $state->id,
                     'nombre' => $state->nombre,
                     'color' => $state->color
                 ];
             }),
             'previous_states' => $this->getPreviousStates()->map(function ($state) {
                 return [
-                    'codigo' => $state->codigo,
+                    'id' => $state->id,
                     'nombre' => $state->nombre,
                     'color' => $state->color
                 ];

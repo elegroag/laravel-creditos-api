@@ -23,7 +23,7 @@ class SolicitudTimeline extends Model
      */
     protected $fillable = [
         'solicitud_id',
-        'estado_codigo',
+        'estado',
         'detalle',
         'usuario_username',
         'automatico',
@@ -58,7 +58,7 @@ class SolicitudTimeline extends Model
      */
     public function estado()
     {
-        return $this->belongsTo(EstadoSolicitud::class, 'estado_codigo', 'codigo');
+        return $this->belongsTo(EstadoSolicitud::class, 'estado', 'id');
     }
 
     /**

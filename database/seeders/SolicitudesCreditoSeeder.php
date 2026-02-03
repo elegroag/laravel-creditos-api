@@ -25,10 +25,10 @@ class SolicitudesCreditoSeeder extends Seeder
         $empresaUser = User::where('username', 'empresa1')->first();
         $trabajadorUser = User::where('username', 'trabajador1')->first();
 
-        $estadoPostulado = EstadoSolicitud::where('codigo', 'POSTULADO')->first();
-        $estadoAprobado = EstadoSolicitud::where('codigo', 'APROBADO')->first();
-        $estadoRevision = EstadoSolicitud::where('codigo', 'EN_REVISION')->first();
-        $estadoFinalizado = EstadoSolicitud::where('codigo', 'FINALIZADO')->first();
+        $estadoPostulado = EstadoSolicitud::where('id', 'POSTULADO')->first();
+        $estadoAprobado = EstadoSolicitud::where('id', 'APROBADA')->first();
+        $estadoRevision = EstadoSolicitud::where('id', 'ENVIADO_VALIDACION')->first();
+        $estadoFinalizado = EstadoSolicitud::where('id', 'APROBADA')->first();
 
         $solicitudes = [
             [
@@ -41,7 +41,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 11.50,
                 'destino_credito' => 'Mejora de vivienda',
                 'descripcion' => 'Crédito solicitado para reparaciones y mejoras en la vivienda principal',
-                'estado' => $estadoFinalizado->codigo
+                'estado' => $estadoFinalizado->id
             ],
             [
                 'numero_solicitud' => '000002-202501-03',
@@ -53,7 +53,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 10.00,
                 'destino_credito' => 'Capital de trabajo',
                 'descripcion' => 'Financiamiento para expansión de operaciones y capital de trabajo',
-                'estado' => $estadoRevision->codigo
+                'estado' => $estadoRevision->id
             ],
             [
                 'numero_solicitud' => '000003-202501-03',
@@ -65,7 +65,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 12.00,
                 'destino_credito' => 'Educación superior',
                 'descripcion' => 'Crédito para pago de matrícula y semestres universitarios',
-                'estado' => $estadoPostulado->codigo
+                'estado' => $estadoPostulado->id
             ],
             [
                 'numero_solicitud' => '000001-202401-03',
@@ -77,7 +77,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 9.50,
                 'destino_credito' => 'Vivienda nueva',
                 'descripcion' => 'Financiamiento para compra de vivienda nueva',
-                'estado' => $estadoFinalizado->codigo
+                'estado' => $estadoFinalizado->id
             ],
             [
                 'numero_solicitud' => '000002-202401-03',
@@ -89,7 +89,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 10.50,
                 'destino_credito' => 'Vehículo',
                 'descripcion' => 'Crédito para compra de vehículo particular',
-                'estado' => $estadoAprobado->codigo
+                'estado' => $estadoAprobado->id
             ],
             [
                 'numero_solicitud' => '000003-202401-03',
@@ -101,7 +101,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 8.00,
                 'destino_credito' => 'Maquinaria y equipo',
                 'descripcion' => 'Inversión en nueva maquinaria para la planta de producción',
-                'estado' => $estadoRevision->codigo
+                'estado' => $estadoRevision->id
             ],
             [
                 'numero_solicitud' => '000001-202301-03',
@@ -113,7 +113,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 13.00,
                 'destino_credito' => 'Emergencia médica',
                 'descripcion' => 'Crédito para gastos médicos urgentes',
-                'estado' => $estadoFinalizado->codigo
+                'estado' => $estadoFinalizado->id
             ],
             [
                 'numero_solicitud' => '000002-202301-03',
@@ -125,7 +125,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 11.00,
                 'destino_credito' => 'Consolidación de deudas',
                 'descripcion' => 'Crédito para consolidar varias deudas existentes',
-                'estado' => $estadoPostulado->codigo
+                'estado' => $estadoPostulado->id
             ],
             [
                 'numero_solicitud' => '000003-202301-03',
@@ -137,7 +137,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 7.50,
                 'destino_credito' => 'Proyecto educativo',
                 'descripcion' => 'Financiamiento para estudios de posgrado en el exterior',
-                'estado' => $estadoAprobado->codigo
+                'estado' => $estadoAprobado->id
             ],
             [
                 'numero_solicitud' => '000001-202201-01',
@@ -149,7 +149,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tasa_interes' => 6.50,
                 'destino_credito' => 'Expansión internacional',
                 'descripcion' => 'Crédito para expansión de operaciones a mercados internacionales',
-                'estado' => $estadoFinalizado->codigo
+                'estado' => $estadoFinalizado->id
             ]
         ];
 

@@ -30,7 +30,6 @@ class SolicitudSolicitante extends Model
         'apellidos',
         'razon_social',
         'nit',
-        'digito_verificacion',
         'fecha_nacimiento',
         'genero',
         'estado_civil',
@@ -43,8 +42,6 @@ class SolicitudSolicitante extends Model
         'barrio',
         'ciudad',
         'departamento',
-        'codigo_postal',
-        'empresa_nit',
         'cargo',
         'salario',
         'antiguedad_meses',
@@ -116,7 +113,7 @@ class SolicitudSolicitante extends Model
         if ($this->tipo_persona === 'NATURAL') {
             return trim(($this->nombres ?? '') . ' ' . ($this->apellidos ?? ''));
         }
-        
+
         return $this->razon_social ?? '';
     }
 
@@ -130,7 +127,7 @@ class SolicitudSolicitante extends Model
             $dv = $this->digito_verificacion ? '-' . $this->digito_verificacion : '';
             return $nit . $dv;
         }
-        
+
         return $this->numero_documento ?? '';
     }
 
@@ -142,7 +139,7 @@ class SolicitudSolicitante extends Model
         if (!$this->fecha_nacimiento) {
             return null;
         }
-        
+
         return $this->fecha_nacimiento->age;
     }
 
@@ -154,7 +151,7 @@ class SolicitudSolicitante extends Model
         if (!$this->salario) {
             return '$0';
         }
-        
+
         return '$' . number_format($this->salario, 2, ',', '.');
     }
 
@@ -166,7 +163,7 @@ class SolicitudSolicitante extends Model
         if (!$this->antiguedad_meses) {
             return 0;
         }
-        
+
         return round($this->antiguedad_meses / 12, 2);
     }
 
@@ -181,7 +178,7 @@ class SolicitudSolicitante extends Model
             $this->ciudad,
             $this->departamento
         ]);
-        
+
         return implode(', ', $parts);
     }
 
@@ -241,13 +238,13 @@ class SolicitudSolicitante extends Model
         } else {
             $camposRequeridos = ['razon_social', 'nit', 'digito_verificacion'];
         }
-        
+
         foreach ($camposRequeridos as $campo) {
             if (empty($this->$campo)) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -273,23 +270,23 @@ class SolicitudSolicitante extends Model
     public function validarCampos(): array
     {
         $errores = [];
-        
+
         if (!$this->tieneDatosPersonalesCompletos()) {
             $errores[] = 'Faltan datos personales obligatorios';
         }
-        
+
         if (!$this->tieneDatosContactoCompletos()) {
             $errores[] = 'Faltan datos de contacto obligatorios';
         }
-        
+
         if (!$this->tieneEmailValido()) {
             $errores[] = 'El correo electrónico no es válido';
         }
-        
+
         if ($this->tipo_persona === 'NATURAL' && !$this->esMayorEdad()) {
             $errores[] = 'El solicitante debe ser mayor de edad';
         }
-        
+
         return $errores;
     }
 

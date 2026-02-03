@@ -12,17 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('estados_solicitud', function (Blueprint $table) {
-            $table->id();
-            $table->string('codigo', 50)->unique();
+            $table->string('id', 50)->primary();
             $table->string('nombre', 100);
             $table->text('descripcion')->nullable();
             $table->integer('orden');
             $table->string('color', 7)->default('#6B7280');
             $table->boolean('activo')->default(true);
             $table->timestamps();
-            
+
             // Índices
-            $table->index('codigo');
             $table->index('orden');
             $table->index('activo');
         });

@@ -50,7 +50,7 @@ class DocumentosPostulantesSeeder extends Seeder
     private function generarDocumentosParaUsuario(User $user): array
     {
         $username = $user->username;
-        $roles = json_decode($user->roles ?? '[]', true);
+        $roles = $user->roles ?? [];
 
         $documentos = [];
 

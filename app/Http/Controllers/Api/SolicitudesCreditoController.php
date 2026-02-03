@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
+use App\Models\EstadoSolicitud;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\UserService;
@@ -281,11 +282,6 @@ class SolicitudesCreditoController extends Controller
             $username = $userData['username'];
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
-
-            Log::info('Listando todas las solicitudes de crédito', [
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
 
             if ($isAdmin) {
                 // Admin puede ver todas las solicitudes
@@ -603,8 +599,7 @@ class SolicitudesCreditoController extends Controller
     public function obtenerEstadosSolicitud(): JsonResponse
     {
         try {
-            $estados = $this->solicitudService->getEstadosDisponibles();
-
+            $estados = EstadoSolicitud::all()->toArray();
             return ApiResource::success($estados, 'Estados de solicitud obtenidos exitosamente')->response();
         } catch (\Exception $e) {
             return ErrorResource::errorResponse('Error al obtener estados de solicitud', [
@@ -808,8 +803,18 @@ class SolicitudesCreditoController extends Controller
             }
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
+                'encabezado' => 'sometimes|array',
                 'solicitud' => 'sometimes|array',
-                'solicitante' => 'sometimes|array'
+                'solicitante' => 'sometimes|array',
+                'linea_credito' => 'sometimes|array',
+                'conyuge' => 'sometimes|array',
+                'informacion_laboral' => 'sometimes|array',
+                'ingresos_descuentos' => 'sometimes|array',
+                'garantia' => 'sometimes|array',
+                'informacion_economica' => 'sometimes|array',
+                'propiedades' => 'sometimes|array',
+                'deudas' => 'sometimes|array',
+                'referencias' => 'sometimes|array',
             ]);
 
             if ($validator->fails()) {

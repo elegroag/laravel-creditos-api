@@ -49,7 +49,7 @@ class EntidadDigitalSeeder extends Seeder
     private function generarEntidadParaUsuario(User $user): array
     {
         $username = $user->username;
-        $roles = json_decode($user->roles ?? '[]', true);
+        $roles = $user->roles ?? [];
 
         // Datos base de identificación
         $baseData = [

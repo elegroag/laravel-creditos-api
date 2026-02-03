@@ -26,7 +26,7 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('owner_username')->references('username')->on('users')->onDelete('cascade');
-            $table->foreign('estado')->references('codigo')->on('estados_solicitud');
+            $table->foreign('estado')->references('id')->on('estados_solicitud');
 
             // Índices
             $table->index('owner_username');

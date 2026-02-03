@@ -30,10 +30,6 @@ class ConvenioValidationService
      */
     public function validarConvenioTrabajador(string $nitEmpresa, string $cedulaTrabajador): array
     {
-        Log::info('Validando convenio para trabajador', [
-            'nit_empresa' => $nitEmpresa,
-            'cedula_trabajador' => $cedulaTrabajador
-        ]);
 
         // 1. Obtener datos del trabajador desde API externa
         $trabajadorData = $this->obtenerDatosTrabajador($cedulaTrabajador);
