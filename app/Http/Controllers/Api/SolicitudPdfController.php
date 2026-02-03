@@ -241,16 +241,63 @@ class SolicitudPdfController extends Controller
 
             if ($pdfData) {
                 $pdfPath = $pdfData['path'] ?? null;
-                $archivoExiste = $pdfPath ? Storage::disk('public')->exists($pdfPath) : false;
+                $filename = $pdfData['filename'] ?? null;
 
-                $estado['pdf_generado'] = [
-                    'filename' => $pdfData['filename'] ?? null,
-                    'generado_en' => $pdfData['generado_en'] ?? null,
-                    'archivo_existe' => $archivoExiste,
-                    'path' => $archivoExiste ? Storage::url($pdfPath) : null,
-                    'tamano' => $pdfData['tamano'] ?? null,
-                    'url_descarga' => $archivoExiste ? Storage::url($pdfPath) : null
-                ];
+                // Verificar si el PDF existe usando la API Flask
+                $pdfExiste = false;
+                $pdfInfo = null;
+
+                if ($filename) {
+                    $verificacion = $this->generadorPdfService->verificarPdf($filename);
+                    $pdfExiste = $verificacion['existe'] ?? false;
+
+                    if ($pdfExiste) {
+                        $pdfInfo = [
+                            'filename' => $verificacion['filename'] ?? $filename,
+                            'generado_en' => $pdfData['generado_en'] ?? null,
+                            'archivo_existe' => true,
+                            'path' => $verificacion['local_path'] ?? $filename,
+                            'tamano' => $verificacion['size_bytes'] ?? $pdfData['tamano'] ?? null,
+                            'url_descarga' => $verificacion['local_path'] ? Storage::url($verificacion['local_path']) : "/api/solicitud-pdf/{$solicitudId}/download",
+                            'verificado_api' => true,
+                            'guardado_local' => $verificacion['guardado_local'] ?? false,
+                            'api_response' => [
+                                'success' => $verificacion['success'] ?? false,
+                                'size_bytes' => $verificacion['size_bytes'] ?? null,
+                                'local_path' => $verificacion['local_path'] ?? null
+                            ]
+                        ];
+                    } else {
+                        $pdfInfo = [
+                            'filename' => $filename,
+                            'generado_en' => $pdfData['generado_en'] ?? null,
+                            'archivo_existe' => false,
+                            'path' => $filename,
+                            'tamano' => $pdfData['tamano'] ?? null,
+                            'url_descarga' => null,
+                            'verificado_api' => true,
+                            'guardado_local' => false,
+                            'api_response' => [
+                                'success' => $verificacion['success'] ?? false,
+                                'error' => $verificacion['error'] ?? 'Error desconocido'
+                            ]
+                        ];
+                    }
+                } else {
+                    // Fallback a verificación local si no hay filename
+                    $archivoExiste = $pdfPath ? Storage::disk('public')->exists($pdfPath) : false;
+                    $pdfInfo = [
+                        'filename' => $pdfData['filename'] ?? null,
+                        'generado_en' => $pdfData['generado_en'] ?? null,
+                        'archivo_existe' => $archivoExiste,
+                        'path' => $archivoExiste ? Storage::url($pdfPath) : null,
+                        'tamano' => $pdfData['tamano'] ?? null,
+                        'url_descarga' => $archivoExiste ? Storage::url($pdfPath) : null,
+                        'verificado_api' => false
+                    ];
+                }
+
+                $estado['pdf_generado'] = $pdfInfo;
             }
 
             return ApiResource::success($estado, 'Estado del PDF obtenido exitosamente')->response();
@@ -436,7 +483,7 @@ class SolicitudPdfController extends Controller
     private function guardarInfoPdfEnSolicitud(string $solicitudId, array $pdfData): void
     {
         try {
-            $solicitud = SolicitudCredito::find($solicitudId);
+            $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
 
             if (!$solicitud) {
                 Log::warning('No se encontró la solicitud para guardar info del PDF', [
@@ -511,7 +558,7 @@ class SolicitudPdfController extends Controller
             }
 
             // Limpiar información del PDF en la solicitud
-            $solicitudModel = SolicitudCredito::find($solicitudId);
+            $solicitudModel = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
             $solicitudModel->update([
                 'pdf_generado' => null,
                 'updated_at' => Carbon::now()

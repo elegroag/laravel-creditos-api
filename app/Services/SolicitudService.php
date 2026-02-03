@@ -513,12 +513,12 @@ class SolicitudService extends EloquentService
     }
 
     /**
-     * Find solicitud by ID.
+     * Find solicitud by ID (numero_solicitud).
      */
-    public function findById(int $id): ?SolicitudCredito
+    public function findById(string $id): ?SolicitudCredito
     {
         try {
-            return SolicitudCredito::find($id);
+            return SolicitudCredito::where('numero_solicitud', $id)->first();
         } catch (\Exception $e) {
             $this->handleDatabaseError($e, 'búsqueda de solicitud');
             return null;
@@ -539,12 +539,12 @@ class SolicitudService extends EloquentService
     }
 
     /**
-     * Update solicitud.
+     * Update solicitud by numero_solicitud.
      */
-    public function update(int $id, array $data): bool
+    public function update(string $id, array $data): bool
     {
         try {
-            $solicitud = SolicitudCredito::find($id);
+            $solicitud = SolicitudCredito::where('numero_solicitud', $id)->first();
             if (!$solicitud) {
                 return false;
             }
@@ -561,7 +561,7 @@ class SolicitudService extends EloquentService
     public function updateEstado(string $id, string $estado): bool
     {
         try {
-            $solicitud = SolicitudCredito::find($id);
+            $solicitud = SolicitudCredito::where('numero_solicitud', $id)->first();
             if (!$solicitud) {
                 return false;
             }
@@ -573,12 +573,12 @@ class SolicitudService extends EloquentService
     }
 
     /**
-     * Delete solicitud.
+     * Delete solicitud by numero_solicitud.
      */
-    public function delete(int $id): bool
+    public function delete(string $id): bool
     {
         try {
-            $solicitud = SolicitudCredito::find($id);
+            $solicitud = SolicitudCredito::where('numero_solicitud', $id)->first();
             if (!$solicitud) {
                 return false;
             }

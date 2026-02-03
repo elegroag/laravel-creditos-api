@@ -54,7 +54,7 @@ class SolicitudDocumento extends Model
      */
     public function solicitud()
     {
-        return $this->belongsTo(SolicitudCredito::class, 'solicitud_id');
+        return $this->belongsTo(SolicitudCredito::class, 'solicitud_id', 'numero_solicitud');
     }
 
     /**

@@ -576,7 +576,7 @@ class SolicitudDocumentosController extends Controller
     private function eliminarDocumentoDeSolicitud(string $solicitudId, string $documentoId): ?array
     {
         try {
-            $solicitud = SolicitudCredito::find($solicitudId);
+            $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
 
             if (!$solicitud) {
                 return null;

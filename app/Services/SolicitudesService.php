@@ -49,7 +49,6 @@ class SolicitudesService extends EloquentService
 
             $this->log('Document saved successfully', [
                 'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
                 'filename' => $uniqueFilename
             ]);
 
@@ -165,7 +164,7 @@ class SolicitudesService extends EloquentService
                 $solicitudId = basename($directory);
 
                 // Check if solicitud exists
-                $solicitud = SolicitudCredito::find($solicitudId);
+                $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
 
                 if (!$solicitud) {
                     // Delete entire directory
