@@ -321,13 +321,6 @@ class SolicitudesCreditoController extends Controller
             $isAdmin = in_array('administrator', $userRoles);
             $isAdviser = in_array('adviser', $userRoles);
 
-            Log::info('Obteniendo solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin,
-                'is_adviser' => $isAdviser
-            ]);
-
             // Obtener solicitud
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -336,7 +329,7 @@ class SolicitudesCreditoController extends Controller
             }
 
             // Verificar permisos: admin, adviser o propietario
-            if (!$isAdmin && !$isAdviser && ($solicitud['owner_username'] ?? '') !== $username) {
+            if (!$isAdmin && !$isAdviser && ($solicitud['owner_username'] !== $username)) {
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 

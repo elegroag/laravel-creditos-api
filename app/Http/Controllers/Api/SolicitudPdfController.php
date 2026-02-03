@@ -7,22 +7,22 @@ use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
+use App\Services\GeneradorPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
-use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class SolicitudPdfController extends Controller
 {
     protected SolicitudService $solicitudService;
+    protected GeneradorPdfService $generadorPdfService;
 
-    public function __construct(SolicitudService $solicitudService)
+    public function __construct(SolicitudService $solicitudService, GeneradorPdfService $generadorPdfService)
     {
         $this->solicitudService = $solicitudService;
+        $this->generadorPdfService = $generadorPdfService;
     }
 
     /**
@@ -49,34 +49,8 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
-            // Validar parámetros opcionales
-            $validator = Validator::make($request->all(), [
-                'incluir_convenio' => 'sometimes|boolean',
-                'incluir_firmantes' => 'sometimes|boolean'
-            ], [
-                'incluir_convenio.boolean' => 'El campo incluir_convenio debe ser booleano',
-                'incluir_firmantes.boolean' => 'El campo incluir_firmantes debe ser booleano'
-            ]);
-
-            if ($validator->fails()) {
-                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
-                    ->response()
-                    ->setStatusCode(422);
-            }
-
-            $data = $validator->validated();
-            $incluirConvenio = $data['incluir_convenio'] ?? true;
-            $incluirFirmantes = $data['incluir_firmantes'] ?? true;
-
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-
-            Log::info('Generando PDF de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'incluir_convenio' => $incluirConvenio,
-                'incluir_firmantes' => $incluirFirmantes,
-                'username' => $username
-            ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
@@ -94,7 +68,7 @@ class SolicitudPdfController extends Controller
             }
 
             // Generar PDF usando script Python
-            $resultado = $this->generarPdfConScript($solicitudId, $incluirConvenio, $incluirFirmantes);
+            $resultado = $this->generarPdfConScript($solicitudId);
 
             if (!$resultado['success']) {
                 return ErrorResource::errorResponse('Error al generar PDF', $resultado['error'] ?? [])
@@ -296,118 +270,153 @@ class SolicitudPdfController extends Controller
     }
 
     /**
-     * Genera PDF usando script Python
+     * Genera PDF usando el servicio externo Flask API
      */
-    private function generarPdfConScript(string $solicitudId, bool $incluirConvenio, bool $incluirFirmantes): array
+    private function generarPdfConScript(string $solicitudId): array
     {
         try {
-            // Ruta al script Python
-            $scriptPath = base_path('scripts/generate_pdf.py');
+            // Obtener datos completos de la solicitud
+            $solicitud = $this->solicitudService->getById($solicitudId);
 
-            if (!file_exists($scriptPath)) {
-                Log::error('Script Python no encontrado', ['script_path' => $scriptPath]);
+            if (!$solicitud) {
+                Log::error('Solicitud no encontrada', ['solicitud_id' => $solicitudId]);
                 return [
                     'success' => false,
-                    'error' => 'Script de generación de PDF no encontrado'
+                    'error' => 'Solicitud no encontrada'
                 ];
             }
 
-            // Preparar parámetros para el script
-            $params = [
-                'solicitud_id' => $solicitudId,
-                'incluir_convenio' => $incluirConvenio,
-                'incluir_firmantes' => $incluirFirmantes,
-                'output_dir' => storage_path('app/public/pdfs/solicitudes'),
-                'db_host' => config('database.connections.mongodb.host', 'localhost'),
-                'db_port' => config('database.connections.mongodb.port', 27017),
-                'db_name' => config('database.connections.mongodb.database', 'comfaca_credito')
+            // Obtener datos relacionados
+            $solicitante = $solicitud->solicitante;
+            $payload = $solicitud->payload;
+            $firmantes = $solicitud->firmantes;
+
+            // Mapear datos de la solicitud
+            $solicitudData = [
+                'numero_solicitud' => $solicitud->numero_solicitud,
+                'monto_solicitado' => $solicitud->monto_solicitado,
+                'monto_aprobado' => $solicitud->monto_aprobado,
+                'plazo_meses' => $solicitud->plazo_meses,
+                'tasa_interes' => $solicitud->tasa_interes,
+                'destino_credito' => $solicitud->destino_credito,
+                'descripcion' => $solicitud->descripcion,
+                'estado' => $solicitud->estado,
+                'created_at' => $solicitud->created_at->toISOString(),
+                'updated_at' => $solicitud->updated_at->toISOString()
             ];
 
-            // Crear directorio de salida si no existe
-            $outputDir = storage_path('app/public/pdfs/solicitudes');
-            if (!is_dir($outputDir)) {
-                mkdir($outputDir, 0755, true);
+            // Mapear datos del solicitante/trabajador
+            $trabajadorData = [];
+            if ($solicitante) {
+                $trabajadorData = [
+                    'nombre_completo' => $solicitante->nombre_completo ?? '',
+                    'tipo_documento' => $solicitante->tipo_documento ?? '',
+                    'numero_documento' => $solicitante->numero_documento ?? '',
+                    'email' => $solicitante->email ?? '',
+                    'telefono' => $solicitante->telefono ?? '',
+                    'direccion' => $solicitante->direccion ?? '',
+                    'ciudad' => $solicitante->ciudad ?? '',
+                    'departamento' => $solicitante->departamento ?? '',
+                    'cargo' => $solicitante->cargo ?? '',
+                    'empresa' => $solicitante->empresa ?? '',
+                    'salario' => $solicitante->salario ?? 0,
+                    'tipo_contrato' => $solicitante->tipo_contrato ?? ''
+                ];
             }
 
-            // Construir comando Python
-            $pythonCommand = 'python3';
-            $command = [
-                $pythonCommand,
-                $scriptPath,
-                json_encode($params)
+            // Mapear datos del payload (información adicional)
+            if ($payload) {
+                $payloadData = json_decode($payload->payload, true) ?? [];
+                $trabajadorData = array_merge($trabajadorData, $payloadData);
+            }
+
+            // Mapear datos de convenio (si aplica)
+            $convenioData = [];
+            $incluirConvenio = false;
+
+            // Aquí puedes agregar lógica para determinar si incluye convenio
+            // Por ejemplo, si el trabajador pertenece a una empresa con convenio
+            if ($solicitante && !empty($solicitante->convenio_id)) {
+                $incluirConvenio = true;
+                $convenioData = [
+                    'nombre_convenio' => $solicitante->convenio->nombre ?? '',
+                    'codigo_convenio' => $solicitante->convenio->codigo ?? '',
+                    'tasa_descuento' => $solicitante->convenio->tasa_descuento ?? 0,
+                    'empresa_convenio' => $solicitante->convenio->empresa ?? ''
+                ];
+            }
+
+            // Mapear datos de firmantes
+            $firmantesData = [];
+            $incluirFirmantes = false;
+
+            if ($firmantes && $firmantes->count() > 0) {
+                $incluirFirmantes = true;
+                $firmantesData = $firmantes->map(function ($firmante) {
+                    return [
+                        'nombre_completo' => $firmante->nombre_completo,
+                        'numero_documento' => $firmante->numero_documento,
+                        'email' => $firmante->email,
+                        'rol' => $firmante->rol,
+                        'tipo' => $firmante->tipo,
+                        'orden' => $firmante->orden
+                    ];
+                })->toArray();
+            }
+
+            // Preparar datos para la API Flask
+            $data = [
+                'solicitud_id' => $solicitudId,
+                'solicitud_data' => $solicitudData,
+                'trabajador_data' => $trabajadorData,
+                'incluir_convenio' => $incluirConvenio,
+                'incluir_firmantes' => $incluirFirmantes,
+                'convenio_data' => $convenioData,
+                'firmantes_data' => $firmantesData
             ];
 
-            Log::info('Ejecutando script Python para generar PDF', [
-                'script_path' => $scriptPath,
-                'params' => $params
+            Log::info('Enviando datos a API Flask para generar PDF', [
+                'solicitud_id' => $solicitudId,
+                'data_keys' => array_keys($data),
+                'has_solicitante' => !empty($trabajadorData),
+                'has_firmantes' => $incluirFirmantes,
+                'has_convenio' => $incluirConvenio
             ]);
 
-            // Ejecutar script Python
-            $process = new Process($command);
-            $process->setTimeout(300); // 5 minutos timeout
-            $process->run();
+            // Llamar al servicio externo
+            $resultado = $this->generadorPdfService->generarPdfCreditos($data);
 
-            if (!$process->isSuccessful()) {
-                $errorOutput = $process->getErrorOutput();
-                Log::error('Error al ejecutar script Python', [
-                    'error_output' => $errorOutput,
-                    'exit_code' => $process->getExitCode()
+            if (!$resultado['success']) {
+                Log::error('Error al generar PDF con API Flask', [
+                    'solicitud_id' => $solicitudId,
+                    'error' => $resultado['error'] ?? 'Unknown error',
+                    'status' => $resultado['status'] ?? 'N/A'
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => 'Error al ejecutar script de generación de PDF',
-                    'details' => ['script_error' => $errorOutput]
-                ];
-            }
-
-            $output = $process->getOutput();
-            $resultado = json_decode($output, true);
-
-            if (!$resultado || !isset($resultado['success'])) {
-                Log::error('Respuesta inválida del script Python', ['output' => $output]);
-                return [
-                    'success' => false,
-                    'error' => 'Respuesta inválida del script de generación de PDF'
-                ];
-            }
-
-            if (!$resultado['success']) {
-                Log::error('Script Python reportó error', ['error' => $resultado['error'] ?? 'Unknown error']);
-                return [
-                    'success' => false,
-                    'error' => $resultado['error'] ?? 'Error desconocido en script Python'
+                    'error' => $resultado['error'] ?? 'Error al generar PDF',
+                    'details' => ['api_error' => $resultado['response'] ?? []]
                 ];
             }
 
             // Guardar información del PDF en la solicitud
-            $pdfData = $resultado['data'] ?? [];
+            $pdfData = $resultado['data']['data'] ?? [];
             if (!empty($pdfData)) {
                 $this->guardarInfoPdfEnSolicitud($solicitudId, $pdfData);
             }
 
-            Log::info('PDF generado exitosamente con script Python', [
+            Log::info('PDF generado exitosamente con API Flask', [
                 'solicitud_id' => $solicitudId,
                 'pdf_data' => $pdfData
             ]);
 
             return [
                 'success' => true,
-                'data' => $resultado['data'] ?? []
-            ];
-        } catch (ProcessFailedException $e) {
-            Log::error('Excepción al ejecutar script Python', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'Error al ejecutar script Python',
-                'details' => ['exception' => $e->getMessage()]
+                'data' => $pdfData
             ];
         } catch (\Exception $e) {
-            Log::error('Error inesperado al generar PDF con script', [
+            Log::error('Error inesperado al generar PDF con API Flask', [
                 'solicitud_id' => $solicitudId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -416,7 +425,7 @@ class SolicitudPdfController extends Controller
             return [
                 'success' => false,
                 'error' => 'Error interno al generar PDF',
-                'details' => ['internal_error' => $e->getMessage()]
+                'details' => ['exception' => $e->getMessage()]
             ];
         }
     }
@@ -475,11 +484,6 @@ class SolicitudPdfController extends Controller
             if (!$username) {
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            Log::info('Eliminando PDF de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username
-            ]);
 
             // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);

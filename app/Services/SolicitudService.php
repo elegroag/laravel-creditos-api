@@ -492,10 +492,12 @@ class SolicitudService extends EloquentService
     /**
      * Get solicitud by ID.
      */
-    public function getById(string $id): ?SolicitudCredito
+    public function getById(string $key): ?SolicitudCredito
     {
         try {
-            return SolicitudCredito::find($id);
+            return SolicitudCredito::where("numero_solicitud", $key)
+                ->with('payload', 'documentos', 'solicitante', 'timeline')
+                ->first();
         } catch (\Exception $e) {
             $this->handleDatabaseError($e, 'búsqueda de solicitud');
             return null;
@@ -556,7 +558,7 @@ class SolicitudService extends EloquentService
     /**
      * Update solicitud status.
      */
-    public function updateEstado(int $id, string $estado): bool
+    public function updateEstado(string $id, string $estado): bool
     {
         try {
             $solicitud = SolicitudCredito::find($id);

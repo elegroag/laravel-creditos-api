@@ -43,4 +43,12 @@ return [
         'timeout' => env('EXTERNAL_API_TIMEOUT', 30),
     ],
 
+    'generador_pdf_api' => [
+        'url' => env('GENERATE_PDF_API_BASE_URL', 'https://api.example.com'),
+        'auth_type' => env('GENERATE_PDF_API_TYPE', 'Basic'),
+        'user' => env('GENERATE_PDF_API_USER'),
+        'password' => env('GENERATE_PDF_API_PASSWORD'),
+        'timeout' => env('GENERATE_PDF_API_TIMEOUT', 30),
+    ]
+
 ];

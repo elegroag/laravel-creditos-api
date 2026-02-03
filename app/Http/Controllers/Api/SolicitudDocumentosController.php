@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\SolicitudCredito;
+use App\Models\SolicitudDocumento;
 use App\Services\SolicitudService;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
@@ -526,26 +527,40 @@ class SolicitudDocumentosController extends Controller
     }
 
     /**
-     * Agregar documento a la solicitud
+     * Agregar documento a la solicitud usando el modelo SolicitudDocumento
      */
     private function agregarDocumentoASolicitud(string $solicitudId, array $fileData): array
     {
         try {
-            $solicitud = SolicitudCredito::find($solicitudId);
+            $solicitud = (new SolicitudService)->getById($solicitudId);
 
             if (!$solicitud) {
                 throw new \Exception("Solicitud no encontrada: {$solicitudId}");
             }
 
-            $documentos = $solicitud->documentos ?? [];
-            $documentos[] = $fileData;
-
-            $solicitud->update([
-                'documentos' => $documentos,
-                'updated_at' => Carbon::now()
+            // Crear registro en la tabla solicitud_documentos
+            $documento = SolicitudDocumento::create([
+                'solicitud_id' => $solicitudId,
+                'documento_uuid' => $fileData['id'],
+                'documento_requerido_id' => $fileData['documento_requerido_id'],
+                'nombre_original' => $fileData['nombre_original'],
+                'saved_filename' => basename($fileData['ruta_archivo']),
+                'tipo_mime' => $fileData['tipo_mime'],
+                'tamano_bytes' => $fileData['tamano'],
+                'ruta_archivo' => $fileData['ruta_archivo'],
+                'activo' => true
             ]);
 
-            return $solicitud->fresh()->toArray();
+            Log::info('Documento guardado en base de datos', [
+                'documento_id' => $documento->id,
+                'solicitud_id' => $solicitudId,
+                'documento_uuid' => $fileData['id']
+            ]);
+
+            return [
+                'documento' => $documento->toArray(),
+                'solicitud' => $solicitud->fresh()->toArray()
+            ];
         } catch (\Exception $e) {
             Log::error('Error al agregar documento a solicitud', [
                 'solicitud_id' => $solicitudId,
