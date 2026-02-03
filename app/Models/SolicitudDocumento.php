@@ -70,7 +70,7 @@ class SolicitudDocumento extends Model
      */
     public function scopeByType($query, string $tipo)
     {
-        return $query->where('tipo_documento', $tipo);
+        return $query->where('documento_requerido_id', $tipo);
     }
 
     /**
@@ -93,7 +93,7 @@ class SolicitudDocumento extends Model
      */
     public function getExtensionAttribute(): string
     {
-        return pathinfo($this->nombre_archivo, PATHINFO_EXTENSION);
+        return pathinfo($this->nombre_original, PATHINFO_EXTENSION);
     }
 
     /**
@@ -102,7 +102,7 @@ class SolicitudDocumento extends Model
     public function isImage(): bool
     {
         $imageMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        return in_array($this->mime_type, $imageMimes);
+        return in_array($this->tipo_mime, $imageMimes);
     }
 
     /**
@@ -110,7 +110,7 @@ class SolicitudDocumento extends Model
      */
     public function isPdf(): bool
     {
-        return $this->mime_type === 'application/pdf';
+        return $this->tipo_mime === 'application/pdf';
     }
 
     /**
@@ -193,12 +193,12 @@ class SolicitudDocumento extends Model
             'id' => $this->id,
             'solicitud_id' => $this->solicitud_id,
             'documento_uuid' => $this->documento_uuid,
-            'nombre_archivo' => $this->nombre_archivo,
-            'tipo_documento' => $this->tipo_documento,
+            'nombre_original' => $this->nombre_original,
+            'documento_requerido_id' => $this->documento_requerido_id,
             'ruta_archivo' => $this->ruta_archivo,
             'tamano_bytes' => $this->tamano_bytes,
             'tamano_formatted' => $this->tamano_formatted,
-            'mime_type' => $this->mime_type,
+            'tipo_mime' => $this->tipo_mime,
             'extension' => $this->extension,
             'file_icon' => $this->file_icon,
             'is_image' => $this->isImage(),

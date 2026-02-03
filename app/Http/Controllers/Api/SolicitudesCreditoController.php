@@ -843,7 +843,7 @@ class SolicitudesCreditoController extends Controller
             $savedSolicitudId = $this->solicitudService->guardarSolicitudEnBaseDatos($data, $numeroSolicitud, $userData['username']);
 
             return ApiResource::success([
-                'solicitud_id' => $savedSolicitudId,
+                'numero_solicitud' => $savedSolicitudId,
                 'filename' => $candidate
             ], 'Solicitud guardada exitosamente')
                 ->response();
