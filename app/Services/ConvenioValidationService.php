@@ -4,19 +4,19 @@ namespace App\Services;
 
 use App\Models\EmpresaConvenio;
 use App\Services\TrabajadorService;
+use App\Services\ExternalApiService;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 
 class ConvenioValidationService
 {
     private TrabajadorService $trabajadorService;
-    private string $externalApiUrl;
+    private ExternalApiService $externalApiService;
 
-    public function __construct(?TrabajadorService $trabajadorService = null)
+    public function __construct(?TrabajadorService $trabajadorService = null, ?ExternalApiService $externalApiService = null)
     {
         $this->trabajadorService = $trabajadorService ?? app(TrabajadorService::class);
-        $this->externalApiUrl = env('EXTERNAL_API_URL', 'https://api.example.com');
+        $this->externalApiService = $externalApiService ?? app(ExternalApiService::class);
     }
 
     /**
@@ -138,7 +138,7 @@ class ConvenioValidationService
     }
 
     /**
-     * Obtiene datos del trabajador desde la API externa.
+     * Obtiene datos del trabajador desde la API externa usando ExternalApiService.
      *
      * @param string $cedula Cédula del trabajador
      * @return array|null Datos del trabajador o null si no se encuentra
@@ -151,20 +151,15 @@ class ConvenioValidationService
                 return $this->trabajadorService->obtenerDatosTrabajador($cedula);
             }
 
-            // Timeout de 8 segundos: balance entre rapidez y confiabilidad
-            $response = Http::post($this->externalApiUrl . '/company/informacion_trabajador', [
-                'cedtra' => $cedula
-            ]);
+            // Usar ExternalApiService para obtener datos del trabajador
+            $data = $this->externalApiService->obtenerInformacionTrabajador($cedula);
 
-            if (!$response->successful()) {
-                Log::error('Error en respuesta de API externa', [
-                    'cedula' => $cedula,
-                    'status' => $response->status()
+            if (!$data) {
+                Log::error('No se obtuvieron datos del trabajador desde ExternalApiService', [
+                    'cedula' => $cedula
                 ]);
                 return null;
             }
-
-            $data = $response->json();
 
             // Validar estructura mínima de datos
             if (!isset($data['cedtra']) && !isset($data['cedula'])) {
@@ -175,14 +170,14 @@ class ConvenioValidationService
                 return null;
             }
 
-            Log::info('Datos del trabajador obtenidos exitosamente', [
+            Log::info('Datos del trabajador obtenidos exitosamente via ExternalApiService', [
                 'cedula' => $cedula,
                 'nit' => $data['nit'] ?? 'N/A'
             ]);
 
             return $data;
         } catch (\Exception $e) {
-            Log::error('Error al obtener datos del trabajador', [
+            Log::error('Error al obtener datos del trabajador via ExternalApiService', [
                 'cedula' => $cedula,
                 'error' => $e->getMessage()
             ]);

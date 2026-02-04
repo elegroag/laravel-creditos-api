@@ -6,9 +6,6 @@ use App\Models\EmpresaConvenio;
 use App\Services\TrabajadorService;
 use App\Services\ExternalApiService;
 use App\Exceptions\ValidationException;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class ConvenioService extends EloquentService

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
+use App\Models\EmpresaConvenio;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\GeneradorPdfService;
+use App\Services\TrabajadorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,11 +20,16 @@ class SolicitudPdfController extends Controller
 {
     protected SolicitudService $solicitudService;
     protected GeneradorPdfService $generadorPdfService;
+    protected TrabajadorService $trabajadorService;
 
-    public function __construct(SolicitudService $solicitudService, GeneradorPdfService $generadorPdfService)
-    {
+    public function __construct(
+        SolicitudService $solicitudService,
+        GeneradorPdfService $generadorPdfService,
+        TrabajadorService $trabajadorService
+    ) {
         $this->solicitudService = $solicitudService;
         $this->generadorPdfService = $generadorPdfService;
+        $this->trabajadorService = $trabajadorService;
     }
 
     /**
@@ -67,8 +74,8 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::forbidden('No autorizado para generar PDF de esta solicitud')->response();
             }
 
-            // Generar PDF usando script Python
-            $resultado = $this->generarPdfConScript($solicitudId);
+            // Generar PDF usando API python
+            $resultado = $this->generarPdfConApi($solicitudId);
 
             if (!$resultado['success']) {
                 return ErrorResource::errorResponse('Error al generar PDF', $resultado['error'] ?? [])
@@ -141,12 +148,12 @@ class SolicitudPdfController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+            if (!$isAdmin && ($solicitud->owner_username ?? '') !== $username) {
                 return ErrorResource::forbidden('No autorizado para descargar PDF de esta solicitud')->response();
             }
 
             // Verificar si tiene PDF generado
-            $pdfData = $solicitud['pdf_generado'] ?? null;
+            $pdfData = $solicitud->pdf_generado ?? null;
 
             if (!$pdfData || empty($pdfData['path'])) {
                 return ErrorResource::errorResponse('La solicitud no tiene un PDF generado. Use el endpoint /generar-pdf primero.')
@@ -156,32 +163,40 @@ class SolicitudPdfController extends Controller
 
             $pdfPath = $pdfData['path'];
 
-            // Verificar que el archivo existe
-            if (!Storage::disk('public')->exists($pdfPath)) {
-                Log::error('Archivo PDF no existe en el sistema de archivos', [
+            // Intentar obtener el PDF desde la API Flask usando el filename
+            try {
+                $filename = $pdfData['filename'] ?? null;
+
+                if (!$filename) {
+                    return ErrorResource::errorResponse('No se encontró el nombre del archivo PDF')
+                        ->response()->setStatusCode(400);
+                }
+
+                $verificacion = $this->generadorPdfService->verificarPdf($filename);
+
+                if ($verificacion['existe'] && !empty($verificacion['base64_content'])) {
+                    // Retornar el PDF en base64 para que el frontend lo descargue
+                    return ApiResource::success([
+                        'base64_content' => $verificacion['base64_content'],
+                        'filename' => $filename,
+                        'size_bytes' => $verificacion['size_bytes'],
+                        'content_type' => 'application/pdf'
+                    ], 'PDF obtenido exitosamente')->response();
+                } else {
+                    return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor', [
+                        'api_response' => $verificacion
+                    ])->response()->setStatusCode(404);
+                }
+            } catch (\Exception $e) {
+                Log::error('Error al obtener PDF desde API Flask', [
                     'solicitud_id' => $solicitudId,
-                    'pdf_path' => $pdfPath
+                    'error' => $e->getMessage()
                 ]);
 
-                return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor')
-                    ->response()
-                    ->setStatusCode(404);
+                return ErrorResource::errorResponse('Error al obtener el PDF del servidor', [
+                    'error' => $e->getMessage()
+                ])->response()->setStatusCode(500);
             }
-
-            // Generar URL de descarga
-            $downloadUrl = Storage::url($pdfPath);
-            $filename = $pdfData['filename'] ?? "solicitud_{$solicitudId}.pdf";
-
-            Log::info('URL de descarga de PDF generada', [
-                'solicitud_id' => $solicitudId,
-                'download_url' => $downloadUrl,
-                'filename' => $filename
-            ]);
-
-            return ApiResource::success([
-                'download_url' => $downloadUrl,
-                'filename' => $filename
-            ], 'URL de descarga generada')->response();
         } catch (\Exception $e) {
             Log::error('Error al descargar PDF', [
                 'solicitud_id' => $solicitudId,
@@ -227,11 +242,11 @@ class SolicitudPdfController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+            if (!$isAdmin && ($solicitud->owner_username ?? '') !== $username) {
                 return ErrorResource::forbidden('No autorizado para verificar estado de PDF de esta solicitud')->response();
             }
 
-            $pdfData = $solicitud['pdf_generado'] ?? null;
+            $pdfData = $solicitud->pdf_generado ?? null;
 
             $estado = [
                 'solicitud_id' => $solicitudId,
@@ -243,11 +258,12 @@ class SolicitudPdfController extends Controller
                 $pdfPath = $pdfData['path'] ?? null;
                 $filename = $pdfData['filename'] ?? null;
 
-                // Verificar si el PDF existe usando la API Flask
+                // Verificar si el PDF existe usando la API Flask con el filename (no el path completo)
                 $pdfExiste = false;
                 $pdfInfo = null;
 
                 if ($filename) {
+                    // Usar solo el filename para verificar con la API Flask
                     $verificacion = $this->generadorPdfService->verificarPdf($filename);
                     $pdfExiste = $verificacion['existe'] ?? false;
 
@@ -267,6 +283,35 @@ class SolicitudPdfController extends Controller
                                 'local_path' => $verificacion['local_path'] ?? null
                             ]
                         ];
+
+                        // Actualizar la base de datos si el PDF se guardó localmente
+                        if ($verificacion['guardado_local'] && $verificacion['local_path']) {
+                            try {
+                                $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
+                                if ($solicitud) {
+                                    $updatedPdfData = array_merge($pdfData, [
+                                        'path' => $verificacion['local_path'],
+                                        'tamano' => $verificacion['size_bytes'],
+                                        'guardado_local' => true,
+                                        'guardado_en' => Carbon::now()->toISOString()
+                                    ]);
+                                    $solicitud->update([
+                                        'pdf_generado' => $updatedPdfData,
+                                        'updated_at' => Carbon::now()
+                                    ]);
+
+                                    Log::info('Base de datos actualizada con path local del PDF', [
+                                        'solicitud_id' => $solicitudId,
+                                        'local_path' => $verificacion['local_path']
+                                    ]);
+                                }
+                            } catch (\Exception $e) {
+                                Log::error('Error al actualizar base de datos con path local', [
+                                    'solicitud_id' => $solicitudId,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
                     } else {
                         $pdfInfo = [
                             'filename' => $filename,
@@ -319,7 +364,7 @@ class SolicitudPdfController extends Controller
     /**
      * Genera PDF usando el servicio externo Flask API
      */
-    private function generarPdfConScript(string $solicitudId): array
+    private function generarPdfConApi(string $solicitudId): array
     {
         try {
             // Obtener datos completos de la solicitud
@@ -338,60 +383,12 @@ class SolicitudPdfController extends Controller
             $payload = $solicitud->payload;
             $firmantes = $solicitud->firmantes;
 
-            // Mapear datos de la solicitud
-            $solicitudData = [
-                'numero_solicitud' => $solicitud->numero_solicitud,
-                'monto_solicitado' => $solicitud->monto_solicitado,
-                'monto_aprobado' => $solicitud->monto_aprobado,
-                'plazo_meses' => $solicitud->plazo_meses,
-                'tasa_interes' => $solicitud->tasa_interes,
-                'destino_credito' => $solicitud->destino_credito,
-                'descripcion' => $solicitud->descripcion,
-                'estado' => $solicitud->estado,
-                'created_at' => $solicitud->created_at->toISOString(),
-                'updated_at' => $solicitud->updated_at->toISOString()
-            ];
-
             // Mapear datos del solicitante/trabajador
-            $trabajadorData = [];
-            if ($solicitante) {
-                $trabajadorData = [
-                    'nombre_completo' => $solicitante->nombre_completo ?? '',
-                    'tipo_documento' => $solicitante->tipo_documento ?? '',
-                    'numero_documento' => $solicitante->numero_documento ?? '',
-                    'email' => $solicitante->email ?? '',
-                    'telefono' => $solicitante->telefono ?? '',
-                    'direccion' => $solicitante->direccion ?? '',
-                    'ciudad' => $solicitante->ciudad ?? '',
-                    'departamento' => $solicitante->departamento ?? '',
-                    'cargo' => $solicitante->cargo ?? '',
-                    'empresa' => $solicitante->empresa ?? '',
-                    'salario' => $solicitante->salario ?? 0,
-                    'tipo_contrato' => $solicitante->tipo_contrato ?? ''
-                ];
-            }
+            $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($solicitante->numero_documento);
 
-            // Mapear datos del payload (información adicional)
-            if ($payload) {
-                $payloadData = json_decode($payload->payload, true) ?? [];
-                $trabajadorData = array_merge($trabajadorData, $payloadData);
-            }
+            $incluirConvenio = true;
+            $convenioData = EmpresaConvenio::where('nit', $solicitante->nit)->first();
 
-            // Mapear datos de convenio (si aplica)
-            $convenioData = [];
-            $incluirConvenio = false;
-
-            // Aquí puedes agregar lógica para determinar si incluye convenio
-            // Por ejemplo, si el trabajador pertenece a una empresa con convenio
-            if ($solicitante && !empty($solicitante->convenio_id)) {
-                $incluirConvenio = true;
-                $convenioData = [
-                    'nombre_convenio' => $solicitante->convenio->nombre ?? '',
-                    'codigo_convenio' => $solicitante->convenio->codigo ?? '',
-                    'tasa_descuento' => $solicitante->convenio->tasa_descuento ?? 0,
-                    'empresa_convenio' => $solicitante->convenio->empresa ?? ''
-                ];
-            }
 
             // Mapear datos de firmantes
             $firmantesData = [];
@@ -414,21 +411,13 @@ class SolicitudPdfController extends Controller
             // Preparar datos para la API Flask
             $data = [
                 'solicitud_id' => $solicitudId,
-                'solicitud_data' => $solicitudData,
+                'solicitud_data' => $solicitud,
                 'trabajador_data' => $trabajadorData,
                 'incluir_convenio' => $incluirConvenio,
                 'incluir_firmantes' => $incluirFirmantes,
                 'convenio_data' => $convenioData,
                 'firmantes_data' => $firmantesData
             ];
-
-            Log::info('Enviando datos a API Flask para generar PDF', [
-                'solicitud_id' => $solicitudId,
-                'data_keys' => array_keys($data),
-                'has_solicitante' => !empty($trabajadorData),
-                'has_firmantes' => $incluirFirmantes,
-                'has_convenio' => $incluirConvenio
-            ]);
 
             // Llamar al servicio externo
             $resultado = $this->generadorPdfService->generarPdfCreditos($data);
@@ -448,7 +437,8 @@ class SolicitudPdfController extends Controller
             }
 
             // Guardar información del PDF en la solicitud
-            $pdfData = $resultado['data']['data'] ?? [];
+            $pdfData = $resultado['data'] ?? [];
+
             if (!empty($pdfData)) {
                 $this->guardarInfoPdfEnSolicitud($solicitudId, $pdfData);
             }
@@ -493,12 +483,13 @@ class SolicitudPdfController extends Controller
             }
 
             $pdfInfo = [
-                'filename' => $pdfData['filename'] ?? null,
-                'path' => $pdfData['path'] ?? null,
-                'generado_en' => Carbon::now()->toISOString(),
-                'tamano' => $pdfData['tamano'] ?? null,
-                'incluir_convenio' => $pdfData['incluir_convenio'] ?? false,
-                'incluir_firmantes' => $pdfData['incluir_firmantes'] ?? false
+                'filename' => $pdfData['pdf_filename'] ?? null,
+                'path' => $pdfData['pdf_path'] ?? null,
+                'generado_en' => $pdfData['fecha_generacion'] ?? Carbon::now()->toISOString(),
+                'tamano' => null, // No viene en la respuesta, se podría calcular después
+                'solicitud_id' => $pdfData['solicitud_id'] ?? null,
+                'tiene_convenio' => $pdfData['tiene_convenio'] ?? false,
+                'cantidad_firmantes' => $pdfData['cantidad_firmantes'] ?? 0
             ];
 
             $solicitud->update([

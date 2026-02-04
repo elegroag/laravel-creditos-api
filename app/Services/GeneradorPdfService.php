@@ -45,11 +45,7 @@ class GeneradorPdfService
                     'response_size' => strlen($response->body())
                 ]);
 
-                return [
-                    'success' => true,
-                    'data' => $response->json(),
-                    'status' => $response->status()
-                ];
+                return $response->json();
             } else {
                 Log::error('Error en respuesta de Flask API', [
                     'status' => $response->status(),

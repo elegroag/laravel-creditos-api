@@ -53,7 +53,8 @@ class SolicitudCredito extends Model
         'tasa_interes',
         'destino_credito',
         'descripcion',
-        'estado'
+        'estado',
+        'pdf_generado'  // Agregar campo pdf_generado
     ];
 
     /**
@@ -68,6 +69,7 @@ class SolicitudCredito extends Model
             'monto_aprobado' => 'decimal:2',
             'plazo_meses' => 'integer',
             'tasa_interes' => 'decimal:2',
+            'pdf_generado' => 'json',  // Cast para campo JSON
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
