@@ -118,7 +118,7 @@ class GeneradorPdfService
     /**
      * Verificar si un PDF existe en la API Flask y guardarlo localmente
      */
-    public function verificarPdf(string $filepath): array
+    public function downloadPdfApi(string $filepath): array
     {
         try {
             Log::info('Verificando PDF en API Flask', [

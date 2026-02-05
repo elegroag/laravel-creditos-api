@@ -227,10 +227,17 @@ class SolicitudDocumentosController extends Controller
             // Generar nombre único para el archivo
             $fileName = $this->generarNombreArchivo($solicitudId, $documentoRequeridoId, $file->getClientOriginalExtension());
 
-            // Guardar archivo en storage
-            $filePath = $file->storeAs('documentos/solicitudes', $fileName, 'public');
+            // Crear directorio para la solicitud si no existe
+            $solicitudDir = storage_path("app/solicitudes/{$solicitudId}");
+            if (!file_exists($solicitudDir)) {
+                mkdir($solicitudDir, 0775, true);
+            }
 
-            if (!$filePath) {
+            // Guardar archivo directamente en el directorio de la solicitud
+            $filePath = "solicitudes/{$solicitudId}/{$fileName}";
+            $fullPath = storage_path("app/{$filePath}");
+
+            if (!move_uploaded_file($file->getPathname(), $fullPath)) {
                 throw new \Exception('No se pudo guardar el archivo');
             }
 

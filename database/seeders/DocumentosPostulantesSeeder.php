@@ -64,7 +64,8 @@ class DocumentosPostulantesSeeder extends Seeder
                 'tipo_mime' => 'image/jpeg',
                 'tamano_bytes' => rand(500000, 2000000),
                 'ruta_archivo' => "documentos/postulantes/{$username}/cedula.jpg",
-                'activo' => true
+                'activo' => true,
+                'solicitud_id' => '000001-202501-03'
             ]
         ];
 
@@ -78,27 +79,8 @@ class DocumentosPostulantesSeeder extends Seeder
                     'tipo_mime' => 'image/jpeg',
                     'tamano_bytes' => rand(400000, 1500000),
                     'ruta_archivo' => "documentos/postulantes/{$username}/pasaporte.jpg",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'certificado_estudio',
-                    'nombre_original' => 'certificado_estudio_' . $username . '.pdf',
-                    'saved_filename' => 'certificado_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(800000, 3000000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/certificado.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'declaracion_renta',
-                    'nombre_original' => 'declaracion_renta_' . $username . '.pdf',
-                    'saved_filename' => 'declaracion_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(1000000, 5000000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/declaracion.pdf",
-                    'activo' => true
+                    'activo' => true,
+                    'solicitud_id' => '000001-202501-03'
                 ]
             ];
             $documentos = array_merge($documentos, $documentosBase, $documentosAdmin);
@@ -112,27 +94,8 @@ class DocumentosPostulantesSeeder extends Seeder
                     'tipo_mime' => 'application/pdf',
                     'tamano_bytes' => rand(600000, 2500000),
                     'ruta_archivo' => "documentos/postulantes/{$username}/cert_laboral.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'carta_trabajo',
-                    'nombre_original' => 'carta_trabajo_' . $username . '.pdf',
-                    'saved_filename' => 'carta_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(400000, 1200000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/carta.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'referencias_personales',
-                    'nombre_original' => 'referencias_' . $username . '.pdf',
-                    'saved_filename' => 'referencias_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(300000, 800000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/referencias.pdf",
-                    'activo' => true
+                    'activo' => true,
+                    'solicitud_id' => '000001-202501-03'
                 ]
             ];
             $documentos = array_merge($documentos, $documentosBase, $documentosAsesor);
@@ -146,37 +109,8 @@ class DocumentosPostulantesSeeder extends Seeder
                     'tipo_mime' => 'application/pdf',
                     'tamano_bytes' => rand(700000, 2800000),
                     'ruta_archivo' => "documentos/postulantes/{$username}/rut.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'camara_comercio',
-                    'nombre_original' => 'camara_comercio_' . $username . '.jpg',
-                    'saved_filename' => 'camara_' . $username . '.jpg',
-                    'tipo_mime' => 'image/jpeg',
-                    'tamano_bytes' => rand(800000, 3500000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/camara.jpg",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'estados_financieros',
-                    'nombre_original' => 'estados_financieros_' . $username . '.pdf',
-                    'saved_filename' => 'estados_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(1500000, 6000000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/estados.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'representante_legal',
-                    'nombre_original' => 'representante_legal_' . $username . '.pdf',
-                    'saved_filename' => 'rep_legal_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(500000, 2000000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/rep_legal.pdf",
-                    'activo' => true
+                    'activo' => true,
+                    'solicitud_id' => '000001-202501-03'
                 ]
             ];
             $documentos = array_merge($documentos, $documentosBase, $documentosEmpresa);
@@ -190,37 +124,8 @@ class DocumentosPostulantesSeeder extends Seeder
                     'tipo_mime' => 'application/pdf',
                     'tamano_bytes' => rand(600000, 2400000),
                     'ruta_archivo' => "documentos/postulantes/{$username}/contrato.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'certificado_afiliacion',
-                    'nombre_original' => 'certificado_afiliacion_' . $username . '.pdf',
-                    'saved_filename' => 'cert_afiliacion_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(400000, 1800000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/cert_afiliacion.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'extractos_bancarios',
-                    'nombre_original' => 'extractos_bancarios_' . $username . '.pdf',
-                    'saved_filename' => 'extractos_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(800000, 3200000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/extractos.pdf",
-                    'activo' => true
-                ],
-                [
-                    'username' => $username,
-                    'tipo_documento' => 'comprobante_ingresos',
-                    'nombre_original' => 'comprobante_ingresos_' . $username . '.pdf',
-                    'saved_filename' => 'comprobante_' . $username . '.pdf',
-                    'tipo_mime' => 'application/pdf',
-                    'tamano_bytes' => rand(500000, 1500000),
-                    'ruta_archivo' => "documentos/postulantes/{$username}/comprobante.pdf",
-                    'activo' => true
+                    'activo' => true,
+                    'solicitud_id' => '000001-202501-03'
                 ]
             ];
             $documentos = array_merge($documentos, $documentosBase, $documentosTrabajador);
@@ -235,7 +140,8 @@ class DocumentosPostulantesSeeder extends Seeder
                     'tipo_mime' => 'application/pdf',
                     'tamano_bytes' => rand(300000, 900000),
                     'ruta_archivo' => "documentos/postulantes/{$username}/ref_personal.pdf",
-                    'activo' => true
+                    'activo' => true,
+                    'solicitud_id' => '000001-202501-03'
                 ]
             ];
             $documentos = array_merge($documentos, $documentosBase, $documentosBasicos);

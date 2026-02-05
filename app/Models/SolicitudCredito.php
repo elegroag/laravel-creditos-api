@@ -100,6 +100,14 @@ class SolicitudCredito extends Model
     }
 
     /**
+     * Get the documentos postulantes for the solicitud.
+     */
+    public function documentosPostulantes()
+    {
+        return $this->hasMany(DocumentoPostulante::class, 'solicitud_id');
+    }
+
+    /**
      * Get the payload for the solicitud.
      */
     public function payload()

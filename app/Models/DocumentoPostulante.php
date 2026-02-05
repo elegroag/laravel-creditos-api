@@ -29,6 +29,9 @@ class DocumentoPostulante extends Model
         'tipo_mime',
         'tamano_bytes',
         'ruta_archivo',
+        'api_path',
+        'api_filename',
+        'solicitud_id',
         'activo'
     ];
 
@@ -55,6 +58,14 @@ class DocumentoPostulante extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'username', 'username');
+    }
+
+    /**
+     * Get the solicitud credito that owns the documents.
+     */
+    public function solicitudCredito()
+    {
+        return $this->belongsTo(SolicitudCredito::class, 'solicitud_id', 'numero_solicitud');
     }
 
     /**
@@ -268,9 +279,12 @@ class DocumentoPostulante extends Model
             'username' => $this->username,
             'tipo_identificacion' => $this->tipo_identificacion,
             'numero_identificacion' => $this->numero_identificacion,
+            'solicitud_id' => $this->solicitud_id,
             'documentos' => $this->documentos,
             'selfie' => $this->selfie,
             'ruta_archivos' => $this->ruta_archivos,
+            'api_path' => $this->api_path,
+            'api_filename' => $this->api_filename,
             'metadata' => $this->metadata,
             'documents_count' => $this->documents_count,
             'documents_list' => $this->documents_list,

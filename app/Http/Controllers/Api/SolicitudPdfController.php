@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
+use App\Models\DocumentoPostulante;
 use App\Models\EmpresaConvenio;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
@@ -12,8 +13,10 @@ use App\Services\GeneradorPdfService;
 use App\Services\TrabajadorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
 
 class SolicitudPdfController extends Controller
@@ -121,7 +124,7 @@ class SolicitudPdfController extends Controller
     /**
      * Descarga el PDF previamente generado de una solicitud.
      */
-    public function descargarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
+    public function descargarPdfSolicitud(Request $request, string $solicitudId): BinaryFileResponse|JsonResponse
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
@@ -152,51 +155,43 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::forbidden('No autorizado para descargar PDF de esta solicitud')->response();
             }
 
-            // Verificar si tiene PDF generado
-            $pdfData = $solicitud->pdf_generado ?? null;
+            // Verificar si tiene PDF generado usando DocumentoPostulante
+            $pdfData = DocumentoPostulante::where("solicitud_id", $solicitudId)->first();
 
-            if (!$pdfData || empty($pdfData['path'])) {
+            if (!$pdfData || empty($pdfData->ruta_archivo)) {
                 return ErrorResource::errorResponse('La solicitud no tiene un PDF generado. Use el endpoint /generar-pdf primero.')
                     ->response()
                     ->setStatusCode(400);
             }
 
-            $pdfPath = $pdfData['path'];
+            // Verificar si el archivo existe físicamente
+            $pdfPath = $pdfData->ruta_archivo;
+            $fullPath = storage_path("app/{$pdfPath}");
 
-            // Intentar obtener el PDF desde la API Flask usando el filename
-            try {
-                $filename = $pdfData['filename'] ?? null;
-
-                if (!$filename) {
-                    return ErrorResource::errorResponse('No se encontró el nombre del archivo PDF')
-                        ->response()->setStatusCode(400);
-                }
-
-                $verificacion = $this->generadorPdfService->verificarPdf($filename);
-
-                if ($verificacion['existe'] && !empty($verificacion['base64_content'])) {
-                    // Retornar el PDF en base64 para que el frontend lo descargue
-                    return ApiResource::success([
-                        'base64_content' => $verificacion['base64_content'],
-                        'filename' => $filename,
-                        'size_bytes' => $verificacion['size_bytes'],
-                        'content_type' => 'application/pdf'
-                    ], 'PDF obtenido exitosamente')->response();
-                } else {
-                    return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor', [
-                        'api_response' => $verificacion
-                    ])->response()->setStatusCode(404);
-                }
-            } catch (\Exception $e) {
-                Log::error('Error al obtener PDF desde API Flask', [
-                    'solicitud_id' => $solicitudId,
-                    'error' => $e->getMessage()
-                ]);
-
-                return ErrorResource::errorResponse('Error al obtener el PDF del servidor', [
-                    'error' => $e->getMessage()
-                ])->response()->setStatusCode(500);
+            if (!file_exists($fullPath)) {
+                return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor')
+                    ->response()
+                    ->setStatusCode(404);
             }
+
+            // Leer el archivo y convertir a base64
+            $pdfContent = file_get_contents($fullPath);
+            if ($pdfContent === false) {
+                return ErrorResource::errorResponse('Error al leer el archivo PDF')
+                    ->response()
+                    ->setStatusCode(500);
+            }
+
+            $base64Content = base64_encode($pdfContent);
+            $filename = $pdfData->saved_filename ?? 'solicitud.pdf';
+            $sizeBytes = filesize($fullPath);
+
+            // Retornar el archivo PDF directamente
+            return response()->file($fullPath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Content-Length' => $sizeBytes
+            ]);
         } catch (\Exception $e) {
             Log::error('Error al descargar PDF', [
                 'solicitud_id' => $solicitudId,
@@ -246,7 +241,7 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::forbidden('No autorizado para verificar estado de PDF de esta solicitud')->response();
             }
 
-            $pdfData = $solicitud->pdf_generado ?? null;
+            $pdfData = DocumentoPostulante::where("solicitud_id", $solicitudId)->first();
 
             $estado = [
                 'solicitud_id' => $solicitudId,
@@ -255,92 +250,34 @@ class SolicitudPdfController extends Controller
             ];
 
             if ($pdfData) {
-                $pdfPath = $pdfData['path'] ?? null;
-                $filename = $pdfData['filename'] ?? null;
+                $path = $pdfData->ruta_archivo ?? null;
+                $filename = $pdfData->saved_filename ?? null;
 
-                // Verificar si el PDF existe usando la API Flask con el filename (no el path completo)
-                $pdfExiste = false;
-                $pdfInfo = null;
+                // Verificar si el archivo existe físicamente en storage
+                $archivoExiste = false;
+                $tamanoArchivo = null;
 
-                if ($filename) {
-                    // Usar solo el filename para verificar con la API Flask
-                    $verificacion = $this->generadorPdfService->verificarPdf($filename);
-                    $pdfExiste = $verificacion['existe'] ?? false;
-
-                    if ($pdfExiste) {
-                        $pdfInfo = [
-                            'filename' => $verificacion['filename'] ?? $filename,
-                            'generado_en' => $pdfData['generado_en'] ?? null,
-                            'archivo_existe' => true,
-                            'path' => $verificacion['local_path'] ?? $filename,
-                            'tamano' => $verificacion['size_bytes'] ?? $pdfData['tamano'] ?? null,
-                            'url_descarga' => $verificacion['local_path'] ? Storage::url($verificacion['local_path']) : "/api/solicitud-pdf/{$solicitudId}/download",
-                            'verificado_api' => true,
-                            'guardado_local' => $verificacion['guardado_local'] ?? false,
-                            'api_response' => [
-                                'success' => $verificacion['success'] ?? false,
-                                'size_bytes' => $verificacion['size_bytes'] ?? null,
-                                'local_path' => $verificacion['local_path'] ?? null
-                            ]
-                        ];
-
-                        // Actualizar la base de datos si el PDF se guardó localmente
-                        if ($verificacion['guardado_local'] && $verificacion['local_path']) {
-                            try {
-                                $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
-                                if ($solicitud) {
-                                    $updatedPdfData = array_merge($pdfData, [
-                                        'path' => $verificacion['local_path'],
-                                        'tamano' => $verificacion['size_bytes'],
-                                        'guardado_local' => true,
-                                        'guardado_en' => Carbon::now()->toISOString()
-                                    ]);
-                                    $solicitud->update([
-                                        'pdf_generado' => $updatedPdfData,
-                                        'updated_at' => Carbon::now()
-                                    ]);
-
-                                    Log::info('Base de datos actualizada con path local del PDF', [
-                                        'solicitud_id' => $solicitudId,
-                                        'local_path' => $verificacion['local_path']
-                                    ]);
-                                }
-                            } catch (\Exception $e) {
-                                Log::error('Error al actualizar base de datos con path local', [
-                                    'solicitud_id' => $solicitudId,
-                                    'error' => $e->getMessage()
-                                ]);
-                            }
-                        }
-                    } else {
-                        $pdfInfo = [
-                            'filename' => $filename,
-                            'generado_en' => $pdfData['generado_en'] ?? null,
-                            'archivo_existe' => false,
-                            'path' => $filename,
-                            'tamano' => $pdfData['tamano'] ?? null,
-                            'url_descarga' => null,
-                            'verificado_api' => true,
-                            'guardado_local' => false,
-                            'api_response' => [
-                                'success' => $verificacion['success'] ?? false,
-                                'error' => $verificacion['error'] ?? 'Error desconocido'
-                            ]
-                        ];
+                if ($path) {
+                    $fullPath = storage_path("app/{$path}");
+                    $archivoExiste = file_exists($fullPath);
+                    if ($archivoExiste) {
+                        $tamanoArchivo = filesize($fullPath);
                     }
-                } else {
-                    // Fallback a verificación local si no hay filename
-                    $archivoExiste = $pdfPath ? Storage::disk('public')->exists($pdfPath) : false;
-                    $pdfInfo = [
-                        'filename' => $pdfData['filename'] ?? null,
-                        'generado_en' => $pdfData['generado_en'] ?? null,
-                        'archivo_existe' => $archivoExiste,
-                        'path' => $archivoExiste ? Storage::url($pdfPath) : null,
-                        'tamano' => $pdfData['tamano'] ?? null,
-                        'url_descarga' => $archivoExiste ? Storage::url($pdfPath) : null,
-                        'verificado_api' => false
-                    ];
                 }
+
+                $pdfInfo = [
+                    'filename' => $filename,
+                    'archivo_existe' => $archivoExiste,
+                    'path' => $path,
+                    'url_descarga' => $archivoExiste ? "/api/solicitud-pdf/{$solicitudId}/download" : "",
+                    'verificado_api' => $archivoExiste ? true : false,
+                    'tamano_bytes' => $tamanoArchivo,
+                    'tipo_documento' => $pdfData->tipo_documento,
+                    'api_path' => $pdfData->api_path,
+                    'api_filename' => $pdfData->api_filename,
+                    'created_at' => $pdfData->created_at?->toISOString(),
+                    'updated_at' => $pdfData->updated_at?->toISOString()
+                ];
 
                 $estado['pdf_generado'] = $pdfInfo;
             }
@@ -481,20 +418,63 @@ class SolicitudPdfController extends Controller
                 ]);
                 return;
             }
+            $dataBase64 = $pdfData['api_content'];
+
+            // Crear directorio para la solicitud si no existe
+            $solicitudDir = storage_path("app/solicitudes/{$solicitudId}");
+            if (!file_exists($solicitudDir)) {
+                mkdir($solicitudDir, 0775, true);
+            }
+
+            // Generar nombre de archivo con timestamp
+            $timestamp = now()->format('Ymd_His');
+            $filename = "solicitud_{$solicitudId}_{$timestamp}.pdf";
+            $path = "solicitudes/{$solicitudId}/{$filename}";
+
+            // Decodificar y guardar el PDF
+            $pdfContent = base64_decode($dataBase64);
+            if ($pdfContent === false) {
+                Log::error('Error al decodificar el contenido base64 del PDF', [
+                    'solicitud_id' => $solicitudId
+                ]);
+                return;
+            }
+
+            $fullPath = storage_path("app/{$path}");
+            if (file_put_contents($fullPath, $pdfContent) === false) {
+                Log::error('Error al guardar el archivo PDF', [
+                    'solicitud_id' => $solicitudId,
+                    'path' => $fullPath
+                ]);
+                return;
+            }
+
 
             $pdfInfo = [
-                'filename' => $pdfData['pdf_filename'] ?? null,
-                'path' => $pdfData['pdf_path'] ?? null,
-                'generado_en' => $pdfData['fecha_generacion'] ?? Carbon::now()->toISOString(),
-                'tamano' => null, // No viene en la respuesta, se podría calcular después
+                'filename' => $filename,
+                'path' => $path,
+                'api_path' => $pdfData['api_path'],
+                'api_filename' => $pdfData['api_filename'],
                 'solicitud_id' => $pdfData['solicitud_id'] ?? null,
-                'tiene_convenio' => $pdfData['tiene_convenio'] ?? false,
-                'cantidad_firmantes' => $pdfData['cantidad_firmantes'] ?? 0
             ];
 
             $solicitud->update([
                 'pdf_generado' => $pdfInfo,
                 'updated_at' => Carbon::now()
+            ]);
+
+            // Crear registro en DocumentoPostulante
+            DocumentoPostulante::create([
+                'username' => $solicitud->owner_username,
+                'tipo_documento' => 'pdf_solicitud',
+                'nombre_original' => $filename,
+                'saved_filename' => $filename,
+                'tipo_mime' => 'application/pdf',
+                'ruta_archivo' => $path,
+                'api_path' => $pdfData['api_path'] ?? null,
+                'api_filename' => $pdfData['api_filename'] ?? null,
+                'solicitud_id' => $solicitudId,
+                'activo' => true
             ]);
 
             Log::info('Información del PDF guardada en solicitud', [
