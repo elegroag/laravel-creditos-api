@@ -720,10 +720,13 @@ class SolicitudesCreditoController extends Controller
 
             $resultados = $this->solicitudService->contarSolicitudesPorEstado($isAdmin ? null : $username);
 
-            return ApiResource::success([
-                'solicitudes' => $resultados,
-                'total' => array_sum(array_column($resultados, 'count'))
-            ], 'Conteo completado')->response();
+            // Transformar el array de resultados a un objeto con estados como claves
+            $estadosConteo = [];
+            foreach ($resultados as $resultado) {
+                $estadosConteo[$resultado['estado']] = $resultado['count'];
+            }
+
+            return ApiResource::success($estadosConteo, 'Conteo de solicitudes obtenido exitosamente')->response();
         } catch (\Exception $e) {
             Log::error('Error al contar solicitudes por estado', [
                 'error' => $e->getMessage(),
@@ -758,7 +761,7 @@ class SolicitudesCreditoController extends Controller
             $resultados = $this->solicitudService->listarSolicitudesCreditoPaginado($limit, $offset, $estado, $isAdmin ? null : $username);
 
             return ApiResource::success([
-                'solicitudes' => $resultados,
+                'collection' => $resultados,
                 'total' => count($resultados),
                 'limit' => $limit,
                 'offset' => $offset,

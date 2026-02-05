@@ -111,9 +111,9 @@ class FirmanteSolicitud extends Model
      */
     public function hasCompleteData(): bool
     {
-        return !empty($this->nombre_completo) && 
-               !empty($this->numero_documento) && 
-               !empty($this->email);
+        return !empty($this->nombre_completo) &&
+            !empty($this->numero_documento) &&
+            !empty($this->email);
     }
 
     /**
@@ -132,14 +132,14 @@ class FirmanteSolicitud extends Model
         if (empty($this->numero_documento)) {
             return 'Sin documento';
         }
-        
+
         $doc = $this->numero_documento;
         $length = strlen($doc);
-        
+
         if ($length <= 4) {
             return $doc;
         }
-        
+
         return substr($doc, 0, 2) . str_repeat('*', $length - 4) . substr($doc, -2);
     }
 
@@ -151,21 +151,21 @@ class FirmanteSolicitud extends Model
         if (empty($this->email)) {
             return 'Sin email';
         }
-        
+
         $email = $this->email;
         $parts = explode('@', $email);
-        
+
         if (count($parts) !== 2) {
             return $email;
         }
-        
+
         $local = $parts[0];
         $domain = $parts[1];
-        
+
         if (strlen($local) <= 2) {
             return $local . '@' . $domain;
         }
-        
+
         return substr($local, 0, 2) . str_repeat('*', strlen($local) - 2) . '@' . $domain;
     }
 
@@ -177,7 +177,7 @@ class FirmanteSolicitud extends Model
         // Get the next order
         $lastOrder = static::where('solicitud_id', $solicitudId)
             ->max('orden') ?? 0;
-        
+
         return static::create(array_merge($data, [
             'solicitud_id' => $solicitudId,
             'orden' => $lastOrder + 1
@@ -192,18 +192,18 @@ class FirmanteSolicitud extends Model
         $firmante = static::where('solicitud_id', $solicitudId)
             ->where('orden', $orden)
             ->first();
-        
+
         if ($firmante) {
             $firmante->delete();
-            
+
             // Reorder remaining firmantes
             static::where('solicitud_id', $solicitudId)
                 ->where('orden', '>', $orden)
                 ->decrement('orden');
-            
+
             return true;
         }
-        
+
         return false;
     }
 
@@ -268,19 +268,19 @@ class FirmanteSolicitud extends Model
         $total = static::count();
         $byType = [];
         $byRole = [];
-        
+
         // Group by type
         $tipos = static::distinct('tipo')->pluck('tipo');
         foreach ($tipos as $tipo) {
             $byType[$tipo] = static::where('tipo', $tipo)->count();
         }
-        
+
         // Group by role
         $roles = static::distinct('rol')->pluck('rol');
         foreach ($roles as $rol) {
             $byRole[$rol] = static::where('rol', $rol)->count();
         }
-        
+
         return [
             'total' => $total,
             'by_type' => $byType,
@@ -291,30 +291,84 @@ class FirmanteSolicitud extends Model
     }
 
     /**
+     * Get available roles for firmantes.
+     */
+    public static function getAvailableRoles(): array
+    {
+        return [
+            'SOLICITANTE_PRINCIPAL' => 'Solicitante Principal',
+            'EMPRESA_PATROCINADORA' => 'Empresa Patrocinadora',
+            'CODEUDOR' => 'Codeudor',
+            'FIADOR' => 'Fiador',
+            'REPRESENTANTE_LEGAL' => 'Representante Legal',
+            'TESTIGO' => 'Testigo',
+            'INTERVENTOR' => 'Interventor',
+            'ASESOR_LEGAL' => 'Asesor Legal',
+            'GERENTE' => 'Gerente',
+            'CONTADOR' => 'Contador',
+            'ADMINISTRADOR' => 'Administrador'
+        ];
+    }
+
+    /**
+     * Get available types for firmantes.
+     */
+    public static function getAvailableTypes(): array
+    {
+        return [
+            'POSTULANTE' => 'Postulante',
+            'EMPRESA_CONVENIO' => 'Empresa Convenio',
+            'PERSONA_NATURAL' => 'Persona Natural',
+            'PERSONA_JURIDICA' => 'Persona Jurídica',
+            'REPRESENTANTE' => 'Representante',
+            'TESTIGO' => 'Testigo',
+            'INTERVENTOR' => 'Interventor'
+        ];
+    }
+
+    /**
+     * Get role display name.
+     */
+    public function getRolDisplayNameAttribute(): string
+    {
+        $roles = self::getAvailableRoles();
+        return $roles[$this->rol] ?? $this->rol;
+    }
+
+    /**
+     * Get type display name.
+     */
+    public function getTipoDisplayNameAttribute(): string
+    {
+        $types = self::getAvailableTypes();
+        return $types[$this->tipo] ?? $this->tipo;
+    }
+
+    /**
      * Validate firmante data.
      */
     public static function validateFirmanteData(array $data): array
     {
         $errors = [];
-        
+
         if (empty($data['nombre_completo'])) {
             $errors[] = 'El nombre completo es requerido';
         }
-        
+
         if (empty($data['numero_documento'])) {
             $errors[] = 'El número de documento es requerido';
         }
-        
+
         if (empty($data['email'])) {
             $errors[] = 'El email es requerido';
         } elseif (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'El email no es válido';
         }
-        
+
         if (empty($data['rol'])) {
             $errors[] = 'El rol es requerido';
         }
-        
+
         return $errors;
     }
 }

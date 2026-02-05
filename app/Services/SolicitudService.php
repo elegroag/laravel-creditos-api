@@ -7,10 +7,13 @@ use App\Models\EstadoSolicitud;
 use App\Models\SolicitudPayload;
 use App\Models\SolicitudSolicitante;
 use App\Models\SolicitudTimeline;
+use App\Models\FirmanteSolicitud;
+use App\Models\EmpresaConvenio;
 use App\Exceptions\ValidationException;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SolicitudService extends EloquentService
 {
@@ -675,13 +678,14 @@ class SolicitudService extends EloquentService
                 $query->where('owner_username', $username);
             }
 
-            if ($estado) {
+            if ($estado && $estado !== '@') {
                 $query->where('estado', $estado);
             }
 
             $resultados = $query->orderBy('created_at', 'desc')
                 ->skip($offset)
                 ->take($limit)
+                ->with("solicitante", "payload")
                 ->get()
                 ->toArray();
 
@@ -803,6 +807,9 @@ class SolicitudService extends EloquentService
 
             // Crear timeline inicial
             $this->crearTimelineInicial($numeroSolicitud, $username);
+
+            // Registrar el firmante numero 1 que es el postulante
+            $this->guardarFirmante($numeroSolicitud, $solicitantePayload);
         }
 
         return $solicitud->numero_solicitud;
@@ -954,6 +961,131 @@ class SolicitudService extends EloquentService
             'detalle' => "Solicitud {$numeroSolicitud} creada exitosamente en el sistema",
             'usuario_username' => $username,
             'automatico' => true
+        ]);
+    }
+
+    private function guardarFirmante($solicitudId, $solicitante)
+    {
+        if (empty($solicitante)) {
+            return;
+        }
+
+        try {
+            // Guardar firmante 1: El postulante
+            $this->guardarFirmantePostulante($solicitudId, $solicitante);
+
+            // Guardar firmante 2: La empresa del convenio (si tiene NIT)
+            $this->guardarFirmanteEmpresa($solicitudId, $solicitante);
+        } catch (\Exception $e) {
+            Log::error('Error al guardar firmantes', [
+                'solicitud_id' => $solicitudId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // No lanzar la excepción para no interrumpir el flujo principal
+        }
+    }
+
+    /**
+     * Guardar el firmante postulante (orden 1)
+     */
+    private function guardarFirmantePostulante($solicitudId, $solicitante)
+    {
+        // Verificar si ya existe un firmante principal para esta solicitud
+        $firmanteExistente = FirmanteSolicitud::where('solicitud_id', $solicitudId)
+            ->where('orden', 1)
+            ->first();
+
+        if ($firmanteExistente) {
+            // Actualizar el firmante existente
+            $firmanteExistente->update([
+                'nombre_completo' => $solicitante['nombres_apellidos'] ?? null,
+                'numero_documento' => $solicitante['numero_identificacion'] ?? null,
+                'email' => $solicitante['email'] ?? null,
+                'tipo' => 'POSTULANTE',
+                'rol' => 'SOLICITANTE_PRINCIPAL'
+            ]);
+        } else {
+            // Crear nuevo firmante principal
+            FirmanteSolicitud::create([
+                'solicitud_id' => $solicitudId,
+                'orden' => 1,
+                'tipo' => 'POSTULANTE',
+                'nombre_completo' => $solicitante['nombres_apellidos'] ?? null,
+                'numero_documento' => $solicitante['numero_identificacion'] ?? null,
+                'email' => $solicitante['email'] ?? null,
+                'rol' => 'SOLICITANTE_PRINCIPAL'
+            ]);
+        }
+
+        Log::info('Firmante postulante registrado exitosamente', [
+            'solicitud_id' => $solicitudId,
+            'nombre' => $solicitante['nombres_apellidos'] ?? 'Sin nombre',
+            'documento' => $solicitante['numero_identificacion'] ?? 'Sin documento'
+        ]);
+    }
+
+    /**
+     * Guardar el firmante empresa del convenio (orden 2)
+     */
+    private function guardarFirmanteEmpresa($solicitudId, $solicitante)
+    {
+        $empresaNit = $solicitante['nit'] ?? null;
+
+        if (empty($empresaNit)) {
+            Log::info('No se registra firmante empresa: el solicitante no tiene NIT de empresa', [
+                'solicitud_id' => $solicitudId,
+                'solicitante_data' => array_keys($solicitante)
+            ]);
+            return;
+        }
+
+        // Buscar la empresa en convenios
+        $empresaConvenio = EmpresaConvenio::where('nit', $empresaNit)
+            ->where('estado', 'Activo')
+            ->first();
+
+        if (!$empresaConvenio) {
+            Log::warning('Empresa no encontrada en convenios activos', [
+                'solicitud_id' => $solicitudId,
+                'empresa_nit' => $empresaNit,
+                'estados_disponibles' => EmpresaConvenio::where('nit', $empresaNit)->pluck('estado')
+            ]);
+            return;
+        }
+
+        // Verificar si ya existe un firmante empresa para esta solicitud
+        $firmanteExistente = FirmanteSolicitud::where('solicitud_id', $solicitudId)
+            ->where('orden', 2)
+            ->first();
+
+        if ($firmanteExistente) {
+            // Actualizar el firmante existente
+            $firmanteExistente->update([
+                'nombre_completo' => $empresaConvenio->razon_social,
+                'numero_documento' => $empresaConvenio->nit,
+                'email' => $empresaConvenio->correo,
+                'tipo' => 'EMPRESA_CONVENIO',
+                'rol' => 'EMPRESA_PATROCINADORA'
+            ]);
+        } else {
+            // Crear nuevo firmante empresa
+            FirmanteSolicitud::create([
+                'solicitud_id' => $solicitudId,
+                'orden' => 2,
+                'tipo' => 'EMPRESA_CONVENIO',
+                'nombre_completo' => $empresaConvenio->razon_social,
+                'numero_documento' => $empresaConvenio->nit,
+                'email' => $empresaConvenio->correo,
+                'rol' => 'EMPRESA_PATROCINADORA'
+            ]);
+        }
+
+        Log::info('Firmante empresa registrado exitosamente', [
+            'solicitud_id' => $solicitudId,
+            'empresa_nit' => $empresaNit,
+            'empresa_razon_social' => $empresaConvenio->razon_social
         ]);
     }
 }
