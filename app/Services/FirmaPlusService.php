@@ -230,4 +230,148 @@ class FirmaPlusService
             return false;
         }
     }
+
+    /**
+     * Validar estructura del payload del webhook
+     *
+     * @param array $data
+     * @return array Lista de errores de validación (vacío si es válido)
+     */
+    public function validarPayloadWebhook(array $data): array
+    {
+        $errores = [];
+
+        if (empty($data['transaccion_id'])) {
+            $errores[] = 'transaccion_id es requerido';
+        }
+
+        if (empty($data['solicitud_id'])) {
+            $errores[] = 'solicitud_id es requerido';
+        }
+
+        if (empty($data['estado'])) {
+            $errores[] = 'estado es requerido';
+        }
+
+        $estadosValidos = ['FIRMADO', 'RECHAZADO', 'EXPIRADO', 'CANCELADO'];
+        if (!empty($data['estado']) && !in_array($data['estado'], $estadosValidos)) {
+            $errores[] = "estado debe ser uno de: " . implode(', ', $estadosValidos);
+        }
+
+        return $errores;
+    }
+
+    /**
+     * Descargar documento firmado con reintentos y backoff exponencial
+     *
+     * @param string $transaccionId
+     * @param string $rutaDestino
+     * @param int $maxReintentos
+     * @return bool True si se descargó exitosamente
+     */
+    public function descargarDocumentoFirmadoConReintentos(
+        string $transaccionId,
+        string $rutaDestino,
+        int $maxReintentos = 3
+    ): bool {
+        $intento = 0;
+        $ultimoError = null;
+
+        while ($intento < $maxReintentos) {
+            try {
+                $this->descargarDocumentoFirmado($transaccionId, $rutaDestino);
+
+                // Verificar que el archivo se descargó correctamente
+                if (file_exists($rutaDestino) && filesize($rutaDestino) > 0) {
+                    Log::info('Documento descargado exitosamente', [
+                        'transaccion_id' => $transaccionId,
+                        'ruta' => $rutaDestino,
+                        'intento' => $intento + 1
+                    ]);
+                    return true;
+                }
+
+                throw new \Exception('Archivo descargado está vacío o no existe');
+            } catch (\Exception $e) {
+                $ultimoError = $e->getMessage();
+                $intento++;
+
+                if ($intento < $maxReintentos) {
+                    $waitSeconds = pow(2, $intento);
+
+                    Log::warning("Reintentando descarga de PDF firmado (intento {$intento}/{$maxReintentos})", [
+                        'transaccion_id' => $transaccionId,
+                        'error' => $ultimoError,
+                        'waiting_seconds' => $waitSeconds
+                    ]);
+
+                    // Esperar antes de reintentar (backoff exponencial: 2, 4, 8 segundos)
+                    sleep($waitSeconds);
+                } else {
+                    Log::error("Falló descarga de PDF firmado después de {$maxReintentos} intentos", [
+                        'transaccion_id' => $transaccionId,
+                        'ultimo_error' => $ultimoError,
+                        'ruta_destino' => $rutaDestino
+                    ]);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Verificar integridad del PDF descargado
+     *
+     * @param string $rutaPdf
+     * @return bool True si el PDF es válido
+     */
+    public function verificarIntegridadPdf(string $rutaPdf): bool
+    {
+        if (!file_exists($rutaPdf)) {
+            Log::warning('PDF no existe en la ruta especificada', [
+                'ruta' => $rutaPdf
+            ]);
+            return false;
+        }
+
+        $size = filesize($rutaPdf);
+
+        // Verificar tamaño mínimo (1 KB)
+        if ($size < 1024) {
+            Log::warning('PDF tiene tamaño sospechosamente pequeño', [
+                'ruta' => $rutaPdf,
+                'size_bytes' => $size
+            ]);
+            return false;
+        }
+
+        // Verificar que sea un PDF válido (magic bytes %PDF-)
+        $handle = fopen($rutaPdf, 'r');
+        if (!$handle) {
+            Log::error('No se pudo abrir el archivo PDF para verificación', [
+                'ruta' => $rutaPdf
+            ]);
+            return false;
+        }
+
+        $header = fread($handle, 5);
+        fclose($handle);
+
+        if ($header !== '%PDF-') {
+            Log::error('Archivo no es un PDF válido (magic bytes incorrectos)', [
+                'ruta' => $rutaPdf,
+                'header_hex' => bin2hex($header),
+                'expected' => bin2hex('%PDF-')
+            ]);
+            return false;
+        }
+
+        Log::info('PDF verificado correctamente', [
+            'ruta' => $rutaPdf,
+            'size_bytes' => $size
+        ]);
+
+        return true;
+    }
 }

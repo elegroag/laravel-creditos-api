@@ -821,12 +821,6 @@ class SolicitudesCreditoController extends Controller
 
             $data = $validator->validated();
 
-            $activosDir = storage_path('app/storage/activos');
-            // Crear directorio si no existe
-            if (!is_dir($activosDir)) {
-                mkdir($activosDir, 0775, true);
-            }
-
             $base = !empty($numeroSolicitud) ? safe_filename_component($numeroSolicitud) : 'solicitud';
             $timestamp = Carbon::now()->format('Ymd-His');
             $candidate = "{$base}-{$timestamp}.pdf";
@@ -834,6 +828,10 @@ class SolicitudesCreditoController extends Controller
             // Generar número de solicitud si se va a guardar
             $solicitudPayload = $data['solicitud'] ?? [];
             $numeroSolicitud = $this->solicitudService->generarNumeroSolicitudSiEsNecesario($solicitudPayload);
+
+            $activosDir = storage_path('app/solicitudes/' . $numeroSolicitud);
+            // Crear directorio si no existe
+            if (!is_dir($activosDir)) mkdir($activosDir, 0775, true);
 
             // Guardar en base de datos
             $savedSolicitudId = $this->solicitudService->guardarSolicitudEnBaseDatos($data, $numeroSolicitud, $userData['username']);

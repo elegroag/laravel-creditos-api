@@ -7,6 +7,7 @@ use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\Postulacion;
 use App\Services\FirmaPlusService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -17,10 +18,12 @@ use Carbon\Carbon;
 class FirmaDigitalController extends Controller
 {
     protected FirmaPlusService $firmaService;
+    protected NotificationService $notificationService;
 
-    public function __construct(FirmaPlusService $firmaService)
+    public function __construct(FirmaPlusService $firmaService, NotificationService $notificationService)
     {
         $this->firmaService = $firmaService;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -226,66 +229,69 @@ class FirmaDigitalController extends Controller
     /**
      * Webhook para recibir notificaciones de FirmaPlus cuando se completa el firmado.
      *
-     * Este endpoint NO requiere autenticación JWT ya que es llamado por FirmaPlus.
-     * La autenticación se valida mediante token en el body o headers.
+     * Este endpoint requiere validación de firma HMAC (manejada por middleware).
      *
      * Body esperado:
      * {
      *     "transaccion_id": "string",
-     *     "estado": "FIRMADO" | "RECHAZADO" | "EXPIRADO",
+     *     "estado": "FIRMADO" | "RECHAZADO" | "EXPIRADO" | "CANCELADO",
      *     "solicitud_id": "string",
      *     "firmantes_completados": number,
+     *     "firmantes": [
+     *         {
+     *             "nombre": "string",
+     *             "email": "string",
+     *             "firmado": boolean,
+     *             "fecha_firma": "ISO8601"
+     *         }
+     *     ],
      *     "documento_firmado_url": "string" (opcional)
      * }
      *
+     * Headers:
+     * X-Signature: HMAC-SHA256 signature (validado por middleware)
+     *
      * Returns:
      * 200: Webhook procesado correctamente
-     * 401: Token de autenticación inválido
+     * 401: Firma inválida (validado por middleware)
      * 400: Datos inválidos
+     * 404: Solicitud no encontrada
      */
     public function webhookFirmaCompletada(Request $request): JsonResponse
     {
+        $startTime = microtime(true);
+
         try {
             // Obtener datos del webhook
             $data = $request->json()->all();
 
-            if (empty($data)) {
-                return ErrorResource::errorResponse('No se proporcionaron datos')
-                    ->response()
-                    ->setStatusCode(400);
-            }
-
-            // Validar token de autenticación del webhook
-            $webhookToken = $data['token'] ?? $request->header('X-Webhook-Token');
-
-            // TODO: Validar token contra configuración
-            // if (!$this->validarWebhookToken($webhookToken)) {
-            //     return response()->json([
-            //         'success' => false,
-            //         'error' => 'Token de webhook inválido',
-            //         'details' => []
-            //     ], 401);
-            // }
-
-            $transaccionId = $data['transaccion_id'] ?? null;
-            $solicitudId = $data['solicitud_id'] ?? null;
-            $nuevoEstado = $data['estado'] ?? null;
-
-            if (!$transaccionId || !$solicitudId || !$nuevoEstado) {
-                return ErrorResource::errorResponse('Faltan campos requeridos: transaccion_id, solicitud_id, estado')
-                    ->response()
-                    ->setStatusCode(400);
-            }
-
-            Log::info('Webhook de FirmaPlus recibido', [
-                'transaccion_id' => $transaccionId,
-                'solicitud_id' => $solicitudId,
-                'estado' => $nuevoEstado
+            Log::info('Webhook FirmaPlus recibido', [
+                'data_keys' => array_keys($data),
+                'ip' => $request->ip()
             ]);
 
-            // Validar solicitud_id
+            // Validar estructura del payload
+            $erroresValidacion = $this->firmaService->validarPayloadWebhook($data);
+
+            if (!empty($erroresValidacion)) {
+                Log::error('Payload de webhook inválido', [
+                    'errores' => $erroresValidacion,
+                    'data' => $data
+                ]);
+
+                return ErrorResource::errorResponse(
+                    'Datos de webhook inválidos: ' . implode(', ', $erroresValidacion)
+                )->response()->setStatusCode(400);
+            }
+
+            $transaccionId = $data['transaccion_id'];
+            $solicitudId = $data['solicitud_id'];
+            $nuevoEstado = $data['estado'];
+            $firmantesData = $data['firmantes'] ?? [];
+
+            // Validar UUID de solicitud
             if (!Str::isUuid($solicitudId)) {
-                return ErrorResource::errorResponse('solicitud_id inválido')
+                return ErrorResource::errorResponse('solicitud_id no es un UUID válido')
                     ->response()
                     ->setStatusCode(400);
             }
@@ -294,50 +300,121 @@ class FirmaDigitalController extends Controller
             $solicitud = Postulacion::find($solicitudId);
 
             if (!$solicitud) {
+                Log::error('Solicitud no encontrada en webhook', [
+                    'solicitud_id' => $solicitudId,
+                    'transaccion_id' => $transaccionId
+                ]);
+
                 return ErrorResource::notFound('Solicitud no encontrada')->response();
             }
 
+            // Verificar que el transaccion_id coincida
+            $procesoFirmado = $solicitud->proceso_firmado ?? [];
+            $transaccionEsperada = $procesoFirmado['transaccion_id'] ?? null;
+
+            if ($transaccionEsperada && $transaccionEsperada !== $transaccionId) {
+                Log::warning('Transacción ID no coincide', [
+                    'esperada' => $transaccionEsperada,
+                    'recibida' => $transaccionId,
+                    'solicitud_id' => $solicitudId
+                ]);
+            }
+
+            Log::info('Procesando webhook de FirmaPlus', [
+                'solicitud_id' => $solicitudId,
+                'transaccion_id' => $transaccionId,
+                'estado_nuevo' => $nuevoEstado,
+                'estado_anterior' => $solicitud->estado
+            ]);
+
             // Si el documento está firmado, descargar PDF
             $pdfFirmadoPath = null;
+            $pdfDescargado = false;
+
             if ($nuevoEstado === 'FIRMADO') {
                 try {
                     // Preparar ruta para PDF firmado
                     $pdfOriginalPath = $solicitud->pdf_generado['path'] ?? '';
-                    $directorio = dirname($pdfOriginalPath);
-                    $pdfFirmadoPath = $directorio . '/solicitud_' . $solicitudId . '_firmado.pdf';
 
-                    // Descargar de FirmaPlus
-                    $this->firmaService->descargarDocumentoFirmado($transaccionId, $pdfFirmadoPath);
+                    if (empty($pdfOriginalPath)) {
+                        Log::error('No se encontró ruta de PDF original', [
+                            'solicitud_id' => $solicitudId
+                        ]);
+                    } else {
+                        $directorio = dirname($pdfOriginalPath);
 
-                    Log::info('PDF firmado descargado exitosamente', [
-                        'solicitud_id' => $solicitudId,
-                        'path' => $pdfFirmadoPath
-                    ]);
+                        // Asegurar que el directorio existe
+                        if (!is_dir($directorio)) {
+                            mkdir($directorio, 0755, true);
+                        }
+
+                        $pdfFirmadoPath = $directorio . '/solicitud_' . $solicitudId . '_firmado_' . time() . '.pdf';
+
+                        // Descargar con reintentos
+                        $pdfDescargado = $this->firmaService->descargarDocumentoFirmadoConReintentos(
+                            $transaccionId,
+                            $pdfFirmadoPath,
+                            3
+                        );
+
+                        if ($pdfDescargado) {
+                            // Verificar integridad
+                            if (!$this->firmaService->verificarIntegridadPdf($pdfFirmadoPath)) {
+                                Log::error('PDF firmado no pasó verificación de integridad', [
+                                    'solicitud_id' => $solicitudId,
+                                    'ruta' => $pdfFirmadoPath
+                                ]);
+
+                                // Eliminar archivo corrupto
+                                if (file_exists($pdfFirmadoPath)) {
+                                    unlink($pdfFirmadoPath);
+                                }
+
+                                $pdfDescargado = false;
+                                $pdfFirmadoPath = null;
+                            } else {
+                                Log::info('PDF firmado descargado y verificado exitosamente', [
+                                    'solicitud_id' => $solicitudId,
+                                    'ruta' => $pdfFirmadoPath,
+                                    'size' => filesize($pdfFirmadoPath)
+                                ]);
+                            }
+                        }
+                    }
                 } catch (\Exception $e) {
                     Log::error('Error descargando PDF firmado', [
+                        'solicitud_id' => $solicitudId,
                         'transaccion_id' => $transaccionId,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
                     ]);
-                    // No fallar el webhook por este error
+
+                    // No fallar el webhook por este error, continuar
+                    $pdfDescargado = false;
                 }
             }
 
-            // Actualizar solicitud
-            $procesoFirmado = $solicitud->proceso_firmado ?? [];
+            // Actualizar proceso de firmado
             $procesoFirmado['estado'] = $nuevoEstado;
-            $procesoFirmado['fecha_completado'] = Carbon::now();
-            $procesoFirmado['firmantes_completados'] = $data['firmantes_completados'] ?? 0;
+            $procesoFirmado['fecha_completado'] = Carbon::now()->toISOString();
+            $procesoFirmado['firmantes_completados'] = $data['firmantes_completados'] ?? count($firmantesData);
+            $procesoFirmado['firmantes_data'] = $firmantesData;
+            $procesoFirmado['webhook_recibido_at'] = Carbon::now()->toISOString();
 
+            // Preparar datos para actualizar
             $updateData = [
                 'proceso_firmado' => $procesoFirmado,
                 'estado' => $nuevoEstado
             ];
 
-            if ($pdfFirmadoPath) {
+            // Si se descargó el PDF exitosamente
+            if ($pdfFirmadoPath && $pdfDescargado) {
                 $updateData['pdf_firmado'] = [
                     'path' => $pdfFirmadoPath,
                     'filename' => basename($pdfFirmadoPath),
-                    'fecha_firmado' => Carbon::now()
+                    'fecha_firmado' => Carbon::now()->toISOString(),
+                    'size' => filesize($pdfFirmadoPath),
+                    'transaccion_id' => $transaccionId
                 ];
             }
 
@@ -346,42 +423,93 @@ class FirmaDigitalController extends Controller
             // Agregar al timeline
             $timeline = $solicitud->timeline ?? [];
             $timeline[] = [
-                'fecha' => Carbon::now(),
-                'evento' => 'FIRMADO_' . $nuevoEstado,
-                'descripcion' => 'Documento ' . strtolower($nuevoEstado) . ' por FirmaPlus',
+                'fecha' => Carbon::now()->toISOString(),
+                'evento' => 'WEBHOOK_' . $nuevoEstado,
+                'descripcion' => $this->getDescripcionEvento($nuevoEstado, $pdfDescargado),
+                'usuario' => 'SYSTEM_FIRMAPLUS',
                 'datos' => [
                     'transaccion_id' => $transaccionId,
-                    'firmantes_completados' => $data['firmantes_completados'] ?? 0
+                    'firmantes_completados' => $procesoFirmado['firmantes_completados'],
+                    'pdf_descargado' => $pdfDescargado,
+                    'processing_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
                 ]
             ];
             $solicitud->timeline = $timeline;
             $solicitud->save();
 
-            // TODO: Actualizar recepcion_firmas cuando se implemente el modelo
+            // Enviar notificación según el estado
+            try {
+                switch ($nuevoEstado) {
+                    case 'FIRMADO':
+                        $this->notificationService->notifyFirmaCompletada($solicitud, [
+                            'pdf_descargado' => $pdfDescargado,
+                            'firmantes_completados' => $procesoFirmado['firmantes_completados']
+                        ]);
+                        break;
+                    case 'RECHAZADO':
+                        $this->notificationService->notifyFirmaRechazada($solicitud);
+                        break;
+                    case 'EXPIRADO':
+                        $this->notificationService->notifyFirmaExpirada($solicitud);
+                        break;
+                }
+            } catch (\Exception $e) {
+                Log::warning('Error al enviar notificación (no crítico)', [
+                    'solicitud_id' => $solicitudId,
+                    'estado' => $nuevoEstado,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             Log::info('Webhook procesado exitosamente', [
                 'solicitud_id' => $solicitudId,
                 'transaccion_id' => $transaccionId,
-                'estado' => $nuevoEstado
+                'estado' => $nuevoEstado,
+                'pdf_descargado' => $pdfDescargado,
+                'processing_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
             ]);
 
+            // Respuesta exitosa
             return ApiResource::success([
                 'procesado' => true,
                 'solicitud_id' => $solicitudId,
-                'estado' => $nuevoEstado
+                'transaccion_id' => $transaccionId,
+                'estado' => $nuevoEstado,
+                'pdf_descargado' => $pdfDescargado,
+                'timestamp' => Carbon::now()->toISOString()
             ], 'Webhook procesado correctamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error procesando webhook de FirmaPlus', [
+            Log::error('Error crítico procesando webhook de FirmaPlus', [
                 'error' => $e->getMessage(),
-                'data' => $request->json()->all()
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->json()->all(),
+                'processing_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
             ]);
 
             return ErrorResource::serverError('Error procesando webhook', [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'timestamp' => Carbon::now()->toISOString()
             ])->response();
         }
+    }
+
+    /**
+     * Obtener descripción del evento para timeline
+     */
+    private function getDescripcionEvento(string $estado, bool $pdfDescargado): string
+    {
+        $descripciones = [
+            'FIRMADO' => $pdfDescargado
+                ? 'Documento firmado exitosamente y PDF descargado'
+                : 'Documento firmado (PDF no pudo descargarse)',
+            'RECHAZADO' => 'Documento rechazado por uno o más firmantes',
+            'EXPIRADO' => 'Proceso de firma expiró sin completarse',
+            'CANCELADO' => 'Proceso de firma cancelado'
+        ];
+
+        return $descripciones[$estado] ?? "Estado actualizado a: {$estado}";
     }
 
     /**

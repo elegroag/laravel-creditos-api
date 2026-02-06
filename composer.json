@@ -15,7 +15,6 @@
         "laravel/reverb": "^1.7",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
-        "mongodb/laravel-mongodb": "^5.5",
         "phpmailer/phpmailer": "^7.0",
         "tymon/jwt-auth": "^2.2"
     },

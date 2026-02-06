@@ -49,6 +49,14 @@ return [
         'user' => env('GENERATE_PDF_API_USER'),
         'password' => env('GENERATE_PDF_API_PASSWORD'),
         'timeout' => env('GENERATE_PDF_API_TIMEOUT', 30),
-    ]
+    ],
+
+    'firma_plus' => [
+        'url' => env('FIRMAPLUS_API_URL', 'https://api.firmaplus.com'),
+        'api_key' => env('FIRMAPLUS_API_KEY'),
+        'webhook_secret' => env('FIRMAPLUS_WEBHOOK_SECRET'),
+        'timeout' => env('FIRMAPLUS_TIMEOUT', 30),
+        'verify_ssl' => env('FIRMAPLUS_VERIFY_SSL', true),
+    ],
 
 ];

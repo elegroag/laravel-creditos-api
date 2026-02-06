@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.jwt' => \App\Http\Middleware\JwtAuthMiddleware::class,
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+            'webhook.signature' => \App\Http\Middleware\ValidateWebhookSignature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

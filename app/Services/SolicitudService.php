@@ -892,32 +892,34 @@ class SolicitudService extends EloquentService
             return;
         }
 
-        $antiguedadMeses = $this->calcularAntiguedadMeses($solicitantePayload['fecha_vinculacion'] ?? null);
+        $antiguedadMeses = $solicitantePayload['antiguedad_meses'] ?? null;
 
         $solicitanteData = [
             'solicitud_id' => $numeroSolicitud,
-            'tipo_persona' => 'natural', // Por defecto persona natural
-            'tipo_documento' => $solicitantePayload['tipo_identificacion'] ?? null,
-            'numero_documento' => $solicitantePayload['numero_identificacion'] ?? null,
-            'nombres' => $solicitantePayload['nombres_apellidos'] ?? null,
-            'email' => $solicitantePayload['email'] ?? null,
-            'telefono' => $solicitantePayload['telefono_fijo'] ?? null,
-            'celular' => $solicitantePayload['telefono_movil'] ?? null,
-            'genero' => $solicitantePayload['sexo'] ?? null,
+            'tipo_persona' => $solicitantePayload['tipo_persona'] ?? 'natural',
+            'tipo_documento' => $solicitantePayload['tipo_documento'] ?? null,
+            'numero_documento' => $solicitantePayload['numero_documento'] ?? null,
+            'nombres' => $solicitantePayload['nombres'] ?? null,
+            'apellidos' => $solicitantePayload['apellidos'] ?? null,
+            'razon_social' => $solicitantePayload['razon_social'] ?? null,
+            'nit' => $solicitantePayload['nit'] ?? null,
             'fecha_nacimiento' => $solicitantePayload['fecha_nacimiento'] ?? null,
+            'genero' => $solicitantePayload['genero'] ?? null,
             'estado_civil' => $solicitantePayload['estado_civil'] ?? null,
             'nivel_educativo' => $solicitantePayload['nivel_educativo'] ?? null,
-            'profesion' => $solicitantePayload['profesion_ocupacion'] ?? null,
-            'barrio' => $solicitantePayload['barrio_residencia'] ?? null,
-            'ciudad' => $solicitantePayload['ciudad_residencia'] ?? null,
-            'departamento' => $solicitantePayload['pais_residencia'] ?? null,
-            'cargo' => $solicitantePayload['profesion_ocupacion'] ?? null,
+            'profesion' => $solicitantePayload['profesion'] ?? null,
+            'email' => $solicitantePayload['email'] ?? null,
+            'telefono' => $solicitantePayload['telefono'] ?? null,
+            'celular' => $solicitantePayload['celular'] ?? null,
+            'direccion' => $solicitantePayload['direccion'] ?? null,
+            'barrio' => $solicitantePayload['barrio'] ?? null,
+            'ciudad' => $solicitantePayload['ciudad'] ?? null,
+            'departamento' => $solicitantePayload['departamento'] ?? null,
+            'cargo' => $solicitantePayload['cargo'] ?? null,
             'salario' => $solicitantePayload['salario'] ?? null,
-            'antiguedad_meses' => $antiguedadMeses,
-            'tipo_contrato' => null,
-            'sector_economico' => null,
-            'nit' => $solicitantePayload['empresa_nit'] ?? null,
-            'razon_social' => $solicitantePayload['empresa_razon_social'] ?? null,
+            'antiguedad_meses' => $solicitantePayload['antiguedad_meses'] ?? $antiguedadMeses,
+            'tipo_contrato' => $solicitantePayload['tipo_contrato'] ?? null,
+            'sector_economico' => $solicitantePayload['sector_economico'] ?? null,
         ];
 
         // Buscar solicitante existente
