@@ -46,7 +46,8 @@ class SolicitudSolicitante extends Model
         'salario',
         'antiguedad_meses',
         'tipo_contrato',
-        'sector_economico'
+        'sector_economico',
+        'codigo_categoria'
     ];
 
     /**

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\EstadoSolicitud;
+use App\Models\NumeroSolicitud;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\UserService;
@@ -854,5 +855,37 @@ class SolicitudesCreditoController extends Controller
                 'trace' => $e->getMessage()
             ])->response();
         }
+    }
+
+    public function buscarNumeroSolicitudDisponible(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'linea_credito' => 'required|string|max:2',
+        ]);
+
+        if ($validator->fails()) {
+            return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
+                ->response()
+                ->setStatusCode(422);
+        }
+
+        $data = $validator->validated();
+
+
+        $ultimo_numero = NumeroSolicitud::where('linea_credito', $data['linea_credito'])->max('numeric_secuencia');
+        $nuevaSecuencia = $ultimo_numero + 1;
+        $now = Carbon::now();
+        $vigencia = (int) $now->format('Ym');
+        $radicado = sprintf('%06d-%d-%s', $nuevaSecuencia, $vigencia, $data['linea_credito']);
+
+
+        if (!$radicado) {
+            return ErrorResource::notFound('Solicitud no encontrada')
+                ->response()
+                ->setStatusCode(404);
+        }
+
+        return ApiResource::success($radicado, 'Solicitud encontrada')
+            ->response();
     }
 }

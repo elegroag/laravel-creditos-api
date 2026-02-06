@@ -24,6 +24,8 @@ Route::middleware('auth.jwt')->group(function () {
 
         #http://localhost:5001/api/solicitudes-credito/paginado/20/0/@
         Route::get('paginado/{limit}/{offset}/{estado}', [SolicitudesCreditoController::class, 'listarSolicitudesCreditoPaginado']);
+
+        Route::post('numero-disponible', [SolicitudesCreditoController::class, 'buscarNumeroSolicitudDisponible']);
     });
 
     //no cambiar esta ruta es  requerida por el frontend del sistema

@@ -39,6 +39,7 @@ return new class extends Migration
             $table->string('barrio', 100)->nullable();
             $table->string('ciudad', 100)->nullable();
             $table->string('departamento', 100)->nullable();
+            $table->string('codigo_categoria', 1)->nullable();
 
             // Datos laborales
             $table->string('cargo', 100)->nullable();
