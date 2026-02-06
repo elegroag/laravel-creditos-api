@@ -10,6 +10,10 @@ use App\Exceptions\ValidationException;
 
 class TrabajadorService extends EloquentService
 {
+    /**
+     * externalApiService variable
+     * @var ExternalApiService
+     */
     private ExternalApiService $externalApiService;
 
     public function __construct(ExternalApiService $externalApiService)

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Resources\ApiResource;
 use App\Services\UserService;
 use App\Services\TrabajadorService;
 use App\Services\AuthenticationService;
@@ -321,7 +322,8 @@ class AuthController extends Controller
                 $authResult['user']['puntos_asesores'] = $puntosAsesores;
             }
 
-            return response()->json($authResult);
+            return ApiResource::success($authResult, 'Solicitud encontrada')
+                ->response();
         } catch (\Exception $e) {
             Log::error('Error en login de asesor: ' . $e->getMessage());
 

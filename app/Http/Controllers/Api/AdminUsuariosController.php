@@ -291,7 +291,7 @@ class AdminUsuariosController extends Controller
             $usuario = User::create([
                 'username' => $data['username'],
                 'email' => $data['email'],
-                'password' => Hash::make($data['password']),
+                'password_hash' => Hash::make($data['password']),
                 'roles' => $data['roles'] ?? ['user_trabajador'],
                 'disabled' => $data['disabled'] ?? false,
                 'tipo_documento' => $data['tipo_documento'] ?? 'CC',
@@ -398,7 +398,7 @@ class AdminUsuariosController extends Controller
 
             // Actualizar contraseña si se proporciona
             if (isset($data['password']) && !empty($data['password'])) {
-                $updateData['password'] = Hash::make($data['password']);
+                $updateData['password_hash'] = Hash::make($data['password']);
             }
 
             // Actualizar datos personales
@@ -692,7 +692,7 @@ class AdminUsuariosController extends Controller
     /**
      * Obtener datos del trabajador desde API externa
      */
-    private function obtenerDatosTrabajador(string $cedtra): ?array
+    private function obtenerDatosTrabajador(?string $cedtra): ?array
     {
         try {
             $response = $this->externalApiService->post('company/informacion_trabajador', [
