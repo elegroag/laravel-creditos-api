@@ -28,6 +28,79 @@ class AdminUsuariosController extends Controller
     }
 
     /**
+     * Obtener estadísticas de usuarios para el dashboard administrativo
+     */
+    public function obtenerEstadisticas(Request $request): JsonResponse
+    {
+        try {
+            Log::info('Obteniendo estadísticas de usuarios para dashboard');
+
+            // Obtener conteo de usuarios por rol
+            $conteoRoles = $this->obtenerConteoRoles();
+
+            // Formatear usuarios por rol para el frontend
+            $usuariosPorRol = [];
+            foreach ($conteoRoles as $rol => $cantidad) {
+                $usuariosPorRol[] = [
+                    'rol' => $rol,
+                    'count' => $cantidad
+                ];
+            }
+
+            // Obtener conteo de trabajadores específicamente
+            $trabajadores = $conteoRoles['user_trabajador'] ?? 0;
+
+            // Obtener estadísticas adicionales
+            $totalUsuarios = User::count();
+            $usuariosActivos = User::where('disabled', false)->count();
+            $usuariosInactivos = $totalUsuarios - $usuariosActivos;
+
+            // Usuarios creados en los últimos 30 días
+            $usuariosRecientes = User::where('created_at', '>=', now()->subDays(30))->count();
+
+            // Distribución por fecha de creación (últimos 7 días)
+            $usuariosPorDia = [];
+            for ($i = 6; $i >= 0; $i--) {
+                $fecha = now()->subDays($i)->format('Y-m-d');
+                $conteo = User::whereDate('created_at', $fecha)->count();
+                $usuariosPorDia[] = [
+                    'fecha' => $fecha,
+                    'conteo' => $conteo
+                ];
+            }
+
+            $data = [
+                'trabajadores' => $trabajadores,
+                'usuariosPorRol' => $usuariosPorRol,
+                'totalUsuarios' => $totalUsuarios,
+                'usuariosActivos' => $usuariosActivos,
+                'usuariosInactivos' => $usuariosInactivos,
+                'usuariosRecientes' => $usuariosRecientes,
+                'usuariosPorDia' => $usuariosPorDia,
+                'ultimaActualizacion' => now()->toISOString()
+            ];
+
+            Log::info('Estadísticas de usuarios obtenidas exitosamente', [
+                'total_usuarios' => $totalUsuarios,
+                'trabajadores' => $trabajadores
+            ]);
+
+            return ApiResource::success($data, 'Estadísticas de usuarios obtenidas exitosamente')->response();
+        } catch (\Exception $e) {
+            Log::error('Error al obtener estadísticas de usuarios', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al obtener estadísticas de usuarios', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
+
+    /**
      * Obtener lista de usuarios con paginación y filtros
      * Query params:
      * - page: número de página (default: 1)

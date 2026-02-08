@@ -20,6 +20,7 @@ require __DIR__ . '/api/convenios.php';
 require __DIR__ . '/api/postulante.php';
 require __DIR__ . '/api/admin.php';
 require __DIR__ . '/api/admin-usuarios.php';
+require __DIR__ . '/api/admin-dashboard.php';
 require __DIR__ . '/api/firmas.php';
 require __DIR__ . '/api/solicitud-credito.php';
 require __DIR__ . '/api/solicitudes-credito.php';
