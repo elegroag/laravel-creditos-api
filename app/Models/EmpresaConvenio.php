@@ -185,4 +185,20 @@ class EmpresaConvenio extends Model
             'color' => $colors[$this->estado] ?? '#6B7280'
         ];
     }
+
+    /**
+     * Transform for API response.
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'representante_documento' => $this->representante_documento,
+            'representante_nombre' => $this->representante_nombre,
+            'fecha_vencimiento' => $this->fecha_vencimiento?->format('Y-m-d'),
+            'fecha_convenio' => $this->fecha_convenio?->format('Y-m-d'),
+            'nit' => $this->nit,
+            'razon_social' => $this->razon_social,
+            'estado' => $this->estado,
+        ];
+    }
 }

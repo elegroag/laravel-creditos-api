@@ -31,16 +31,22 @@ class SolicitudSolicitante extends Model
         'razon_social',
         'nit',
         'fecha_nacimiento',
+        'pais_nacimiento',
+        'fecha_expedicion',
         'genero',
         'estado_civil',
         'nivel_educativo',
         'profesion',
         'email',
-        'telefono',
-        'celular',
+        'telefono_fijo',
+        'telefono_movil',
         'direccion',
         'barrio',
         'ciudad',
+        'pais_residencia',
+        'tipo_vivienda',
+        'vive_con_nucleo_familiar',
+        'personas_a_cargo',
         'departamento',
         'cargo',
         'salario',
@@ -59,6 +65,9 @@ class SolicitudSolicitante extends Model
     {
         return [
             'fecha_nacimiento' => 'date',
+            'fecha_expedicion' => 'date',
+            'vive_con_nucleo_familiar' => 'boolean',
+            'personas_a_cargo' => 'integer',
             'salario' => 'decimal:2',
             'antiguedad_meses' => 'integer',
             'created_at' => 'datetime',
@@ -297,52 +306,26 @@ class SolicitudSolicitante extends Model
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
-            'solicitud_id' => $this->solicitud_id,
-            'tipo_persona' => $this->tipo_persona,
-            'identificacion' => [
-                'tipo_documento' => $this->tipo_documento,
-                'numero_documento' => $this->numero_documento,
-                'identificacion_formateada' => $this->identificacion_formateada
-            ],
-            'datos_personales' => [
-                'nombre_completo' => $this->nombre_completo,
-                'nombres' => $this->nombres,
-                'apellidos' => $this->apellidos,
-                'razon_social' => $this->razon_social,
-                'nit' => $this->nit,
-                'digito_verificacion' => $this->digito_verificacion,
-                'fecha_nacimiento' => $this->fecha_nacimiento?->toISOString(),
-                'edad' => $this->edad,
-                'genero' => $this->genero,
-                'estado_civil' => $this->estado_civil,
-                'nivel_educativo' => $this->nivel_educativo,
-                'profesion' => $this->profesion
-            ],
-            'contacto' => $this->contacto_resumen,
-            'direccion' => [
-                'direccion' => $this->direccion,
-                'barrio' => $this->barrio,
-                'ciudad' => $this->ciudad,
-                'departamento' => $this->departamento,
-                'codigo_postal' => $this->codigo_postal,
-                'direccion_completa' => $this->direccion_completa
-            ],
-            'informacion_laboral' => $this->informacion_laboral,
-            'empresa' => $this->empresa ? [
-                'nit' => $this->empresa->nit,
-                'razon_social' => $this->empresa->razon_social
-            ] : null,
-            'validaciones' => [
-                'es_mayor_edad' => $this->esMayorEdad(),
-                'tiene_email_valido' => $this->tieneEmailValido(),
-                'datos_personales_completos' => $this->tieneDatosPersonalesCompletos(),
-                'datos_contacto_completos' => $this->tieneDatosContactoCompletos(),
-                'datos_laborales_completos' => $this->tieneDatosLaboralesCompletos(),
-                'errores_validacion' => $this->validarCampos()
-            ],
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+            'fecha_vinculacion' => $this->created_at?->format('Y-m-d'),
+            'tipo_documento' => $this->tipo_documento,
+            'numero_documento' => $this->numero_documento,
+            'fecha_nacimiento' => $this->fecha_nacimiento?->format('Y-m-d'),
+            'pais_nacimiento' => $this->pais_nacimiento ?? '',
+            'nombre_completo' => $this->nombre_completo,
+            'fecha_expedicion_documento' => $this->fecha_expedicion?->format('Y-m-d'),
+            'profesion_ocupacion' => $this->profesion ?? '',
+            'sexo' => $this->genero ?? '',
+            'nivel_educativo' => $this->nivel_educativo ?? '',
+            'barrio_residencia' => $this->barrio ?? '',
+            'ciudad_residencia' => $this->ciudad ?? '',
+            'pais_residencia' => $this->pais_residencia ?? '',
+            'telefono_fijo' => $this->telefono_fijo ?? '',
+            'telefono_movil' => $this->telefono_movil ?? '',
+            'email' => $this->email ?? '',
+            'tipo_vivienda' => $this->tipo_vivienda ?? '',
+            'vive_con_nucleo_familiar' => $this->vive_con_nucleo_familiar ?? false,
+            'personas_a_cargo' => $this->personas_a_cargo ?? 0,
+            'direccion_residencia' => $this->direccion ?? ''
         ];
     }
 

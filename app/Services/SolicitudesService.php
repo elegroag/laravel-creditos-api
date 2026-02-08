@@ -314,7 +314,7 @@ class SolicitudesService extends EloquentService
             'id' => $solicitud->id,
             'numero_solicitud' => $solicitud->numero_solicitud,
             'estado' => $solicitud->estado,
-            'monto_solicitado' => $solicitud->monto_solicitado,
+            'valor_solicitud' => $solicitud->valor_solicitud,
             'plazo_meses' => $solicitud->plazo_meses,
             'tipo_credito' => $solicitud->tipo_credito,
             'created_at' => $solicitud->created_at,

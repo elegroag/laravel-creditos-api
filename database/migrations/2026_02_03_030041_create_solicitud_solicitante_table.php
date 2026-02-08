@@ -28,16 +28,22 @@ return new class extends Migration
 
             // Datos personales
             $table->date('fecha_nacimiento')->nullable();
+            $table->char('pais_nacimiento', 3)->nullable();
+            $table->date('fecha_expedicion')->nullable();
             $table->enum('genero', ['M', 'F', 'O'])->nullable();
             $table->string('estado_civil', 20)->nullable();
             $table->string('nivel_educativo', 50)->nullable();
             $table->string('profesion', 100)->nullable();
             $table->string('email', 150)->nullable();
-            $table->string('telefono', 20)->nullable();
-            $table->string('celular', 20)->nullable();
+            $table->char('telefono_fijo', 10)->nullable();
+            $table->char('telefono_movil', 10)->nullable();
             $table->string('direccion', 200)->nullable();
             $table->string('barrio', 100)->nullable();
             $table->string('ciudad', 100)->nullable();
+            $table->char('pais_residencia', 3)->nullable();
+            $table->char('tipo_vivienda', 2)->nullable();
+            $table->boolean('vive_con_nucleo_familiar')->default(false);
+            $table->smallInteger('personas_a_cargo')->default(0);
             $table->string('departamento', 100)->nullable();
             $table->string('codigo_categoria', 1)->nullable();
 

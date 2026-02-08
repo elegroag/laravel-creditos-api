@@ -6,14 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\DocumentoPostulante;
-use App\Models\EmpresaConvenio;
 use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\GeneradorPdfService;
 use App\Services\TrabajadorService;
+use App\Services\PdfGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -24,15 +23,19 @@ class SolicitudPdfController extends Controller
     protected SolicitudService $solicitudService;
     protected GeneradorPdfService $generadorPdfService;
     protected TrabajadorService $trabajadorService;
+    protected PdfGenerationService $pdfGenerationService;
+
 
     public function __construct(
         SolicitudService $solicitudService,
         GeneradorPdfService $generadorPdfService,
-        TrabajadorService $trabajadorService
+        TrabajadorService $trabajadorService,
+        PdfGenerationService $pdfGenerationService
     ) {
         $this->solicitudService = $solicitudService;
         $this->generadorPdfService = $generadorPdfService;
         $this->trabajadorService = $trabajadorService;
+        $this->pdfGenerationService = $pdfGenerationService;
     }
 
     /**
@@ -78,7 +81,7 @@ class SolicitudPdfController extends Controller
             }
 
             // Generar PDF usando API python
-            $resultado = $this->generarPdfConApi($solicitudId);
+            $resultado = $this->pdfGenerationService->generarPdfConApi($solicitudId);
 
             if (!$resultado['success']) {
                 return ErrorResource::errorResponse('Error al generar PDF', $resultado['error'] ?? [])
@@ -295,197 +298,6 @@ class SolicitudPdfController extends Controller
                 'line' => $e->getLine(),
                 'trace' => $e->getMessage()
             ])->response();
-        }
-    }
-
-    /**
-     * Genera PDF usando el servicio externo Flask API
-     */
-    private function generarPdfConApi(string $solicitudId): array
-    {
-        try {
-            // Obtener datos completos de la solicitud
-            $solicitud = $this->solicitudService->getById($solicitudId);
-
-            if (!$solicitud) {
-                Log::error('Solicitud no encontrada', ['solicitud_id' => $solicitudId]);
-                return [
-                    'success' => false,
-                    'error' => 'Solicitud no encontrada'
-                ];
-            }
-
-            // Obtener datos relacionados
-            $solicitante = $solicitud->solicitante;
-            $payload = $solicitud->payload;
-            $firmantes = $solicitud->firmantes;
-
-            // Mapear datos del solicitante/trabajador
-            $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($solicitante->numero_documento);
-
-            $incluirConvenio = true;
-            $convenioData = EmpresaConvenio::where('nit', $solicitante->nit)->first();
-
-
-            // Mapear datos de firmantes
-            $firmantesData = [];
-            $incluirFirmantes = false;
-
-            if ($firmantes && $firmantes->count() > 0) {
-                $incluirFirmantes = true;
-                $firmantesData = $firmantes->map(function ($firmante) {
-                    return [
-                        'nombre_completo' => $firmante->nombre_completo,
-                        'numero_documento' => $firmante->numero_documento,
-                        'email' => $firmante->email,
-                        'rol' => $firmante->rol,
-                        'tipo' => $firmante->tipo,
-                        'orden' => $firmante->orden
-                    ];
-                })->toArray();
-            }
-
-            // Preparar datos para la API Flask
-            $data = [
-                'solicitud_id' => $solicitudId,
-                'solicitud_data' => $solicitud,
-                'trabajador_data' => $trabajadorData,
-                'incluir_convenio' => $incluirConvenio,
-                'incluir_firmantes' => $incluirFirmantes,
-                'convenio_data' => $convenioData,
-                'firmantes_data' => $firmantesData
-            ];
-
-            // Llamar al servicio externo
-            $resultado = $this->generadorPdfService->generarPdfCreditos($data);
-
-            if (!$resultado['success']) {
-                Log::error('Error al generar PDF con API Flask', [
-                    'solicitud_id' => $solicitudId,
-                    'error' => $resultado['error'] ?? 'Unknown error',
-                    'status' => $resultado['status'] ?? 'N/A'
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => $resultado['error'] ?? 'Error al generar PDF',
-                    'details' => ['api_error' => $resultado['response'] ?? []]
-                ];
-            }
-
-            // Guardar información del PDF en la solicitud
-            $pdfData = $resultado['data'] ?? [];
-
-            if (!empty($pdfData)) {
-                $this->guardarInfoPdfEnSolicitud($solicitudId, $pdfData);
-            }
-
-            Log::info('PDF generado exitosamente con API Flask', [
-                'solicitud_id' => $solicitudId,
-                'pdf_data' => $pdfData
-            ]);
-
-            return [
-                'success' => true,
-                'data' => $pdfData
-            ];
-        } catch (\Exception $e) {
-            Log::error('Error inesperado al generar PDF con API Flask', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'Error interno al generar PDF',
-                'details' => ['exception' => $e->getMessage()]
-            ];
-        }
-    }
-
-    /**
-     * Guarda información del PDF en la solicitud
-     */
-    private function guardarInfoPdfEnSolicitud(string $solicitudId, array $pdfData): void
-    {
-        try {
-            $solicitud = SolicitudCredito::where('numero_solicitud', $solicitudId)->first();
-
-            if (!$solicitud) {
-                Log::warning('No se encontró la solicitud para guardar info del PDF', [
-                    'solicitud_id' => $solicitudId
-                ]);
-                return;
-            }
-            $dataBase64 = $pdfData['api_content'];
-
-            // Crear directorio para la solicitud si no existe
-            $solicitudDir = storage_path("app/solicitudes/{$solicitudId}");
-            if (!file_exists($solicitudDir)) {
-                mkdir($solicitudDir, 0775, true);
-            }
-
-            // Generar nombre de archivo con timestamp
-            $timestamp = now()->format('Ymd_His');
-            $filename = "solicitud_{$solicitudId}_{$timestamp}.pdf";
-            $path = "solicitudes/{$solicitudId}/{$filename}";
-
-            // Decodificar y guardar el PDF
-            $pdfContent = base64_decode($dataBase64);
-            if ($pdfContent === false) {
-                Log::error('Error al decodificar el contenido base64 del PDF', [
-                    'solicitud_id' => $solicitudId
-                ]);
-                return;
-            }
-
-            $fullPath = storage_path("app/{$path}");
-            if (file_put_contents($fullPath, $pdfContent) === false) {
-                Log::error('Error al guardar el archivo PDF', [
-                    'solicitud_id' => $solicitudId,
-                    'path' => $fullPath
-                ]);
-                return;
-            }
-
-
-            $pdfInfo = [
-                'filename' => $filename,
-                'path' => $path,
-                'api_path' => $pdfData['api_path'],
-                'api_filename' => $pdfData['api_filename'],
-                'solicitud_id' => $pdfData['solicitud_id'] ?? null,
-            ];
-
-            $solicitud->update([
-                'pdf_generado' => $pdfInfo,
-                'updated_at' => Carbon::now()
-            ]);
-
-            // Crear registro en DocumentoPostulante
-            DocumentoPostulante::create([
-                'username' => $solicitud->owner_username,
-                'tipo_documento' => 'pdf_solicitud',
-                'nombre_original' => $filename,
-                'saved_filename' => $filename,
-                'tipo_mime' => 'application/pdf',
-                'ruta_archivo' => $path,
-                'api_path' => $pdfData['api_path'] ?? null,
-                'api_filename' => $pdfData['api_filename'] ?? null,
-                'solicitud_id' => $solicitudId,
-                'activo' => true
-            ]);
-
-            Log::info('Información del PDF guardada en solicitud', [
-                'solicitud_id' => $solicitudId,
-                'pdf_info' => $pdfInfo
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error al guardar información del PDF en solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
         }
     }
 

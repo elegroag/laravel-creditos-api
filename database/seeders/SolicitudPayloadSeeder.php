@@ -53,7 +53,7 @@ class SolicitudPayloadSeeder extends Seeder
     {
         $numeroSolicitud = $solicitud->numero_solicitud;
         $destino = strtolower($solicitud->destino_credito ?? '');
-        $monto = $solicitud->monto_solicitado;
+        $monto = $solicitud->monto_solicitado ?? 0;
 
         // Datos base del solicitante
         $solicitanteBase = [
@@ -274,10 +274,20 @@ class SolicitudPayloadSeeder extends Seeder
 
     private function generarSalario(float $montoCredito): float
     {
+        // Si el monto del crédito es 0 o muy bajo, usar un salario base
+        if ($montoCredito <= 0) {
+            $montoCredito = 2000000; // Salario base de 2 millones
+        }
+        
         // El salario debe ser razonable en relación al crédito solicitado
         $minimo = $montoCredito * 0.05; // Mínimo 5% del crédito
         $maximo = $montoCredito * 0.5;  // Máximo 50% del crédito
-        return rand($minimo, $maximo);
+        
+        // Asegurar que el salario mínimo sea al menos el SMMLV
+        $salarioMinimoLegal = 1300000; // SMMLV 2024
+        $salarioCalculado = rand($minimo, $maximo);
+        
+        return max($salarioCalculado, $salarioMinimoLegal);
     }
 
     private function generarFechaIngreso(): string

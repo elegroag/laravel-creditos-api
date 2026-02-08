@@ -230,19 +230,12 @@ class FirmanteSolicitud extends Model
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
-            'solicitud_id' => $this->solicitud_id,
-            'orden' => $this->orden,
             'tipo' => $this->tipo,
-            'nombre_completo' => $this->nombre_completo,
-            'numero_documento' => $this->getDocumentoEnmascaradoAttribute(),
-            'email' => $this->getEmailEnmascaradoAttribute(),
             'rol' => $this->rol,
-            'is_primary' => $this->isPrimary(),
-            'has_complete_data' => $this->hasCompleteData(),
-            'nombre_formateado' => $this->getNombreFormateadoAttribute(),
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+            'nombre_completo' => $this->nombre_completo,
+            'numero_documento' => $this->numero_documento,
+            'email' => $this->email,
+            'orden' => $this->orden
         ];
     }
 

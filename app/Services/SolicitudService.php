@@ -31,6 +31,7 @@ class SolicitudService extends EloquentService
                 'numero_solicitud' => $numeroSolicitud,
                 'owner_username' => $ownerUsername,
                 'estado' => 'PENDIENTE',
+                'fecha_radicado' => $data['fecha_radicado'] ?? now(),
                 'created_at' => now(),
                 'updated_at' => now()
             ], $data);
@@ -314,10 +315,10 @@ class SolicitudService extends EloquentService
 
             // Filter by monto range
             if (isset($filters['monto_minimo'])) {
-                $query->where('monto_solicitado', '>=', $filters['monto_minimo']);
+                $query->where('valor_solicitud', '>=', $filters['monto_minimo']);
             }
             if (isset($filters['monto_maximo'])) {
-                $query->where('monto_solicitado', '<=', $filters['monto_maximo']);
+                $query->where('valor_solicitud', '<=', $filters['monto_maximo']);
             }
 
             // Apply ordering
@@ -397,38 +398,6 @@ class SolicitudService extends EloquentService
     }
 
     /**
-     * Get solicitudes by date range.
-     */
-    public function getByDateRange(string $startDate, string $endDate, int $skip = 0, int $limit = 50): array
-    {
-        try {
-            $solicitudes = SolicitudCredito::whereBetween('created_at', [$startDate, $endDate])
-                ->orderBy('created_at', 'desc')
-                ->skip($skip)
-                ->limit($limit)
-                ->get();
-
-            $total = SolicitudCredito::whereBetween('created_at', [$startDate, $endDate])->count();
-
-            return [
-                'solicitudes' => $this->transformCollectionForApi($solicitudes),
-                'pagination' => [
-                    'skip' => $skip,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'has_more' => ($skip + $limit) < $total
-                ]
-            ];
-        } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'obtención de solicitudes por rango de fechas');
-            return [
-                'solicitudes' => [],
-                'pagination' => ['skip' => $skip, 'limit' => $limit, 'total' => 0, 'has_more' => false]
-            ];
-        }
-    }
-
-    /**
      * Validate uploaded document file.
      */
     private function validateDocumentFile(UploadedFile $file): void
@@ -456,63 +425,18 @@ class SolicitudService extends EloquentService
     }
 
     /**
-     * Transform solicitud for API response.
-     */
-    public function transformForApi($solicitud): array
-    {
-        return [
-            'id' => $solicitud->id,
-            'numero_solicitud' => $solicitud->numero_solicitud,
-            'owner_username' => $solicitud->owner_username,
-            'monto_solicitado' => $solicitud->monto_solicitado,
-            'monto_solicitado_formatted' => number_format($solicitud->monto_solicitado, 0, ',', '.'),
-            'monto_aprobado' => $solicitud->monto_aprobado,
-            'monto_aprobado_formatted' => $solicitud->monto_aprobado ? number_format($solicitud->monto_aprobado, 0, ',', '.') : null,
-            'plazo_meses' => $solicitud->plazo_meses,
-            'tasa_interes' => $solicitud->tasa_interes,
-            'destino_credito' => $solicitud->destino_credito,
-            'descripcion' => $solicitud->descripcion,
-            'estado' => $solicitud->estado,
-            'estado_label' => match ($solicitud->estado) {
-                'PENDIENTE' => 'Pendiente',
-                'EN_REVISION' => 'En Revisión',
-                'APROBADO' => 'Aprobado',
-                'RECHAZADO' => 'Rechazado',
-                'FINALIZADO' => 'Finalizado',
-                'CANCELADO' => 'Cancelado',
-                'REQUIERE_INFO' => 'Requiere Información',
-                default => $solicitud->estado
-            },
-            'documentos' => json_decode($solicitud->documentos ?? '[]', true),
-            'created_at' => $solicitud->created_at->toISOString(),
-            'updated_at' => $solicitud->updated_at->toISOString(),
-            'requires_action' => in_array($solicitud->estado, ['REQUIERE_INFO']),
-            'is_final_state' => in_array($solicitud->estado, ['APROBADO', 'RECHAZADO', 'FINALIZADO', 'CANCELADO']),
-            'can_be_modified' => !in_array($solicitud->estado, ['APROBADO', 'RECHAZADO', 'FINALIZADO', 'CANCELADO'])
-        ];
-    }
-
-    /**
      * Get solicitud by ID.
      */
     public function getById(string $key): ?SolicitudCredito
     {
         try {
             return SolicitudCredito::where("numero_solicitud", $key)
-                ->with('payload', 'documentos', 'solicitante', 'timeline')
+                ->with('payload', 'documentos', 'solicitante', 'timeline', 'firmantes')
                 ->first();
         } catch (\Exception $e) {
             $this->handleDatabaseError($e, 'búsqueda de solicitud');
             return null;
         }
-    }
-
-    /**
-     * Transform collection for API response.
-     */
-    public function transformCollectionForApi($collection): array
-    {
-        return $collection->map(fn($solicitud) => $this->transformForApi($solicitud))->toArray();
     }
 
     /**
@@ -731,8 +655,7 @@ class SolicitudService extends EloquentService
         // Preparar datos del solicitante
         $solicitantePayload = $data['solicitante'] ?? [];
         $solicitudPayload = $data['solicitud'] ?? [];
-
-        $montoSolicitado = $solicitudPayload['valor_solicitado'] ?? $solicitudPayload['valor_solicitud'] ?? 0;
+        $valorSolicitud = $solicitudPayload['valor_solicitud'] ?? 0;
 
         $plazoMeses = $solicitudPayload['plazo_meses'] ?? 0;
         $estado = 'POSTULADO';
@@ -751,17 +674,8 @@ class SolicitudService extends EloquentService
         $updateData = [
             'owner_username' => $username,
             'numero_solicitud' => $numeroSolicitud,
-            'monto_solicitado' => $montoSolicitado,
+            'valor_solicitud' => $valorSolicitud,
             'plazo_meses' => is_numeric($plazoMeses) ? (int)$plazoMeses : 0,
-            'solicitante' => [
-                'tipo_identificacion' => $solicitantePayload['tipo_identificacion'] ?? null,
-                'numero_identificacion' => $solicitantePayload['numero_identificacion'] ?? null,
-                'nombres_apellidos' => $solicitantePayload['nombres_apellidos'] ?? null,
-                'email' => $solicitantePayload['email'] ?? null,
-                'telefono_movil' => $solicitantePayload['telefono_movil'] ?? null,
-            ],
-            'xml_filename' => '',
-            'payload' => $data,
             'updated_at' => $now,
             'tasa_interes' => 0.10,
         ];
@@ -789,6 +703,7 @@ class SolicitudService extends EloquentService
             $updateData['created_at'] = $now;
             $updateData['documentos'] = [];
             $updateData['estado'] = $estado;
+            $updateData['fecha_radicado'] = $data['fecha_radicado'] ?? now();
             $updateData['timeline'] = [
                 [
                     'estado' => $estadoDoc,

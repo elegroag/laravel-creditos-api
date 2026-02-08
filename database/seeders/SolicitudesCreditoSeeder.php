@@ -25,14 +25,17 @@ class SolicitudesCreditoSeeder extends Seeder
             [
                 'numero_solicitud' => '000001-202501-03',
                 'owner_username' => $trabajadorUser->username,
-                'xml_filename' => 'solicitud_000001_202501.xml',
-                'monto_solicitado' => 15000000.00,
-                'monto_aprobado' => 12000000.00,
+                'valor_solicitud' => 15000000.00,
                 'plazo_meses' => 36,
                 'tasa_interes' => 11.50,
-                'destino_credito' => 'Mejora de vivienda',
-                'descripcion' => 'Crédito solicitado para reparaciones y mejoras en la vivienda principal',
-                'estado' => $estadoFinalizado->id
+                'estado' => $estadoFinalizado->id,
+                'fecha_radicado' => '2025-01-15',
+                'producto_tipo' => '01',
+                'ha_tenido_credito' => true,
+                'detalle_modalidad' => 'Crédito personal',
+                'tipo_credito' => '01',
+                'moneda' => 'COP',
+                'cuota_mensual' => 495000.00,
             ]
         ];
 

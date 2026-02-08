@@ -157,3 +157,11 @@ if (!function_exists('safe_filename_component')) {
         return $safe ?: 'solicitud';
     }
 };
+
+
+if (!function_exists('json_to_array')) {
+    function json_to_array($json)
+    {
+        return json_decode($json, true);
+    }
+}

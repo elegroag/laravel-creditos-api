@@ -46,14 +46,17 @@ class SolicitudCredito extends Model
     protected $fillable = [
         'numero_solicitud',
         'owner_username',
-        'xml_filename',
-        'monto_solicitado',
-        'monto_aprobado',
+        'valor_solicitud',
         'plazo_meses',
         'tasa_interes',
-        'destino_credito',
-        'descripcion',
         'estado',
+        'fecha_radicado',
+        'producto_tipo',
+        'ha_tenido_credito',
+        'detalle_modalidad',
+        'tipo_credito',
+        'moneda',
+        'cuota_mensual',
         'pdf_generado'  // Agregar campo pdf_generado
     ];
 
@@ -65,11 +68,17 @@ class SolicitudCredito extends Model
     protected function casts(): array
     {
         return [
-            'monto_solicitado' => 'decimal:2',
-            'monto_aprobado' => 'decimal:2',
+            'valor_solicitud' => 'decimal:2',
             'plazo_meses' => 'integer',
             'tasa_interes' => 'decimal:2',
+            'producto_tipo' => 'string',
+            'ha_tenido_credito' => 'boolean',
+            'detalle_modalidad' => 'string',
+            'tipo_credito' => 'string',
+            'moneda' => 'string',
+            'cuota_mensual' => 'decimal:2',
             'pdf_generado' => 'json',  // Cast para campo JSON
+            'fecha_radicado' => 'date',
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
@@ -174,12 +183,12 @@ class SolicitudCredito extends Model
     /**
      * Scope to get solicitudes by amount range.
      */
-    public function scopeByAmountRange($query, float $min, float $max = null)
+    public function scopeByAmountRange($query, float $min, ?float $max = null)
     {
-        $query->where('monto_solicitado', '>=', $min);
+        $query->where('valor_solicitud', '>=', $min);
 
         if ($max !== null) {
-            $query->where('monto_solicitado', '<=', $max);
+            $query->where('valor_solicitud', '<=', $max);
         }
 
         return $query;
@@ -258,7 +267,7 @@ class SolicitudCredito extends Model
     /**
      * Add timeline entry.
      */
-    public function addTimelineEntry(string $estado, string $detalle, string $usuarioUsername = null, bool $automatico = false): void
+    public function addTimelineEntry(string $estado, string $detalle, ?string $usuarioUsername = null, bool $automatico = false): void
     {
         $this->timeline()->create([
             'estado' => $estado,
@@ -271,7 +280,7 @@ class SolicitudCredito extends Model
     /**
      * Change status with timeline entry.
      */
-    public function changeStatus(string $newEstado, string $detalle, string $usuarioUsername = null): bool
+    public function changeStatus(string $newEstado, string $detalle, ?string $usuarioUsername = null): bool
     {
         $oldEstado = $this->estado;
 
@@ -290,7 +299,7 @@ class SolicitudCredito extends Model
      */
     public function getMontoSolicitadoFormattedAttribute(): string
     {
-        return '$' . number_format($this->monto_solicitado, 2, ',', '.');
+        return '$' . number_format($this->valor_solicitud, 2, ',', '.');
     }
 
     public function getMontoAprobadoFormattedAttribute(): string
@@ -380,30 +389,16 @@ class SolicitudCredito extends Model
     public function toApiArray(): array
     {
         return [
+            'fecha_radicado' => $this->fecha_radicado,
             'numero_solicitud' => $this->numero_solicitud,
-            'owner_username' => $this->owner_username,
-            'user' => $this->user?->only(['id', 'username', 'full_name', 'email']),
-            'monto_solicitado' => $this->monto_solicitado,
-            'monto_solicitado_formatted' => $this->monto_solicitado_formatted,
-            'monto_aprobado' => $this->monto_aprobado,
-            'monto_aprobado_formatted' => $this->monto_aprobado_formatted,
+            'valor_solicitud' => $this->valor_solicitud,
             'plazo_meses' => $this->plazo_meses,
-            'tasa_interes' => $this->tasa_interes,
-            'destino_credito' => $this->destino_credito,
-            'descripcion' => $this->descripcion,
-            'estado' => $this->getStatusWithColorAttribute(),
-            'xml_filename' => $this->xml_filename,
-            'monthly_payment' => $this->getMonthlyPayment(),
-            'total_interest' => $this->getTotalInterest(),
-            'total_to_pay' => $this->getTotalToPay(),
-            'is_approved' => $this->isApproved(),
-            'is_rejected' => $this->isRejected(),
-            'is_active' => $this->isActive(),
-            'documentos_count' => $this->documentos()->where('activo', true)->count(),
-            'timeline_count' => $this->timeline()->count(),
-            'solicitante' => $this->solicitante,
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+            'numero_comprobante' => 0,
+            'rol_en_solicitud' => 'Trabajador',
+            'categoria' => $this->solicitante->codigo_categoria ?? '',
+            'producto_tipo' => $this->producto_tipo ?? '',
+            'ha_tenido_credito_comfaca' => $this->ha_tenido_credito,
+            'tipo_credito' => $this->tipo_credito ?? ''
         ];
     }
 
@@ -420,7 +415,7 @@ class SolicitudCredito extends Model
                 estados_solicitud.nombre,
                 estados_solicitud.color,
                 COUNT(solicitudes_credito.numero_solicitud) as cantidad,
-                COALESCE(SUM(solicitudes_credito.monto_solicitado), 0) as total_monto
+                COALESCE(SUM(solicitudes_credito.valor_solicitud), 0) as total_monto
             ')
             ->get();
 

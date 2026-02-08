@@ -14,14 +14,17 @@ return new class extends Migration
         Schema::create('solicitudes_credito', function (Blueprint $table) {
             $table->string('numero_solicitud', 20)->primary();
             $table->string('owner_username', 100);
-            $table->string('xml_filename', 255)->nullable();
-            $table->decimal('monto_solicitado', 15, 2);
-            $table->decimal('monto_aprobado', 15, 2)->default(0);
+            $table->decimal('valor_solicitud', 15, 2);
             $table->integer('plazo_meses');
             $table->decimal('tasa_interes', 5, 2);
-            $table->string('destino_credito', 255)->nullable();
-            $table->text('descripcion')->nullable();
             $table->string('estado', 50);
+            $table->date('fecha_radicado')->nullable();
+            $table->char('producto_tipo', 2)->nullable();
+            $table->boolean('ha_tenido_credito')->default(false);
+            $table->string('detalle_modalidad')->nullable();
+            $table->char('tipo_credito', 2)->nullable();
+            $table->char('moneda', 3)->default('COP');
+            $table->decimal('cuota_mensual', 12, 2)->nullable();
             $table->timestamps();
 
             // Foreign keys
