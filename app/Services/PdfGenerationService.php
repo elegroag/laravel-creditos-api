@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DocumentoPostulante;
 use App\Models\SolicitudCredito;
 use App\Models\SolicitudSolicitante;
 use App\Models\SolicitudPayload;
@@ -9,6 +10,7 @@ use App\Models\FirmanteSolicitud;
 use App\Models\EmpresaConvenio;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Support\Facades\Storage;
 
 class PdfGenerationService
 {
@@ -95,14 +97,13 @@ class PdfGenerationService
             // Guardar información del PDF en la solicitud
             $pdfData = $resultado['data'] ?? [];
 
+            #Log::info('PDF Data', ['pdfData' => $pdfData]);
+
             if (!empty($pdfData)) {
-                $this->guardarInfoPdfEnSolicitud($solicitudId, $pdfData);
+                $this->guardarInfoPdfEnSolicitud($solicitud, $pdfData);
             }
 
-            Log::info('PDF generado exitosamente con API Flask', [
-                'solicitud_id' => $solicitudId,
-                'pdf_data' => $pdfData
-            ]);
+            Log::info('PDF generado exitosamente con API Flask', ['solicitud_id' => $solicitudId]);
 
             return [
                 'success' => true,
@@ -165,21 +166,22 @@ class PdfGenerationService
         $laboralData = $payload->informacion_laboral ?? [];
         $economicaData = $payload->informacion_economica ?? [];
 
+        # Log::info("json_to_array", ['json' => $payload->ingresos_descuentos]);
+
         // Separar ingresos y descuentos
-        $ingresosDescuentos = json_to_array($payload->ingresos_descuentos ?? '{}');
-        $ingresosData = $ingresosDescuentos['ingresos'] ?? [];
-        $descuentosData = $ingresosDescuentos['descuentos'] ?? [];
+        $ingresosDescuentos = $payload->toApiArrayIngresosDescuentos();
 
         // Datos del cónyuge
         $conyugeData = $payload->conyuge ?? [];
 
-        return [
+        $payloadApi = [
+            'solicitud_id' => $solicitudId,
             'solicitud' => $solicitud->toApiArray(),
             'solicitante' => $solicitante->toApiArray(),
             'laboral' => $laboralData,
             'economica' => $economicaData,
-            'ingresos' => $ingresosData,
-            'descuentos' => $descuentosData,
+            'ingresos' => $ingresosDescuentos['ingresos'],
+            'descuentos' => $ingresosDescuentos['descuentos'],
             'conyuge' => $conyugeData,
             "referencias" => $referenciasData,
             "deudas" => $deudasData,
@@ -191,38 +193,60 @@ class PdfGenerationService
             "pdf_metadata" => $pdfMetadataData,
             'trabajador' => $trabajadorData
         ];
+        # Log::info("payloadApi", ['payloadApi' => $payloadApi]);
+        return $payloadApi;
     }
 
     /**
      * Guarda la información del PDF en la solicitud
      */
-    private function guardarInfoPdfEnSolicitud(string $solicitudId, array $pdfData): void
+    private function guardarInfoPdfEnSolicitud($solicitud, array $pdfData): void
     {
         try {
-            $solicitud = $this->solicitudService->getById($solicitudId);
 
-            if ($solicitud) {
-                $pdfInfo = [
-                    'api_content' => $pdfData['api_content'] ?? null,
-                    'api_path' => $pdfData['api_path'] ?? null,
-                    'api_filename' => $pdfData['api_filename'] ?? null,
-                    'generated_at' => now()->toISOString(),
-                    'generated_by' => 'pdf_generation_service'
-                ];
+            if (!$solicitud)  return;
 
-                // Actualizar el campo pdf_generado en la solicitud
-                $solicitud->update([
-                    'pdf_generado' => json_encode($pdfInfo)
-                ]);
+            Log::info('guardarInfoPdfEnSolicitud - solicitud', ['solicitud' => $solicitud]);
 
-                Log::info('Información del PDF guardada en la solicitud', [
-                    'solicitud_id' => $solicitudId,
-                    'pdf_filename' => $pdfData['api_filename'] ?? null
-                ]);
-            }
+            $pdfInfo = [
+                'api_path' => $pdfData['api_path'] ?? null,
+                'api_filename' => $pdfData['api_filename'] ?? null,
+                'generated_at' => now()->toISOString(),
+                'generated_by' => 'pdf_generation_service'
+            ];
+
+            Log::info('guardarInfoPdfEnSolicitud - pdfInfo', ['pdfInfo' => $pdfInfo]);
+
+            // Actualizar el campo pdf_generado en la solicitud
+            $solicitud->update([
+                'pdf_generado' => json_encode($pdfInfo)
+            ]);
+
+            $dataSaved = $this->guardarPdfDesdeBase64($pdfData['api_filename'] ?? null, $pdfData['api_content']);
+
+            Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
+
+            //es necesario guardar en DocumentoPostulante
+            $data = [
+                'username' => $solicitud->owner_username,
+                'tipo_documento' => 'pdf',
+                'nombre_original' => $pdfData['api_filename'] ?? null,
+                'saved_filename' => $dataSaved['saved_filename'] ?? null,
+                'tipo_mime' => $dataSaved['tipo_mime'] ?? null,
+                'tamano_bytes' => $dataSaved['tamano_bytes'] ?? null,
+                'ruta_archivo' => $dataSaved['ruta_archivo'] ?? null,
+                'api_path' => $pdfData['api_path'] ?? null,
+                'api_filename' => $pdfData['api_filename'] ?? null,
+                'solicitud_id' => $solicitud->numero_solicitud,
+                'activo' => 1
+            ];
+
+            Log::info('guardarInfoPdfEnSolicitud - data', ['data' => $data]);
+
+            DocumentoPostulante::create($data);
         } catch (Exception $e) {
             Log::error('Error al guardar información del PDF en la solicitud', [
-                'solicitud_id' => $solicitudId,
+                'solicitud_id' => $solicitud->numero_solicitud,
                 'error' => $e->getMessage()
             ]);
         }
@@ -325,6 +349,60 @@ class PdfGenerationService
             ]);
 
             return false;
+        }
+    }
+
+    public function guardarPdfDesdeBase64(string $filename, string $base64Content): array
+    {
+        try {
+            // Decodificar base64
+            $pdfContent = base64_decode($base64Content);
+
+            if ($pdfContent === false) {
+                throw new \Exception('Error al decodificar contenido base64');
+            }
+
+            // Crear directorio si no existe
+            $directory = 'pdfs/solicitudes';
+            if (!Storage::disk('public')->exists($directory)) {
+                Storage::disk('public')->makeDirectory($directory);
+            }
+
+            // Generar nombre de archivo único
+            $timestamp = now()->format('YmdHis');
+            $safeFilename = pathinfo($filename, PATHINFO_FILENAME);
+            $extension = pathinfo($filename, PATHINFO_EXTENSION);
+            $uniqueFilename = "{$safeFilename}_{$timestamp}.{$extension}";
+
+            // Ruta completa del archivo
+            $fullPath = "{$directory}/{$uniqueFilename}";
+
+            // Guardar archivo en storage
+            $saved = Storage::disk('public')->put($fullPath, $pdfContent);
+
+            if (!$saved) {
+                throw new \Exception('Error al guardar archivo en storage');
+            }
+
+            Log::info('PDF guardado exitosamente', [
+                'original_filename' => $filename,
+                'saved_path' => $fullPath,
+                'size_bytes' => strlen($pdfContent)
+            ]);
+
+            return [
+                'tamano_bytes' => strlen($pdfContent),
+                'tipo_mime' => 'application/pdf',
+                'ruta_archivo' => $fullPath,
+                'saved_filename' => basename($uniqueFilename)
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error al guardar PDF desde base64', [
+                'filename' => $filename,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
         }
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Log;
+
 if (!function_exists('tipo_documentos_array')) {
 
     function tipo_documentos_collect()
@@ -160,8 +162,34 @@ if (!function_exists('safe_filename_component')) {
 
 
 if (!function_exists('json_to_array')) {
-    function json_to_array($json)
+    function json_to_array(string|array $json): array
     {
+        // Si ya es un array, retornarlo directamente
+        if (is_array($json)) {
+            return $json;
+        }
+
+        if (is_null($json) || $json === "" || $json === "[]" || $json === "{}") {
+            return [];
+        }
+        //expresion regular para validar json o array json vacio
+        if (preg_match('/^\s*(\{\s*\}|\[\s*\])\s*$/', $json)) {
+            return [];
+        }
         return json_decode($json, true);
+    }
+}
+
+
+/**
+ * Format bytes to human readable format.
+ */
+if (!function_exists('format_bytes')) {
+    function format_bytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $factor = floor(log($bytes, 1024));
+
+        return round($bytes / pow(1024, $factor), 2) . ' ' . $units[$factor];
     }
 }

@@ -296,7 +296,6 @@ class SolicitudPayload extends Model
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
             'solicitud_id' => $this->solicitud_id,
             'datos_json' => $this->datos_json,
             'datos_solicitante' => $this->getDatosSolicitante(),
@@ -310,8 +309,36 @@ class SolicitudPayload extends Model
             'direccion' => $this->getDireccion(),
             'tiene_datos_completos' => $this->tieneDatosCompletos(),
             'errores_validacion' => $this->validarEstructura(),
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+        ];
+    }
+
+    public function toApiArrayIngresosDescuentos(): array
+    {
+        $ingresosDescuentos = json_to_array($this->ingresos_descuentos ?? '{}');
+        $ingresosData = [
+            "moneda" => $ingresosDescuentos['moneda'] ?? "COP",
+            "comisiones" => $ingresosDescuentos['comisiones'] ?? 0,
+            "horas_extras" => $ingresosDescuentos['horas_extras'] ?? 0,
+            "otros_ingresos" => $ingresosDescuentos['otros_ingresos'] ?? 0,
+            "total_ingresos" => $ingresosDescuentos['total_ingresos'] ?? 0,
+            "total_neto_recibido" => $ingresosDescuentos['total_neto_recibido'] ?? 0,
+            "salario_basico_mensual" => $ingresosDescuentos['salario_basico_mensual'] ?? 0
+        ];
+
+        $descuentosData = [
+            "judiciales" => $ingresosDescuentos['judiciales'] ?? 0,
+            "salud_pension" => $ingresosDescuentos['salud_pension'] ?? 0,
+            "otras_libranzas" => $ingresosDescuentos['otras_libranzas'] ?? 0,
+            "total_descuentos" => $ingresosDescuentos['total_descuentos'] ?? 0,
+            "libranzas_comfaca" => $ingresosDescuentos['libranzas_comfaca'] ?? 0,
+            "otras_deducciones" => $ingresosDescuentos['otras_deducciones'] ?? 0,
+            "subsidio_transporte" => $ingresosDescuentos['subsidio_transporte'] ?? 0,
+            "total_neto_recibido" => $ingresosDescuentos['total_neto_recibido'] ?? 0
+        ];
+
+        return [
+            "ingresos" => $ingresosData,
+            "descuentos" => $descuentosData
         ];
     }
 

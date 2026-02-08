@@ -245,6 +245,9 @@ class SolicitudPdfController extends Controller
             }
 
             $pdfData = DocumentoPostulante::where("solicitud_id", $solicitudId)->first();
+            Log::info('PDF Data', [
+                'pdfData' => $pdfData
+            ]);
 
             $estado = [
                 'solicitud_id' => $solicitudId,

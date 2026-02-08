@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Symfony\Component\HttpFoundation\Response;
 
 class PdfGenerado extends Model
 {
@@ -88,15 +89,8 @@ class PdfGenerado extends Model
     public function getTamanoFormateadoAttribute(): string
     {
         $bytes = $this->getTamanoAttribute();
-        
-        if ($bytes === 0) {
-            return '0 bytes';
-        }
-        
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $factor = floor(log($bytes, 1024));
-        
-        return round($bytes / pow(1024, $factor), 2) . ' ' . $units[$factor];
+        if ($bytes === 0) return '0 bytes';
+        return format_bytes($bytes);
     }
 
     /**
@@ -123,7 +117,7 @@ class PdfGenerado extends Model
         if ($this->generado_en && isset($this->generado_en['$date'])) {
             return $this->generado_en['$date'];
         }
-        
+
         return $this->created_at ? $this->created_at->toISOString() : null;
     }
 
@@ -145,17 +139,17 @@ class PdfGenerado extends Model
         if ($existente) {
             $existente->delete();
         }
-        
+
         // Generar nuevo PDF
         $filename = 'solicitud_' . $solicitudId . '_' . date('Ymd_His') . '.pdf';
         $path = storage_path('solicitudes/' . $solicitudId . '/' . $filename);
-        
+
         // Asegurar que el directorio exista
         $directory = dirname($path);
         if (!is_dir($directory)) {
             mkdir($directory, 0755, true);
         }
-        
+
         // Aquí iría la lógica real de generación del PDF
         // Por ahora, creamos un archivo vacío como placeholder
         if (touch($path)) {
@@ -170,7 +164,7 @@ class PdfGenerado extends Model
                 ]
             ]);
         }
-        
+
         return null;
     }
 
@@ -183,7 +177,7 @@ class PdfGenerado extends Model
         if ($this->archivoExiste()) {
             unlink($this->path);
         }
-        
+
         // Eliminar registro
         return $this->delete();
     }
@@ -196,7 +190,7 @@ class PdfGenerado extends Model
         if (!$this->archivoExiste()) {
             return null;
         }
-        
+
         $content = file_get_contents($this->path);
         return base64_encode($content);
     }
@@ -204,25 +198,25 @@ class PdfGenerado extends Model
     /**
      * Download PDF to browser.
      */
-    public function descargar(): \Symfony\Component\HttpFoundation\Response
+    public function descargar(): Response
     {
         if (!$this->archivoExiste()) {
             abort(404, 'PDF no encontrado');
         }
-        
+
         return response()->download($this->path, $this->filename);
     }
 
     /**
      * Display PDF in browser.
      */
-    public function mostrar(): \Symfony\Component\HttpFoundation\Response
+    public function mostrar(): Response
     {
         if (!$this->archivoExiste()) {
             abort(404, 'PDF no encontrado');
         }
-        
-        return response()->file($this->path, 'application/pdf');
+
+        return response()->file($this->path, ['Content-Type' => 'application/pdf']);
     }
 
     /**
@@ -231,7 +225,6 @@ class PdfGenerado extends Model
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
             'solicitud_id' => $this->solicitud_id,
             'path' => $this->path,
             'filename' => $this->filename,
@@ -242,9 +235,7 @@ class PdfGenerado extends Model
             'fecha_generacion' => $this->getFechaGeneracionAttribute(),
             'generado_en' => $this->generado_en,
             'fue_generado' => $this->fueGenerado(),
-            'archivo_existe' => $this->archivoExiste(),
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+            'archivo_existe' => $this->archivoExiste()
         ];
     }
 
@@ -254,7 +245,7 @@ class PdfGenerado extends Model
     public static function getBySolicitudForApi(string $solicitudId): ?array
     {
         $pdf = static::findBySolicitud($solicitudId);
-        
+
         return $pdf ? $pdf->toApiArray() : null;
     }
 
@@ -276,7 +267,7 @@ class PdfGenerado extends Model
         $total = static::count();
         $existentes = 0;
         $tamanoTotal = 0;
-        
+
         $pdfs = static::all();
         foreach ($pdfs as $pdf) {
             if ($pdf->archivoExiste()) {
@@ -284,27 +275,18 @@ class PdfGenerado extends Model
                 $tamanoTotal += $pdf->getTamanoAttribute();
             }
         }
-        
+
         return [
             'total' => $total,
             'existentes' => $existentes,
             'no_existentes' => $total - $existentes,
             'tamano_total' => $tamanoTotal,
             'tamano_promedio' => $existentes > 0 ? round($tamanoTotal / $existentes, 2) : 0,
-            'tamano_formateado_total' => $this->formatBytes($tamanoTotal)
+            'tamano_formateado_total' => format_bytes($tamanoTotal)
         ];
     }
 
-    /**
-     * Format bytes to human readable format.
-     */
-    private function formatBytes(int $bytes): string
-    {
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $factor = floor(log($bytes, 1024));
-        
-        return round($bytes / pow(1024, $factor), 2) . ' ' . $units[$factor];
-    }
+
 
     /**
      * Clean up orphaned PDFs.
@@ -312,20 +294,20 @@ class PdfGenerado extends Model
     public static function limpiarHuerfanos(): int
     {
         $eliminados = 0;
-        
+
         // Obtener todos los PDFs
         $pdfs = static::all();
-        
+
         foreach ($pdfs as $pdf) {
             // Verificar si la solicitud existe
             $solicitud = SolicitudCredito::where('numero_solicitud', $pdf->solicitud_id)->first();
-            
+
             if (!$solicitud) {
                 $pdf->eliminar();
                 $eliminados++;
             }
         }
-        
+
         return $eliminados;
     }
 
@@ -335,7 +317,7 @@ class PdfGenerado extends Model
     public static function limpiarArchivosFaltantes(): int
     {
         $eliminados = 0;
-        
+
         $pdfs = static::all();
         foreach ($pdfs as $pdf) {
             if (!$pdf->archivoExiste()) {
@@ -343,7 +325,7 @@ class PdfGenerado extends Model
                 $eliminados++;
             }
         }
-        
+
         return $eliminados;
     }
 }
