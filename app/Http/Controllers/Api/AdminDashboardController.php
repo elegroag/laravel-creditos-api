@@ -84,7 +84,7 @@ class AdminDashboardController extends Controller
 
             // Monto total aprobado
             $montoAprobado = SolicitudCredito::where('estado', 'APROBADA')
-                ->sum('monto_aprobado');
+                ->sum('valor_solicitud');
 
             // Tasa de aprobación
             $tasaAprobacion = $total > 0 ? round(($aprobadas / $total) * 100, 1) : 0;
@@ -221,18 +221,6 @@ class AdminDashboardController extends Controller
             // Total de usuarios
             $total = User::count();
 
-            // Usuarios activos
-            $activos = User::where('disabled', false)->count();
-
-            // Usuarios por rol
-            $usuariosPorRol = [];
-            $conteoRoles = $this->obtenerConteoRoles();
-
-            foreach ($conteoRoles as $rol => $cantidad) {
-                $usuariosPorRol[] = [
-                    'rol' => $rol,
-                    'count' => $cantidad
-                ];
             }
 
             // Trabajadores específicamente

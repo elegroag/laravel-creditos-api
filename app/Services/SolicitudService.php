@@ -623,26 +623,15 @@ class SolicitudService extends EloquentService
     /**
      * Generar número de solicitud si es necesario
      */
-    public function generarNumeroSolicitudSiEsNecesario(array &$solicitudPayload): string
+    public function generarNumeroSolicitudSiEsNecesario(string $tipcre = '03'): string
     {
-        $numeroSolicitud = $solicitudPayload['numero_solicitud'] ?? '';
         $numeroSolicitudService = new NumeroSolicitudService();
 
-        if (!is_string($numeroSolicitud) || empty(trim($numeroSolicitud))) {
-            // Obtener línea de crédito para generar el número
-            $lineaCredito = $solicitudPayload['tipcre'] ?? '03';
-
-            if (is_string($lineaCredito) && !empty(trim($lineaCredito))) {
-                $numeroSolicitud = $numeroSolicitudService->generarNumeroSolicitud(trim($lineaCredito));
-                $solicitudPayload['numero_solicitud'] = $numeroSolicitud;
-            } else {
-                $numeroSolicitud = '';
-            }
-        } else {
-            $numeroSolicitud = trim($numeroSolicitud);
+        if (is_string($tipcre) && !empty(trim($tipcre))) {
+            return $numeroSolicitudService->generarNumeroSolicitud(trim($tipcre));
         }
 
-        return $numeroSolicitud;
+        return '';
     }
 
     /**
@@ -753,27 +742,15 @@ class SolicitudService extends EloquentService
             $tasa_facmor = $categoria['facmor'];
         }
 
-        $encabezado = [
-            'ip_origen' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
-            'fecha_radicado' => Carbon::now()->toDateTimeString(),
-            'usuario_radica' => $data['solicitante']['numero_documento'] ?? 'Unknown',
-        ];
-
         $payloadData = [
             'solicitud_id' => $numeroSolicitud,
             'version' => '1.0',
-            'encabezado' => $encabezado,
-            'solicitud' => $data['solicitud'] ?? null,
-            'producto_solicitado' => $data['producto_solicitado'] ?? null,
-            'solicitante' => $data['solicitante'] ?? null,
             'informacion_laboral' => $data['informacion_laboral'] ?? null,
             'ingresos_descuentos' => $data['ingresos_descuentos'] ?? null,
             'informacion_economica' => $data['informacion_economica'] ?? null,
             'propiedades' => $data['propiedades'] ?? null,
             'deudas' => $data['deudas'] ?? null,
             'referencias' => $data['referencias'] ?? null,
-            'save_xml' => $data['save_xml'] ?? true,
             'linea_credito' => [
                 "tipcre" => $data['linea_credito']['tipcre'],
                 "modxml4" => $data['linea_credito']['modxml4'],

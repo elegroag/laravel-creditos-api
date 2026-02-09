@@ -85,7 +85,7 @@ class LineasCreditoController extends Controller
             // Realizar la consulta a la API externa
             $response = $this->externalApiService->post('/creditos/tipo_creditos');
 
-            Log::info('tip creditos', $response);
+            Log::info('tip creditos', array_keys($response));
             // Verificar si la respuesta fue exitosa
 
             //aqui se valida con status no con success

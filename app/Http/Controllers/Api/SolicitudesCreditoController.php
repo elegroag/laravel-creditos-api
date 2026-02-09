@@ -800,9 +800,6 @@ class SolicitudesCreditoController extends Controller
             }
             // Validar datos de entrada
             $validator = Validator::make($request->all(), [
-                'encabezado' => 'sometimes|array',
-                'solicitud' => 'sometimes|array',
-                'solicitante' => 'sometimes|array',
                 'linea_credito' => 'sometimes|array',
                 'conyuge' => 'sometimes|array',
                 'informacion_laboral' => 'sometimes|array',
@@ -812,6 +809,7 @@ class SolicitudesCreditoController extends Controller
                 'propiedades' => 'sometimes|array',
                 'deudas' => 'sometimes|array',
                 'referencias' => 'sometimes|array',
+                'solicitante' => 'sometimes|array',
             ]);
 
             if ($validator->fails()) {
@@ -827,8 +825,8 @@ class SolicitudesCreditoController extends Controller
             $candidate = "{$base}-{$timestamp}.pdf";
 
             // Generar número de solicitud si se va a guardar
-            $solicitudPayload = $data['solicitud'] ?? [];
-            $numeroSolicitud = $this->solicitudService->generarNumeroSolicitudSiEsNecesario($solicitudPayload);
+            $tipcre = $data['linea_credito']['tipcre'] ?? '03';
+            $numeroSolicitud = $this->solicitudService->generarNumeroSolicitudSiEsNecesario($tipcre);
 
             $activosDir = storage_path('app/solicitudes/' . $numeroSolicitud);
             // Crear directorio si no existe
