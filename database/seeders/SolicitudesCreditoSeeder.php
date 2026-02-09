@@ -36,6 +36,7 @@ class SolicitudesCreditoSeeder extends Seeder
                 'tipo_credito' => '01',
                 'moneda' => 'COP',
                 'cuota_mensual' => 495000.00,
+                'rol_en_solicitud' => 'T',
             ]
         ];
 

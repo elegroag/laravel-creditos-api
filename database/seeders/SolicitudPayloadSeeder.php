@@ -33,10 +33,6 @@ class SolicitudPayloadSeeder extends Seeder
         $this->command->info('Versión: 1.0 para todos los registros');
         $this->command->info('');
         $this->command->info('Estructura de datos JSON:');
-        $this->command->info('- encabezado: Fecha radicado, información general');
-        $this->command->info('- solicitud: Número, valor, categoría');
-        $this->command->info('- producto_solicitado: Tipo y historial crediticio');
-        $this->command->info('- solicitante: Datos personales completos');
         $this->command->info('- informacion_laboral: Datos del empleo');
         $this->command->info('- ingresos_descuentos: Información financiera');
         $this->command->info('- informacion_economica: Activos y pasivos');
@@ -104,31 +100,6 @@ class SolicitudPayloadSeeder extends Seeder
         return [
             'solicitud_id' => $solicitud->numero_solicitud,
             'version' => '1.0',
-            'encabezado' => [
-                'fecha_radicado' => $solicitud->created_at->format('Y-m-d H:i:s'),
-                'usuario_radica' => $solicitud->owner_username,
-                'sistema_origen' => 'COMFACA_CREDITOS',
-                'version_formato' => '1.0',
-                'ip_origen' => '192.168.1.100',
-                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            ],
-            'solicitud' => [
-                'numero_solicitud' => $numeroSolicitud,
-                'valor_solicitud' => $monto,
-                'categoria' => $this->determinarCategoria($monto),
-                'plazo_meses' => $solicitud->plazo_meses,
-                'tasa_interes' => $solicitud->tasa_interes,
-                'destino_credito' => $solicitud->destino_credito,
-                'descripcion' => $solicitud->descripcion
-            ],
-            'producto_solicitado' => [
-                'tipo' => $this->determinarTipoProducto($destino),
-                'ha_tenido_credito_comfaca' => $this->generarBoolean(),
-                'ultimo_credito_fecha' => $this->generarBoolean() ? $this->generarFechaAnterior() : null,
-                'ultimo_credito_monto' => $this->generarBoolean() ? $this->generarMontoAnterior() : null,
-                'comportamiento_pago' => $this->generarBoolean() ? 'Excelente' : null
-            ],
-            'solicitante' => $solicitanteBase,
             'informacion_laboral' => $infoLaboralBase,
             'ingresos_descuentos' => [
                 'ingreso_mensual' => $infoLaboralBase['salario'],
@@ -180,8 +151,7 @@ class SolicitudPayloadSeeder extends Seeder
                 'cuota_estimada' => $this->calcularCuotaEstimada($monto, $solicitud->tasa_interes, $solicitud->plazo_meses),
                 'seguro_desempleo' => $this->generarBoolean(),
                 'seguro_vida' => $this->generarBoolean()
-            ],
-            'save_xml' => true
+            ]
         ];
     }
 
@@ -278,15 +248,15 @@ class SolicitudPayloadSeeder extends Seeder
         if ($montoCredito <= 0) {
             $montoCredito = 2000000; // Salario base de 2 millones
         }
-        
+
         // El salario debe ser razonable en relación al crédito solicitado
         $minimo = $montoCredito * 0.05; // Mínimo 5% del crédito
         $maximo = $montoCredito * 0.5;  // Máximo 50% del crédito
-        
+
         // Asegurar que el salario mínimo sea al menos el SMMLV
         $salarioMinimoLegal = 1300000; // SMMLV 2024
         $salarioCalculado = rand($minimo, $maximo);
-        
+
         return max($salarioCalculado, $salarioMinimoLegal);
     }
 

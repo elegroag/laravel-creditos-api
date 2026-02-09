@@ -15,10 +15,6 @@ return new class extends Migration
             $table->id();
             $table->string('solicitud_id', 20); // Cambiar a string para coincidir con numero_solicitud
             $table->string('version', 20)->default('1.0');
-            $table->json('encabezado')->nullable();
-            $table->json('solicitud')->nullable();
-            $table->json('producto_solicitado')->nullable();
-            $table->json('solicitante')->nullable();
             $table->json('informacion_laboral')->nullable();
             $table->json('ingresos_descuentos')->nullable();
             $table->json('informacion_economica')->nullable();
@@ -26,7 +22,6 @@ return new class extends Migration
             $table->json('deudas')->nullable();
             $table->json('referencias')->nullable();
             $table->json('linea_credito')->nullable();
-            $table->boolean('save_xml')->default(true);
             $table->timestamps();
 
             // Foreign key

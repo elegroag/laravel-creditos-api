@@ -8,6 +8,7 @@ use App\Models\SolicitudSolicitante;
 use App\Models\SolicitudPayload;
 use App\Models\FirmanteSolicitud;
 use App\Models\EmpresaConvenio;
+use App\Models\TipoDocumento;
 use Illuminate\Support\Facades\Log;
 use Exception;
 use Illuminate\Support\Facades\Storage;
@@ -200,56 +201,51 @@ class PdfGenerationService
     /**
      * Guarda la información del PDF en la solicitud
      */
-    private function guardarInfoPdfEnSolicitud($solicitud, array $pdfData): void
+    private function guardarInfoPdfEnSolicitud($solicitud, array $pdfData): DocumentoPostulante|null
     {
-        try {
 
-            if (!$solicitud)  return;
+        if (!$solicitud)  return null;
 
-            Log::info('guardarInfoPdfEnSolicitud - solicitud', ['solicitud' => $solicitud]);
+        Log::info('guardarInfoPdfEnSolicitud - solicitud', ['solicitud' => $solicitud]);
 
-            $pdfInfo = [
-                'api_path' => $pdfData['api_path'] ?? null,
-                'api_filename' => $pdfData['api_filename'] ?? null,
-                'generated_at' => now()->toISOString(),
-                'generated_by' => 'pdf_generation_service'
-            ];
+        $pdfInfo = [
+            'api_path' => $pdfData['api_path'] ?? null,
+            'api_filename' => $pdfData['api_filename'] ?? null,
+            'generated_at' => now()->toISOString(),
+            'generated_by' => 'pdf_generation_service'
+        ];
 
-            Log::info('guardarInfoPdfEnSolicitud - pdfInfo', ['pdfInfo' => $pdfInfo]);
+        Log::info('guardarInfoPdfEnSolicitud - pdfInfo', ['pdfInfo' => $pdfInfo]);
 
-            // Actualizar el campo pdf_generado en la solicitud
-            $solicitud->update([
-                'pdf_generado' => json_encode($pdfInfo)
-            ]);
+        // Actualizar el campo pdf_generado en la solicitud
+        $solicitud->update([
+            'pdf_generado' => json_encode($pdfInfo)
+        ]);
 
-            $dataSaved = $this->guardarPdfDesdeBase64($pdfData['api_filename'] ?? null, $pdfData['api_content']);
+        $dataSaved = $this->guardarPdfDesdeBase64($pdfData['api_filename'] ?? null, $pdfData['api_content']);
 
-            Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
+        Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
 
-            //es necesario guardar en DocumentoPostulante
-            $data = [
-                'username' => $solicitud->owner_username,
-                'tipo_documento' => 'pdf',
-                'nombre_original' => $pdfData['api_filename'] ?? null,
-                'saved_filename' => $dataSaved['saved_filename'] ?? null,
-                'tipo_mime' => $dataSaved['tipo_mime'] ?? null,
-                'tamano_bytes' => $dataSaved['tamano_bytes'] ?? null,
-                'ruta_archivo' => $dataSaved['ruta_archivo'] ?? null,
-                'api_path' => $pdfData['api_path'] ?? null,
-                'api_filename' => $pdfData['api_filename'] ?? null,
-                'solicitud_id' => $solicitud->numero_solicitud,
-                'activo' => 1
-            ];
+        //es necesario guardar en DocumentoPostulante
+        $tipoPdf = TipoDocumento::porTipo('pdf');
+        $data = [
+            'username' => $solicitud->owner_username,
+            'tipo_documento' => $tipoPdf->tipo,
+            'nombre_original' => $pdfData['api_filename'] ?? null,
+            'saved_filename' => $dataSaved['saved_filename'] ?? null,
+            'tipo_mime' => $dataSaved['tipo_mime'] ?? null,
+            'tamano_bytes' => $dataSaved['tamano_bytes'] ?? null,
+            'ruta_archivo' => $dataSaved['ruta_archivo'] ?? null,
+            'api_path' => $pdfData['api_path'] ?? null,
+            'api_filename' => $pdfData['api_filename'] ?? null,
+            'solicitud_id' => $solicitud->numero_solicitud,
+            'activo' => 1
+        ];
 
-            Log::info('guardarInfoPdfEnSolicitud - data', ['data' => $data]);
+        Log::info('Data DocumentoPostulante', ['data' => $data]);
 
-            DocumentoPostulante::create($data);
-        } catch (Exception $e) {
-            Log::error('Error al guardar información del PDF en la solicitud', [
-                'solicitud_id' => $solicitud->numero_solicitud,
-                'error' => $e->getMessage()
-            ]);
-        }
+        $dataSaved = DocumentoPostulante::create($data);
+        return $dataSaved;
     }
 
     /**

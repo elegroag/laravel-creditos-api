@@ -57,6 +57,7 @@ class SolicitudCredito extends Model
         'tipo_credito',
         'moneda',
         'cuota_mensual',
+        'rol_en_solicitud', // T=Trabajador, S=Solicitante, C=Codeudor, E=Empleador
         'pdf_generado'  // Agregar campo pdf_generado
     ];
 
@@ -77,6 +78,7 @@ class SolicitudCredito extends Model
             'tipo_credito' => 'string',
             'moneda' => 'string',
             'cuota_mensual' => 'decimal:2',
+            'rol_en_solicitud' => 'string', // T=Trabajador, S=Solicitante, C=Codeudor, E=Empleador
             'pdf_generado' => 'json',  // Cast para campo JSON
             'fecha_radicado' => 'date',
             'created_at' => 'datetime',
@@ -394,7 +396,7 @@ class SolicitudCredito extends Model
             'valor_solicitud' => $this->valor_solicitud,
             'plazo_meses' => $this->plazo_meses,
             'numero_comprobante' => 0,
-            'rol_en_solicitud' => 'Trabajador',
+            'rol_en_solicitud' => $this->rol_en_solicitud ?? 'T',
             'categoria' => $this->solicitante->codigo_categoria ?? '',
             'producto_tipo' => $this->producto_tipo ?? '',
             'ha_tenido_credito_comfaca' => $this->ha_tenido_credito,

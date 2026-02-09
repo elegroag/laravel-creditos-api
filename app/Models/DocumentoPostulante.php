@@ -45,6 +45,8 @@ class DocumentoPostulante extends Model
         return [
             'documentos' => 'json',
             'metadata' => 'json',
+            'tamano_bytes' => 'integer',
+            'activo' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'deleted_at' => 'datetime',
@@ -275,7 +277,6 @@ class DocumentoPostulante extends Model
     public function toApiArray(): array
     {
         return [
-            'id' => $this->id,
             'username' => $this->username,
             'tipo_identificacion' => $this->tipo_identificacion,
             'numero_identificacion' => $this->numero_identificacion,
@@ -290,9 +291,7 @@ class DocumentoPostulante extends Model
             'documents_list' => $this->documents_list,
             'verification_status' => $this->verification_status,
             'has_selfie' => $this->hasSelfie(),
-            'has_required_documents' => $this->hasRequiredDocuments(),
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString()
+            'has_required_documents' => $this->hasRequiredDocuments()
         ];
     }
 
@@ -336,5 +335,47 @@ class DocumentoPostulante extends Model
             'documentos' => [],
             'metadata' => []
         ]);
+    }
+
+    /**
+     * Obtener el tipo de documento relacionado
+     */
+    public function tipoDocumento()
+    {
+        return $this->belongsTo(TipoDocumento::class, 'tipo_documento', 'tipo');
+    }
+
+    /**
+     * Scope para filtrar por tipo de documento
+     */
+    public function scopePorTipo($query, string $tipo)
+    {
+        return $query->whereHas('tipoDocumento', function ($q) use ($tipo) {
+            $q->where('tipo', $tipo);
+        });
+    }
+
+    /**
+     * Scope para obtener solo documentos activos
+     */
+    public function scopeActivos($query)
+    {
+        return $query->where('activo', true);
+    }
+
+    /**
+     * Obtener el nombre del tipo de documento
+     */
+    public function getTipoNombreAttribute(): string
+    {
+        return $this->tipoDocumento?->detalle ?? $this->tipo_documento ?? 'Desconocido';
+    }
+
+    /**
+     * Obtener la key del tipo de documento
+     */
+    public function getTipoKeyAttribute(): string
+    {
+        return $this->tipoDocumento?->tipo ?? $this->tipo_documento ?? '';
     }
 }

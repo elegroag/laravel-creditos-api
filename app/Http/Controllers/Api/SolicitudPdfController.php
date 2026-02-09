@@ -169,7 +169,7 @@ class SolicitudPdfController extends Controller
 
             // Verificar si el archivo existe físicamente
             $pdfPath = $pdfData->ruta_archivo;
-            $fullPath = storage_path("app/{$pdfPath}");
+            $fullPath = storage_path("app/public/{$pdfPath}");
 
             if (!file_exists($fullPath)) {
                 return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor')
@@ -244,7 +244,11 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::forbidden('No autorizado para verificar estado de PDF de esta solicitud')->response();
             }
 
-            $pdfData = DocumentoPostulante::where("solicitud_id", $solicitudId)->first();
+            $pdfData = DocumentoPostulante::where("solicitud_id", $solicitudId)
+                ->where("activo", 1)
+                ->where("tipo_documento", 'pdf')
+                ->first();
+
             Log::info('PDF Data', [
                 'pdfData' => $pdfData
             ]);
@@ -264,7 +268,7 @@ class SolicitudPdfController extends Controller
                 $tamanoArchivo = null;
 
                 if ($path) {
-                    $fullPath = storage_path("app/{$path}");
+                    $fullPath = storage_path("app/public/{$path}");
                     $archivoExiste = file_exists($fullPath);
                     if ($archivoExiste) {
                         $tamanoArchivo = filesize($fullPath);

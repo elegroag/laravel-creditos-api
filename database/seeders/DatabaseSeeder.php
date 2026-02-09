@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             SolicitudPayloadSeeder::class,
             SolicitudTimelineSeeder::class,
             EntidadDigitalSeeder::class,
+            TipoDocumentoSeeder::class,
             DocumentosPostulantesSeeder::class,
             PostulacionesSeeder::class,
         ]);

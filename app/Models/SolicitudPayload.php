@@ -24,18 +24,13 @@ class SolicitudPayload extends Model
     protected $fillable = [
         'solicitud_id',
         'version',
-        'encabezado',
-        'solicitud',
-        'producto_solicitado',
-        'solicitante',
         'informacion_laboral',
         'ingresos_descuentos',
         'informacion_economica',
         'propiedades',
         'deudas',
         'referencias',
-        'linea_credito',
-        'save_xml'
+        'linea_credito'
     ];
 
     /**
@@ -46,10 +41,6 @@ class SolicitudPayload extends Model
     protected function casts(): array
     {
         return [
-            'encabezado' => 'json',
-            'solicitud' => 'json',
-            'producto_solicitado' => 'json',
-            'solicitante' => 'json',
             'informacion_laboral' => 'json',
             'ingresos_descuentos' => 'json',
             'informacion_economica' => 'json',
@@ -57,7 +48,6 @@ class SolicitudPayload extends Model
             'deudas' => 'json',
             'referencias' => 'json',
             'linea_credito' => 'json',
-            'save_xml' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime'
         ];
