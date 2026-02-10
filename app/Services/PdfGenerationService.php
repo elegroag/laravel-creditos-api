@@ -194,7 +194,7 @@ class PdfGenerationService
             "pdf_metadata" => $pdfMetadataData,
             'trabajador' => $trabajadorData
         ];
-        # Log::info("payloadApi", ['payloadApi' => $payloadApi]);
+        Log::info("payloadApi", ['payloadApi' => $payloadApi]);
         return $payloadApi;
     }
 

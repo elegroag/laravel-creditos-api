@@ -810,6 +810,7 @@ class SolicitudesCreditoController extends Controller
                 'deudas' => 'sometimes|array',
                 'referencias' => 'sometimes|array',
                 'solicitante' => 'sometimes|array',
+                'solicitud' => 'sometimes|array'
             ]);
 
             if ($validator->fails()) {
@@ -820,12 +821,14 @@ class SolicitudesCreditoController extends Controller
 
             $data = $validator->validated();
 
-            $base = !empty($numeroSolicitud) ? safe_filename_component($numeroSolicitud) : 'solicitud';
-            $timestamp = Carbon::now()->format('Ymd-His');
-            $candidate = "{$base}-{$timestamp}.pdf";
-
             // Generar número de solicitud si se va a guardar
-            $tipcre = $data['linea_credito']['tipcre'] ?? '03';
+            $tipcre = $data['solicitud']['tipcre'] ?? null;
+            if (!$tipcre) {
+                return ErrorResource::validationError(['tipcre' => 'El tipo de crédito es requerido'], 'Datos inválidos')
+                    ->response()
+                    ->setStatusCode(422);
+            }
+
             $numeroSolicitud = $this->solicitudService->generarNumeroSolicitudSiEsNecesario($tipcre);
 
             $activosDir = storage_path('app/solicitudes/' . $numeroSolicitud);
@@ -837,7 +840,8 @@ class SolicitudesCreditoController extends Controller
 
             return ApiResource::success([
                 'numero_solicitud' => $savedSolicitudId,
-                'filename' => $candidate
+                'username' => $userData['username'],
+                'tipcre' => $tipcre
             ], 'Solicitud guardada exitosamente')
                 ->response();
         } catch (\Exception $e) {
@@ -858,7 +862,7 @@ class SolicitudesCreditoController extends Controller
     public function buscarNumeroSolicitudDisponible(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'linea_credito' => 'required|string|max:2',
+            'linea_credito' => 'required|string|max:3',
         ]);
 
         if ($validator->fails()) {

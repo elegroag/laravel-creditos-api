@@ -623,7 +623,7 @@ class SolicitudService extends EloquentService
     /**
      * Generar número de solicitud si es necesario
      */
-    public function generarNumeroSolicitudSiEsNecesario(string $tipcre = '03'): string
+    public function generarNumeroSolicitudSiEsNecesario(?string $tipcre = null): string
     {
         $numeroSolicitudService = new NumeroSolicitudService();
 
@@ -644,8 +644,9 @@ class SolicitudService extends EloquentService
         // Preparar datos del solicitante
         $solicitantePayload = $data['solicitante'] ?? [];
         $solicitudPayload = $data['solicitud'] ?? [];
-        $valorSolicitud = $solicitudPayload['valor_solicitud'] ?? 0;
+        $lineaCredito = $data['linea_credito'] ?? [];
 
+        $valorSolicitud = $solicitudPayload['valor_solicitud'] ?? 0;
         $plazoMeses = $solicitudPayload['plazo_meses'] ?? 0;
         $estado = 'POSTULADO';
 
@@ -662,11 +663,20 @@ class SolicitudService extends EloquentService
         // Preparar datos para actualización/creación
         $updateData = [
             'owner_username' => $username,
-            'numero_solicitud' => $numeroSolicitud,
             'valor_solicitud' => $valorSolicitud,
             'plazo_meses' => is_numeric($plazoMeses) ? (int)$plazoMeses : 0,
+            'tasa_interes' => $lineaCredito['tasa_interes'] ?? 0,
+            'estado' => $estadoDoc,
+            'fecha_radicado' => $data['fecha_radicado'] ?? now(),
+            'producto_tipo' => $solicitudPayload['producto_tipo'] ?? null,
+            'ha_tenido_credito' => $solicitudPayload['ha_tenido_credito'] ?? null,
+            'detalle_modalidad' => $solicitudPayload['detalle_modalidad'] ?? null,
+            'tipo_credito' => $solicitudPayload['tipcre'] ?? null,
+            'moneda' => $solicitudPayload['moneda'] ?? null,
+            'cuota_mensual' => $solicitudPayload['cuota_mensual'] ?? null,
+            'rol_en_solicitud' => $solicitudPayload['rol_en_solicitud'] ?? null,
             'updated_at' => $now,
-            'tasa_interes' => 0.10,
+            'pdf_generado' => null
         ];
 
         if ($existing) {
@@ -689,17 +699,11 @@ class SolicitudService extends EloquentService
             $existing->update(['timeline' => $timeline]);
         } else {
             // Crear nueva solicitud
+            $updateData['numero_solicitud'] = $numeroSolicitud;
             $updateData['created_at'] = $now;
             $updateData['documentos'] = [];
             $updateData['estado'] = $estado;
             $updateData['fecha_radicado'] = $data['fecha_radicado'] ?? now();
-            $updateData['timeline'] = [
-                [
-                    'estado' => $estadoDoc,
-                    'fecha' => $now->toISOString(),
-                    'detalle' => 'Creación por guardado de solicitud'
-                ]
-            ];
 
             $solicitud = SolicitudCredito::create($updateData);
 
@@ -735,6 +739,7 @@ class SolicitudService extends EloquentService
             $collection = collect($response['data']);
             $lineaCredito = $collection->where('tipcre', $data['linea_credito']['tipcre'])->first();
             $categorias = $lineaCredito['categorias'];
+
             $collectionCategorias = collect($categorias);
             $categoria = $collectionCategorias->where('codcat', $data['solicitante']['codigo_categoria'])->first();
             $tasa_mes = round($categoria['facfin'] / 12, 2) - 0.01;
@@ -752,14 +757,10 @@ class SolicitudService extends EloquentService
             'deudas' => $data['deudas'] ?? null,
             'referencias' => $data['referencias'] ?? null,
             'linea_credito' => [
-                "tipcre" => $data['linea_credito']['tipcre'],
-                "modxml4" => $data['linea_credito']['modxml4'],
-                "numero_cuotas" => $data['linea_credito']['numero_cuotas'],
-                "tasa_categoria" => $data['solicitante']['codigo_categoria'],
-                "tasa_mes" => $tasa_mes,
-                "tasa_facfin" => $tasa_facfin,
-                "tasa_facmor" => $tasa_facmor,
-                "detalle_modalidad" => $data['linea_credito']['detalle_modalidad'],
+                ...$data['linea_credito'],
+                'tasa_mes' => $tasa_mes,
+                'tasa_facfin' => $tasa_facfin,
+                'tasa_facmor' => $tasa_facmor
             ],
         ];
 
@@ -812,6 +813,8 @@ class SolicitudService extends EloquentService
             'antiguedad_meses' => $solicitantePayload['antiguedad_meses'] ?? $antiguedadMeses,
             'tipo_contrato' => $solicitantePayload['tipo_contrato'] ?? null,
             'sector_economico' => $solicitantePayload['sector_economico'] ?? null,
+            'pais_residencia' => $solicitantePayload['pais_residencia'] ?? 'CO',
+            'codigo_categoria' => $solicitantePayload['codigo_categoria'] ?? 'A',
         ];
 
         // Buscar solicitante existente

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->char('producto_tipo', 2)->nullable();
             $table->boolean('ha_tenido_credito')->default(false);
             $table->string('detalle_modalidad')->nullable();
-            $table->char('tipo_credito', 2)->nullable();
+            $table->char('tipo_credito', 3)->nullable();
             $table->char('moneda', 3)->default('COP');
             $table->decimal('cuota_mensual', 12, 2)->nullable();
             $table->timestamps();
