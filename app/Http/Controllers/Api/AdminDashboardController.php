@@ -221,6 +221,18 @@ class AdminDashboardController extends Controller
             // Total de usuarios
             $total = User::count();
 
+            // Usuarios activos
+            $activos = User::where('disabled', false)->count();
+
+            // Usuarios por rol
+            $usuariosPorRol = [];
+            $conteoRoles = $this->obtenerConteoRoles();
+
+            foreach ($conteoRoles as $rol => $cantidad) {
+                $usuariosPorRol[] = [
+                    'rol' => $rol,
+                    'count' => $cantidad
+                ];
             }
 
             // Trabajadores específicamente

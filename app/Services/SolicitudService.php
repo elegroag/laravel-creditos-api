@@ -894,29 +894,29 @@ class SolicitudService extends EloquentService
         if ($firmanteExistente) {
             // Actualizar el firmante existente
             $firmanteExistente->update([
-                'nombre_completo' => $solicitante['nombres_apellidos'] ?? null,
-                'numero_documento' => $solicitante['numero_identificacion'] ?? null,
+                'nombre_completo' => $solicitante['nombres'] . ' ' . $solicitante['apellidos'] ?? null,
+                'numero_documento' => $solicitante['numero_documento'] ?? null,
                 'email' => $solicitante['email'] ?? null,
-                'tipo' => 'POSTULANTE',
-                'rol' => 'SOLICITANTE_PRINCIPAL'
+                'tipo' => $solicitante['tipo_persona'],
+                'rol' => 'SOLICITANTE'
             ]);
         } else {
             // Crear nuevo firmante principal
             FirmanteSolicitud::create([
                 'solicitud_id' => $solicitudId,
                 'orden' => 1,
-                'tipo' => 'POSTULANTE',
-                'nombre_completo' => $solicitante['nombres_apellidos'] ?? null,
-                'numero_documento' => $solicitante['numero_identificacion'] ?? null,
+                'tipo' => $solicitante['tipo_persona'],
+                'nombre_completo' => $solicitante['nombres'] . ' ' . $solicitante['apellidos'] ?? null,
+                'numero_documento' => $solicitante['numero_documento'] ?? null,
                 'email' => $solicitante['email'] ?? null,
-                'rol' => 'SOLICITANTE_PRINCIPAL'
+                'rol' => 'SOLICITANTE'
             ]);
         }
 
         Log::info('Firmante postulante registrado exitosamente', [
             'solicitud_id' => $solicitudId,
-            'nombre' => $solicitante['nombres_apellidos'] ?? 'Sin nombre',
-            'documento' => $solicitante['numero_identificacion'] ?? 'Sin documento'
+            'nombre' => $solicitante['nombres']  ?? 'Sin nombre',
+            'documento' => $solicitante['numero_documento'] ?? 'Sin documento'
         ]);
     }
 

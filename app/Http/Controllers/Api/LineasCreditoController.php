@@ -115,10 +115,7 @@ class LineasCreditoController extends Controller
                 ])->response()->setStatusCode(400);
             }
 
-            Log::info('Tipos de crédito obtenidos exitosamente', [
-                'data_keys' => array_keys($responseData['data'] ?? []),
-                'count' => count($responseData['data'] ?? [])
-            ]);
+            Log::info('Tipos de crédito obtenidos exitosamente', ['count' => count($responseData['data'] ?? [])]);
 
             return ApiResource::success(
                 $responseData['data'] ?? [],
