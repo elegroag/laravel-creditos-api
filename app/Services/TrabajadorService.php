@@ -7,6 +7,7 @@ use App\Models\EmpresaConvenio;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use App\Exceptions\ValidationException;
+use Carbon\Carbon;
 
 class TrabajadorService extends EloquentService
 {
@@ -61,8 +62,20 @@ class TrabajadorService extends EloquentService
             ],
             'estado' => $trabajadorFullData['estado'] ?? null,
             'fecha_afiliacion' => $trabajadorFullData['fecafi'] ?? null,
-            'cargo' => $trabajadorFullData['cargo'] ?? null
+            'cargo' => $trabajadorFullData['cargo'] ?? null,
+            'tipo_contrato' => $trabajadorFullData['tipcon'] ?? null,
+            'personas_a_cargo' => $trabajadorFullData['personas_a_cargo'] ?? null,
+            'antiguedad_meses' => $this->calculaAntiguedadMeses($trabajadorFullData['fecafi'])
         ];
+    }
+
+    //calcula la antiguedad en meses usando la fecha de afiliacion hasta la fecha actual.
+    public function calculaAntiguedadMeses($fecha_afiliacion)
+    {
+        $fecha_afiliacion = Carbon::parse($fecha_afiliacion);
+        $fecha_actual = Carbon::now();
+        $meses = $fecha_afiliacion->diffInMonths($fecha_actual);
+        return ceil($meses);
     }
 
     /**
