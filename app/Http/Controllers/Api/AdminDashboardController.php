@@ -31,7 +31,8 @@ class AdminDashboardController extends Controller
             $username = $userData['username'];
 
             $userRoles = $userData['roles'] ?? [];
-            $isAdmin = in_array('admin', $userRoles);
+            // el rol administrator es el que tiene permiso para ver todas las solicitudes
+            $isAdmin = in_array('administrator', $userRoles);
 
             if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();

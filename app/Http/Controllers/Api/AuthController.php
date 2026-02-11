@@ -238,6 +238,12 @@ class AuthController extends Controller
                 return ErrorResource::authError('Token inválido')->response()->setStatusCode(401);
             }
 
+            // Cargar datos del trabajador (mismo comportamiento que login)
+            $trabajadorData = null;
+            if (isset($user->numero_documento) && $user->numero_documento) {
+                $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($user->numero_documento);
+            }
+
             $verifyData = [
                 'valid' => true,
                 'user' => [
@@ -247,7 +253,8 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'email' => $user->email,
                     'tipo_documento' => $user->tipo_documento,
-                    'numero_documento' => $user->numero_documento
+                    'numero_documento' => $user->numero_documento,
+                    'trabajador' => $trabajadorData
                 ],
                 'expires_at' => $userData['expires_at'] ?? null
             ];

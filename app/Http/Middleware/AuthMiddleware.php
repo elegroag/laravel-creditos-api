@@ -90,6 +90,8 @@ class AuthMiddleware
                     'id' => $user->id,
                     'username' => $user->username,
                     'email' => $user->email,
+                    'tipo_documento' => $user->tipo_documento ?? null,
+                    'numero_documento' => $user->numero_documento ?? null,
                     'roles' => $this->getUserRoles($user),
                     'permissions' => $this->getUserPermissions($user),
                     'is_admin' => $this->isAdmin($user),
@@ -107,7 +109,6 @@ class AuthMiddleware
             ]);
 
             return $next($request);
-
         } catch (\Exception $e) {
             Log::error('Error en AuthMiddleware', [
                 'error' => $e->getMessage(),

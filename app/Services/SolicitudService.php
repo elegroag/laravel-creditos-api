@@ -369,6 +369,65 @@ class SolicitudService extends EloquentService
     }
 
     /**
+     * List solicitudes in a lightweight summary format (no payload relation).
+     */
+    public function listResumen(int $skip = 0, int $limit = 20, array $filters = []): array
+    {
+        try {
+            $query = SolicitudCredito::query();
+
+            if (!empty($filters)) {
+                foreach ($filters as $field => $value) {
+                    if (is_array($value)) {
+                        $query->whereIn($field, $value);
+                    } else {
+                        $query->where($field, $value);
+                    }
+                }
+            }
+
+            $query->orderBy('created_at', 'desc');
+
+            $columns = [
+                'numero_solicitud',
+                'detalle_modalidad',
+                'valor_solicitud',
+                'estado',
+                'created_at',
+            ];
+
+            $items = $query
+                ->select($columns)
+                ->skip($skip)
+                ->limit($limit)
+                ->get();
+
+            return [
+                'items' => $items->toArray(),
+                'count' => $items->count(),
+                'skip' => $skip,
+                'limit' => $limit,
+            ];
+        } catch (\Exception $e) {
+            $this->handleDatabaseError($e, 'listado resumen de solicitudes');
+            return [
+                'items' => [],
+                'count' => 0,
+                'skip' => $skip,
+                'limit' => $limit,
+            ];
+        }
+    }
+
+    /**
+     * Get solicitudes by owner in a lightweight summary format (no payload relation).
+     */
+    public function getResumenByOwner(string $username, int $skip = 0, int $limit = 20): array
+    {
+        return $this->listResumen($skip, $limit, ['owner_username' => $username]);
+    }
+
+    /**
      * Get available transitions for solicitud.
      */
     public function getAvailableTransitions(string $solicitudId): array

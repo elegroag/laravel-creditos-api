@@ -12,6 +12,7 @@ Route::middleware('auth.jwt')->group(function () {
         Route::post('/', [SolicitudesCreditoController::class, 'crearSolicitudCredito']);
         Route::get('/', [SolicitudesCreditoController::class, 'listarSolicitudesCredito']);
         Route::get('all-user', [SolicitudesCreditoController::class, 'listarSolicitudesCreditoForUser']);
+        Route::get('mis-solicitudes', [SolicitudesCreditoController::class, 'listarMisSolicitudesResumen']);
         Route::get('{solicitud_id}', [SolicitudesCreditoController::class, 'obtenerSolicitudCredito']);
         Route::put('{solicitud_id}', [SolicitudesCreditoController::class, 'actualizarSolicitudCredito']);
         Route::delete('{solicitud_id}', [SolicitudesCreditoController::class, 'eliminarSolicitudCredito']);

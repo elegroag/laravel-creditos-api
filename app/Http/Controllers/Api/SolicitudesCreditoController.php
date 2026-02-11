@@ -310,6 +310,59 @@ class SolicitudesCreditoController extends Controller
     }
 
     /**
+     * Lista solicitudes del usuario autenticado en formato resumen (sin payload).
+     */
+    public function listarMisSolicitudesResumen(Request $request): JsonResponse
+    {
+        try {
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+            $userRoles = $userData['roles'] ?? [];
+            $isAdmin = in_array('administrator', $userRoles);
+
+            $validator = Validator::make($request->all(), [
+                'limit' => 'sometimes|integer|min:1|max:100',
+                'offset' => 'sometimes|integer|min:0',
+                'owner_username' => 'sometimes|string|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return ErrorResource::validationError($validator->errors()->toArray(), 'Parámetros inválidos')
+                    ->response()
+                    ->setStatusCode(422);
+            }
+
+            $params = $validator->validated();
+            $limit = (int)($params['limit'] ?? 20);
+            $offset = (int)($params['offset'] ?? 0);
+
+            if ($isAdmin) {
+                $filters = [];
+                if (!empty($params['owner_username'])) {
+                    $filters['owner_username'] = $params['owner_username'];
+                }
+
+                $result = $this->solicitudService->listResumen($offset, $limit, $filters);
+            } else {
+                $result = $this->solicitudService->getResumenByOwner($username, $offset, $limit);
+            }
+
+            return ApiResource::success($result, 'Solicitudes obtenidas exitosamente')->response();
+        } catch (\Exception $e) {
+            Log::error('Error al listar resumen de solicitudes', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al listar solicitudes', [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
+
+    /**
      * Obtiene una solicitud específica con validación.
      */
     public function obtenerSolicitudCredito(Request $request, string $solicitudId): JsonResponse
