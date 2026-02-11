@@ -27,6 +27,16 @@ class AdminDashboardController extends Controller
     public function obtenerEstadisticasGenerales(Request $request): JsonResponse
     {
         try {
+            $userData = $this->getAuthenticatedUser($request);
+            $username = $userData['username'];
+
+            $userRoles = $userData['roles'] ?? [];
+            $isAdmin = in_array('admin', $userRoles);
+
+            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
+            }
+
             Log::info('Obteniendo estadísticas generales del dashboard');
 
             // Estadísticas de solicitudes
@@ -329,5 +339,14 @@ class AdminDashboardController extends Controller
         }
 
         return $conteo;
+    }
+
+    /**
+     * Obtiene los datos del usuario autenticado desde JWT middleware
+     */
+    private function getAuthenticatedUser(Request $request): array
+    {
+        $authenticatedUser = $request->get('authenticated_user');
+        return $authenticatedUser['user'] ?? [];
     }
 }

@@ -226,6 +226,11 @@ class PdfGenerationService
 
         Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
 
+        //si existe el DocumentoPostulante se debe borrar
+        DocumentoPostulante::where('solicitud_id', $solicitud->numero_solicitud)
+            ->where('tipo_documento', 'pdf')
+            ->delete();
+
         //es necesario guardar en DocumentoPostulante
         $tipoPdf = TipoDocumento::porTipo('pdf');
         $data = [
