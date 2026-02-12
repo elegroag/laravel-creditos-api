@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class SolicitudDocumentosController extends Controller
 {
@@ -176,6 +177,26 @@ class SolicitudDocumentosController extends Controller
     /**
      * Lista los documentos requeridos para una solicitud según el tipo de crédito.
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}/documentos/requeridos',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Listar documentos requeridos',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Documentos requeridos listados'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function listarDocumentosRequeridos(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -241,6 +262,26 @@ class SolicitudDocumentosController extends Controller
     /**
      * Lista los documentos de una solicitud.
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}/documentos',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Listar documentos de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Documentos listados'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function listarDocumentosSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -298,6 +339,36 @@ class SolicitudDocumentosController extends Controller
     /**
      * Agrega un documento a una solicitud.
      */
+    #[OA\Post(
+        path: '/solicitudes-credito/{solicitud_id}/documentos',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Agregar documento a solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['tipo_documento', 'archivo'],
+                properties: [
+                    new OA\Property(property: 'tipo_documento', type: 'string', example: 'cedula'),
+                    new OA\Property(property: 'archivo', type: 'string', format: 'binary', description: 'Archivo del documento')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Documento agregado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function agregarDocumentoSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -409,6 +480,33 @@ class SolicitudDocumentosController extends Controller
     /**
      * Elimina un documento de una solicitud.
      */
+    #[OA\Delete(
+        path: '/solicitudes-credito/{solicitud_id}/documentos/{documento_id}',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Eliminar documento de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'documento_id',
+                in: 'path',
+                required: true,
+                description: 'ID del documento',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Documento eliminado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Documento no encontrado')
+        ]
+    )]
     public function eliminarDocumentoSolicitud(Request $request, string $solicitudId, string $documentoId): JsonResponse
     {
         try {

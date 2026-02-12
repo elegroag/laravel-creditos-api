@@ -363,6 +363,25 @@ class AuthController extends Controller
     /**
      * Login for advisers with additional data.
      */
+    #[OA\Post(
+        path: '/auth/adviser/autenticar',
+        tags: ['Auth'],
+        summary: 'Login de asesor',
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['username', 'password'],
+                properties: [
+                    new OA\Property(property: 'username', type: 'string', example: 'asesor123'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Login exitoso'),
+            new OA\Response(response: 401, description: 'Credenciales inválidas')
+        ]
+    )]
     public function adviserLogin(LoginRequest $request): JsonResponse
     {
         try {
@@ -432,6 +451,16 @@ class AuthController extends Controller
     /**
      * Logout user (revoke token).
      */
+    #[OA\Post(
+        path: '/auth/logout',
+        tags: ['Auth'],
+        summary: 'Cerrar sesión',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Logout exitoso'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function logout(Request $request): JsonResponse
     {
         try {
@@ -453,6 +482,16 @@ class AuthController extends Controller
     /**
      * Refresh token.
      */
+    #[OA\Post(
+        path: '/auth/refresh',
+        tags: ['Auth'],
+        summary: 'Refrescar token',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Token refrescado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function refresh(Request $request): JsonResponse
     {
         try {
@@ -492,6 +531,16 @@ class AuthController extends Controller
     /**
      * Get current authenticated user info.
      */
+    #[OA\Get(
+        path: '/auth/me',
+        tags: ['Auth'],
+        summary: 'Obtener usuario autenticado',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Usuario autenticado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function me(Request $request): JsonResponse
     {
         try {
@@ -532,6 +581,26 @@ class AuthController extends Controller
     /**
      * Change password.
      */
+    #[OA\Post(
+        path: '/auth/change-password',
+        tags: ['Auth'],
+        summary: 'Cambiar contraseña',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['current_password', 'new_password'],
+                properties: [
+                    new OA\Property(property: 'current_password', type: 'string', format: 'password'),
+                    new OA\Property(property: 'new_password', type: 'string', format: 'password')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Contraseña actualizada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function changePassword(Request $request): JsonResponse
     {
         try {
@@ -580,6 +649,20 @@ class AuthController extends Controller
     /**
      * Update user profile.
      */
+    #[OA\Put(
+        path: '/auth/profile',
+        tags: ['Auth'],
+        summary: 'Actualizar perfil',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(type: 'object')
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Perfil actualizado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function updateProfile(Request $request): JsonResponse
     {
         try {

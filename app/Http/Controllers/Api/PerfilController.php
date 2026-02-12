@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
+use OpenApi\Attributes as OA;
 
 class PerfilController extends Controller
 {
@@ -41,6 +42,17 @@ class PerfilController extends Controller
      * Returns:
      *     Datos del perfil del usuario
      */
+    #[OA\Get(
+        path: '/perfil',
+        tags: ['Perfil'],
+        summary: 'Obtener perfil de usuario',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Perfil obtenido'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Usuario no encontrado')
+        ]
+    )]
     public function obtenerPerfil(Request $request): JsonResponse
     {
         try {

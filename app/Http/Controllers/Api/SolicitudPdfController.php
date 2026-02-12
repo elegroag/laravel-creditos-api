@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class SolicitudPdfController extends Controller
 {
@@ -51,6 +52,26 @@ class SolicitudPdfController extends Controller
      * Genera el PDF de una solicitud de crédito con soporte para convenios y firmantes.
      * Este endpoint reemplaza el antiguo '/api/solicitud-credito/xml' (deprecado).
      */
+    #[OA\Post(
+        path: '/solicitudes/{solicitud_id}/generar-pdf',
+        tags: ['SolicitudPdf'],
+        summary: 'Generar PDF de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'PDF generado exitosamente'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function generarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -127,6 +148,26 @@ class SolicitudPdfController extends Controller
     /**
      * Descarga el PDF previamente generado de una solicitud.
      */
+    #[OA\Get(
+        path: '/solicitudes/{solicitud_id}/descargar-pdf',
+        tags: ['SolicitudPdf'],
+        summary: 'Descargar PDF de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'PDF descargado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'PDF no encontrado')
+        ]
+    )]
     public function descargarPdfSolicitud(Request $request, string $solicitudId): BinaryFileResponse|JsonResponse
     {
         try {
@@ -213,6 +254,26 @@ class SolicitudPdfController extends Controller
     /**
      * Verifica si una solicitud tiene PDF generado y retorna su estado.
      */
+    #[OA\Get(
+        path: '/solicitudes/{solicitud_id}/estado-pdf',
+        tags: ['SolicitudPdf'],
+        summary: 'Verificar estado de PDF',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Estado del PDF'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function verificarEstadoPdf(Request $request, string $solicitudId): JsonResponse
     {
         try {

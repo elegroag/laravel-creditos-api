@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Str;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
+use OpenApi\Attributes as OA;
 
 class MovileController extends Controller
 {
@@ -31,6 +32,17 @@ class MovileController extends Controller
     /**
      * Genera un token temporal para el QR basado en la sesión actual.
      */
+    #[OA\Get(
+        path: '/mobile/qr-token',
+        tags: ['MobileAuth'],
+        summary: 'Generar token QR para autorización móvil',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Token QR generado'),
+            new OA\Response(response: 401, description: 'Sesión no válida'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function getQrToken(): JsonResponse
     {
         try {
@@ -92,6 +104,26 @@ class MovileController extends Controller
     /**
      * Endpoint llamado por la app móvil para autorizar el acceso en el frontend.
      */
+    #[OA\Post(
+        path: '/mobile/authorize/{token}',
+        tags: ['MobileAuth'],
+        summary: 'Autorizar acceso móvil',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'token',
+                in: 'path',
+                required: true,
+                description: 'Token de autorización',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Autorización completada'),
+            new OA\Response(response: 400, description: 'Token inválido'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function mobileAuthorize(string $token): JsonResponse
     {
         try {
@@ -224,6 +256,17 @@ class MovileController extends Controller
     /**
      * Obtiene el estado de autenticación móvil
      */
+    #[OA\Get(
+        path: '/mobile/auth-status',
+        tags: ['MobileAuth'],
+        summary: 'Obtener estado de autenticación móvil',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estado obtenido'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function getMobileAuthStatus(): JsonResponse
     {
         try {

@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
+use OpenApi\Attributes as OA;
 
 class LineasCreditoController extends Controller
 {
@@ -23,6 +24,17 @@ class LineasCreditoController extends Controller
     /**
      * Obtener parámetros generales de líneas de crédito
      */
+    #[OA\Get(
+        path: '/lineas_credito/parametros',
+        tags: ['LineasCredito'],
+        summary: 'Obtener parámetros generales',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Parámetros obtenidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerParametros(): JsonResponse
     {
         try {
@@ -79,6 +91,17 @@ class LineasCreditoController extends Controller
     /**
      * Obtener tipos de crédito disponibles
      */
+    #[OA\Get(
+        path: '/lineas_credito/tipo_creditos',
+        tags: ['LineasCredito'],
+        summary: 'Obtener tipos de crédito',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Tipos de crédito obtenidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerTiposCreditos(): JsonResponse
     {
         try {
@@ -134,6 +157,17 @@ class LineasCreditoController extends Controller
     /**
      * Obtener información completa de líneas de crédito (parámetros + tipos)
      */
+    #[OA\Get(
+        path: '/lineas_credito/completo',
+        tags: ['LineasCredito'],
+        summary: 'Obtener líneas de crédito completas',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Líneas completas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerLineasCredito(): JsonResponse
     {
         try {

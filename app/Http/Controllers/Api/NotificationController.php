@@ -9,6 +9,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use OpenApi\Attributes as OA;
 
 class NotificationController extends Controller
 {
@@ -28,6 +29,21 @@ class NotificationController extends Controller
      * - unread: boolean (opcional) - Solo notificaciones no leídas
      * - limit: int (opcional) - Límite de resultados (default: 50)
      */
+    #[OA\Get(
+        path: '/notifications',
+        tags: ['Notifications'],
+        summary: 'Obtener notificaciones del usuario',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'unread', in: 'query', required: false, description: 'Solo no leídas', schema: new OA\Schema(type: 'boolean')),
+            new OA\Parameter(name: 'limit', in: 'query', required: false, description: 'Límite de resultados', schema: new OA\Schema(type: 'integer', default: 50))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Notificaciones obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function index(Request $request): JsonResponse
     {
         try {
@@ -49,7 +65,6 @@ class NotificationController extends Controller
                 'unread_count' => $unreadCount,
                 'total' => $notifications->count()
             ], 'Notificaciones obtenidas exitosamente')->response();
-
         } catch (\Exception $e) {
             Log::error('Error al obtener notificaciones', [
                 'error' => $e->getMessage(),
@@ -67,6 +82,17 @@ class NotificationController extends Controller
      *
      * GET /api/notifications/unread-count
      */
+    #[OA\Get(
+        path: '/notifications/unread-count',
+        tags: ['Notifications'],
+        summary: 'Obtener contador de notificaciones no leídas',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Contador obtenido'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function unreadCount(Request $request): JsonResponse
     {
         try {
@@ -77,7 +103,6 @@ class NotificationController extends Controller
             return ApiResource::success([
                 'unread_count' => $count
             ], 'Contador obtenido')->response();
-
         } catch (\Exception $e) {
             Log::error('Error al obtener contador de notificaciones', [
                 'error' => $e->getMessage()
@@ -92,6 +117,26 @@ class NotificationController extends Controller
      *
      * PUT /api/notifications/{id}/read
      */
+    #[OA\Put(
+        path: '/notifications/{id}/read',
+        tags: ['Notifications'],
+        summary: 'Marcar notificación como leída',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID de la notificación',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Notificación marcada como leída'),
+            new OA\Response(response: 404, description: 'Notificación no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function markAsRead(Request $request, string $id): JsonResponse
     {
         try {
@@ -107,7 +152,6 @@ class NotificationController extends Controller
                 'notification_id' => $id,
                 'marked_as_read' => true
             ], 'Notificación marcada como leída')->response();
-
         } catch (\Exception $e) {
             Log::error('Error al marcar notificación como leída', [
                 'notification_id' => $id,
@@ -123,6 +167,17 @@ class NotificationController extends Controller
      *
      * PUT /api/notifications/mark-all-read
      */
+    #[OA\Put(
+        path: '/notifications/mark-all-read',
+        tags: ['Notifications'],
+        summary: 'Marcar todas las notificaciones como leídas',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Notificaciones marcadas como leídas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function markAllAsRead(Request $request): JsonResponse
     {
         try {
@@ -133,7 +188,6 @@ class NotificationController extends Controller
             return ApiResource::success([
                 'marked_count' => $count
             ], "Se marcaron {$count} notificaciones como leídas")->response();
-
         } catch (\Exception $e) {
             Log::error('Error al marcar todas las notificaciones como leídas', [
                 'error' => $e->getMessage()
@@ -163,7 +217,6 @@ class NotificationController extends Controller
                 'notification_id' => $id,
                 'deleted' => true
             ], 'Notificación eliminada')->response();
-
         } catch (\Exception $e) {
             Log::error('Error al eliminar notificación', [
                 'notification_id' => $id,

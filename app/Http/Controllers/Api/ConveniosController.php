@@ -222,6 +222,17 @@ class ConveniosController extends Controller
     /**
      * Obtiene el convenio activo del trabajador autenticado.
      */
+    #[OA\Get(
+        path: '/convenios/activo',
+        tags: ['Convenios'],
+        summary: 'Obtener convenio activo',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Convenio activo obtenido'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Convenio no encontrado')
+        ]
+    )]
     public function obtenerConvenioActivo(Request $request): JsonResponse
     {
         try {

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class AdminUsuariosController extends Controller
 {
@@ -30,6 +31,17 @@ class AdminUsuariosController extends Controller
     /**
      * Obtener estadísticas de usuarios para el dashboard administrativo
      */
+    #[OA\Get(
+        path: '/admin/usuarios/estadisticas',
+        tags: ['AdminUsuarios'],
+        summary: 'Obtener estadísticas de usuarios',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas de usuarios obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticas(Request $request): JsonResponse
     {
         try {
@@ -102,15 +114,32 @@ class AdminUsuariosController extends Controller
 
     /**
      * Obtener lista de usuarios con paginación y filtros
+     *
      * Query params:
      * - page: número de página (default: 1)
      * - limit: límite de resultados por página (default: 20)
      * - rol: filtro por rol
-     * - estado: filtro por estado (active, inactive, suspended)
-     * - busqueda: búsqueda por nombre, email o documento
+     * - estado: filtro por estado (active/inactive)
      * - tipo_documento: filtro por tipo de documento
      * - numero_documento: filtro por número de documento
      */
+    #[OA\Get(
+        path: '/admin/usuarios',
+        tags: ['AdminUsuarios'],
+        summary: 'Listar usuarios administrativos',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'Número de página', schema: new OA\Schema(type: 'integer', default: 1)),
+            new OA\Parameter(name: 'limit', in: 'query', required: false, description: 'Límite por página', schema: new OA\Schema(type: 'integer', default: 20)),
+            new OA\Parameter(name: 'rol', in: 'query', required: false, description: 'Filtro por rol', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'estado', in: 'query', required: false, description: 'Estado del usuario', schema: new OA\Schema(type: 'string', enum: ['active', 'inactive']))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Lista de usuarios'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 422, description: 'Parámetros inválidos')
+        ]
+    )]
     public function obtenerUsuarios(Request $request): JsonResponse
     {
         try {
@@ -245,6 +274,26 @@ class AdminUsuariosController extends Controller
     /**
      * Obtener detalles de un usuario específico
      */
+    #[OA\Get(
+        path: '/admin/usuarios/{userId}',
+        tags: ['AdminUsuarios'],
+        summary: 'Obtener usuario por ID',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'userId',
+                in: 'path',
+                required: true,
+                description: 'ID del usuario',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Usuario encontrado'),
+            new OA\Response(response: 404, description: 'Usuario no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerUsuario(string $userId): JsonResponse
     {
         try {

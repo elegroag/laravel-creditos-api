@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class FirmaDigitalController extends Controller
 {
@@ -37,6 +38,27 @@ class FirmaDigitalController extends Controller
      * 404: Solicitud o PDF no encontrado
      * 400: Error de validación
      */
+    #[OA\Post(
+        path: '/firmas/{solicitud_id}/iniciar',
+        tags: ['FirmaDigital'],
+        summary: 'Iniciar proceso de firmado digital',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string', format: 'uuid')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Proceso de firmado iniciado'),
+            new OA\Response(response: 400, description: 'Error de validación'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function iniciarProcesoFirmado(string $solicitud_id): JsonResponse
     {
         try {
@@ -155,7 +177,7 @@ class FirmaDigitalController extends Controller
     }
 
     /**
-     * Consulta el estado actual del proceso de firmado en FirmaPlus.
+     * Consulta el estado del proceso de firmado digital de una solicitud.
      *
      * Args:
      * solicitud_id: ID de la solicitud
@@ -164,6 +186,26 @@ class FirmaDigitalController extends Controller
      * 200: Estado del proceso de firmado
      * 404: Solicitud no encontrada o sin proceso de firmado
      */
+    #[OA\Get(
+        path: '/firmas/{solicitud_id}/estado',
+        tags: ['FirmaDigital'],
+        summary: 'Consultar estado de firmado',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string', format: 'uuid')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Estado del proceso de firmado'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function consultarEstadoFirmado(string $solicitud_id): JsonResponse
     {
         try {
@@ -227,36 +269,37 @@ class FirmaDigitalController extends Controller
     }
 
     /**
-     * Webhook para recibir notificaciones de FirmaPlus cuando se completa el firmado.
+     * Webhook que recibe la notificación de FirmaPlus cuando el proceso de firmado se completa.
      *
-     * Este endpoint requiere validación de firma HMAC (manejada por middleware).
-     *
-     * Body esperado:
-     * {
-     *     "transaccion_id": "string",
-     *     "estado": "FIRMADO" | "RECHAZADO" | "EXPIRADO" | "CANCELADO",
-     *     "solicitud_id": "string",
-     *     "firmantes_completados": number,
-     *     "firmantes": [
-     *         {
-     *             "nombre": "string",
-     *             "email": "string",
-     *             "firmado": boolean,
-     *             "fecha_firma": "ISO8601"
-     *         }
-     *     ],
-     *     "documento_firmado_url": "string" (opcional)
-     * }
-     *
-     * Headers:
-     * X-Signature: HMAC-SHA256 signature (validado por middleware)
+     * Args:
+     * request: Datos del webhook de FirmaPlus
      *
      * Returns:
-     * 200: Webhook procesado correctamente
-     * 401: Firma inválida (validado por middleware)
+     * 200: Proceso completado exitosamente
      * 400: Datos inválidos
      * 404: Solicitud no encontrada
      */
+    #[OA\Post(
+        path: '/firmas/webhook/completada',
+        tags: ['FirmaDigital'],
+        summary: 'Webhook de firma completada',
+        requestBody: new OA\RequestBody(
+            required: true,
+            description: 'Datos del webhook de FirmaPlus',
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'solicitud_id', type: 'string', example: 'uuid'),
+                    new OA\Property(property: 'estado', type: 'string', example: 'completado'),
+                    new OA\Property(property: 'firmantes', type: 'array', items: new OA\Items(type: 'object'))
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Proceso completado'),
+            new OA\Response(response: 400, description: 'Datos inválidos'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada')
+        ]
+    )]
     public function webhookFirmaCompletada(Request $request): JsonResponse
     {
         $startTime = microtime(true);

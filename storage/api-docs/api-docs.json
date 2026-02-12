@@ -11,6 +11,334 @@
         }
     ],
     "paths": {
+        "/admin/convenios": {
+            "get": {
+                "tags": [
+                    "AdminConvenios"
+                ],
+                "summary": "Listar convenios administrativos",
+                "description": "Obtener lista de empresas con convenios con paginación y filtros\n\nQuery params:\n- page: número de página (default: 1)\n- limit: límite de resultados por página (default: 20)\n- estado: filtro por estado (Activo, Inactivo)\n- busqueda: búsqueda por razón social, NIT o representante\n- nit: filtro por NIT",
+                "operationId": "d51ac7badb86c7a523c740f9d8dd3981",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Número de página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Límite por página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "estado",
+                        "in": "query",
+                        "description": "Estado del convenio",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "Activo",
+                                "Inactivo"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "busqueda",
+                        "in": "query",
+                        "description": "Búsqueda por razón social",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "nit",
+                        "in": "query",
+                        "description": "Filtro por NIT",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de convenios"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "422": {
+                        "description": "Parámetros inválidos"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "AdminConvenios"
+                ],
+                "summary": "Crear convenio",
+                "description": "Crear una nueva empresa con convenio",
+                "operationId": "c43de8b6f45159940d79f64662c8e8ad",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nit",
+                                    "razon_social",
+                                    "representante_nombre"
+                                ],
+                                "properties": {
+                                    "nit": {
+                                        "type": "string",
+                                        "example": "900123456"
+                                    },
+                                    "razon_social": {
+                                        "type": "string",
+                                        "example": "Empresa SA"
+                                    },
+                                    "representante_nombre": {
+                                        "type": "string",
+                                        "example": "Juan Pérez"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Convenio creado"
+                    },
+                    "422": {
+                        "description": "Datos inválidos"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/convenios/{id}": {
+            "get": {
+                "tags": [
+                    "AdminConvenios"
+                ],
+                "summary": "Obtener convenio por ID",
+                "description": "Obtener detalles de una empresa con convenio específica",
+                "operationId": "1701cfab035e4b8fd984f071ccfc38d4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID del convenio",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Convenio encontrado"
+                    },
+                    "404": {
+                        "description": "Convenio no encontrado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/dashboard/estadisticas": {
+            "get": {
+                "tags": [
+                    "AdminDashboard"
+                ],
+                "summary": "Obtener estadísticas del dashboard",
+                "description": "Obtener estadísticas completas del dashboard",
+                "operationId": "4b1efb5592ad0fab40913e99e2028504",
+                "responses": {
+                    "200": {
+                        "description": "Estadísticas obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "403": {
+                        "description": "Acceso denegado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/usuarios/estadisticas": {
+            "get": {
+                "tags": [
+                    "AdminUsuarios"
+                ],
+                "summary": "Obtener estadísticas de usuarios",
+                "description": "Obtener estadísticas de usuarios para el dashboard administrativo",
+                "operationId": "cb8e7961d7b5fd1ff005ef5babe4fc58",
+                "responses": {
+                    "200": {
+                        "description": "Estadísticas de usuarios obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/usuarios": {
+            "get": {
+                "tags": [
+                    "AdminUsuarios"
+                ],
+                "summary": "Listar usuarios administrativos",
+                "description": "Obtener lista de usuarios con paginación y filtros\n\nQuery params:\n- page: número de página (default: 1)\n- limit: límite de resultados por página (default: 20)\n- rol: filtro por rol\n- estado: filtro por estado (active/inactive)\n- tipo_documento: filtro por tipo de documento\n- numero_documento: filtro por número de documento",
+                "operationId": "c6d28326dcbf8285738630476bd426ea",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Número de página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Límite por página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "rol",
+                        "in": "query",
+                        "description": "Filtro por rol",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "estado",
+                        "in": "query",
+                        "description": "Estado del usuario",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "active",
+                                "inactive"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de usuarios"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "422": {
+                        "description": "Parámetros inválidos"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/usuarios/{userId}": {
+            "get": {
+                "tags": [
+                    "AdminUsuarios"
+                ],
+                "summary": "Obtener usuario por ID",
+                "description": "Obtener detalles de un usuario específico",
+                "operationId": "3078dd5ded58e606c024e68746924026",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "ID del usuario",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Usuario encontrado"
+                    },
+                    "404": {
+                        "description": "Usuario no encontrado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/auth/login": {
             "post": {
                 "tags": [
@@ -154,6 +482,197 @@
                 ]
             }
         },
+        "/auth/adviser/autenticar": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Login de asesor",
+                "description": "Login for advisers with additional data.",
+                "operationId": "56388c1a107a46b7f53e4363e81ded60",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "username",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "username": {
+                                        "type": "string",
+                                        "example": "asesor123"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login exitoso"
+                    },
+                    "401": {
+                        "description": "Credenciales inválidas"
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Cerrar sesión",
+                "description": "Logout user (revoke token).",
+                "operationId": "6abf3b64a4bc7838d56346f05a5153af",
+                "responses": {
+                    "200": {
+                        "description": "Logout exitoso"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Refrescar token",
+                "description": "Refresh token.",
+                "operationId": "e7ab7446393758bb71fd1946a349e500",
+                "responses": {
+                    "200": {
+                        "description": "Token refrescado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Obtener usuario autenticado",
+                "description": "Get current authenticated user info.",
+                "operationId": "7edae2cdbaafc10dff8c9c4198b320a2",
+                "responses": {
+                    "200": {
+                        "description": "Usuario autenticado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/change-password": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Cambiar contraseña",
+                "description": "Change password.",
+                "operationId": "392f5b8efb38f64f049872d18d481cf1",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "current_password",
+                                    "new_password"
+                                ],
+                                "properties": {
+                                    "current_password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    },
+                                    "new_password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Contraseña actualizada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/profile": {
+            "put": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Actualizar perfil",
+                "description": "Update user profile.",
+                "operationId": "1b6f918eb3f3cd3b4d27be8eb1979861",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Perfil actualizado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/convenios/validar/{nit_empresa}/{cedula_trabajador}": {
             "get": {
                 "tags": [
@@ -253,7 +772,610 @@
                 ]
             }
         },
+        "/convenios/activo": {
+            "get": {
+                "tags": [
+                    "Convenios"
+                ],
+                "summary": "Obtener convenio activo",
+                "description": "Obtiene el convenio activo del trabajador autenticado.",
+                "operationId": "13ef9c8681b886386102bb5b1157f25b",
+                "responses": {
+                    "200": {
+                        "description": "Convenio activo obtenido"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Convenio no encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/firmas/{solicitud_id}/iniciar": {
+            "post": {
+                "tags": [
+                    "FirmaDigital"
+                ],
+                "summary": "Iniciar proceso de firmado digital",
+                "description": "Inicia el proceso de firmado digital enviando el PDF a FirmaPlus.\n\nArgs:\nsolicitud_id: ID de la solicitud\n\nReturns:\n200: Proceso de firmado iniciado exitosamente\n404: Solicitud o PDF no encontrado\n400: Error de validación",
+                "operationId": "24c397ccb26c5c23ceeb6a69ea786bbe",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proceso de firmado iniciado"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/firmas/{solicitud_id}/estado": {
+            "get": {
+                "tags": [
+                    "FirmaDigital"
+                ],
+                "summary": "Consultar estado de firmado",
+                "description": "Consulta el estado del proceso de firmado digital de una solicitud.\n\nArgs:\nsolicitud_id: ID de la solicitud\n\nReturns:\n200: Estado del proceso de firmado\n404: Solicitud no encontrada o sin proceso de firmado",
+                "operationId": "7749d278caa2101d7abf5bcdc9d775cd",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Estado del proceso de firmado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/firmas/webhook/completada": {
+            "post": {
+                "tags": [
+                    "FirmaDigital"
+                ],
+                "summary": "Webhook de firma completada",
+                "description": "Webhook que recibe la notificación de FirmaPlus cuando el proceso de firmado se completa.\n\nArgs:\nrequest: Datos del webhook de FirmaPlus\n\nReturns:\n200: Proceso completado exitosamente\n400: Datos inválidos\n404: Solicitud no encontrada",
+                "operationId": "83a5f2b86506dd7640e62080e784247e",
+                "requestBody": {
+                    "description": "Datos del webhook de FirmaPlus",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "solicitud_id": {
+                                        "type": "string",
+                                        "example": "uuid"
+                                    },
+                                    "estado": {
+                                        "type": "string",
+                                        "example": "completado"
+                                    },
+                                    "firmantes": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Proceso completado"
+                    },
+                    "400": {
+                        "description": "Datos inválidos"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                }
+            }
+        },
+        "/lineas_credito/parametros": {
+            "get": {
+                "tags": [
+                    "LineasCredito"
+                ],
+                "summary": "Obtener parámetros generales",
+                "description": "Obtener parámetros generales de líneas de crédito",
+                "operationId": "e1c54dd0db67693bd7f69762cd9bdb1d",
+                "responses": {
+                    "200": {
+                        "description": "Parámetros obtenidos"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/lineas_credito/tipo_creditos": {
+            "get": {
+                "tags": [
+                    "LineasCredito"
+                ],
+                "summary": "Obtener tipos de crédito",
+                "description": "Obtener tipos de crédito disponibles",
+                "operationId": "d26db0d38e035ad8636cfb53cc71d2ac",
+                "responses": {
+                    "200": {
+                        "description": "Tipos de crédito obtenidos"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/lineas_credito/completo": {
+            "get": {
+                "tags": [
+                    "LineasCredito"
+                ],
+                "summary": "Obtener líneas de crédito completas",
+                "description": "Obtener información completa de líneas de crédito (parámetros + tipos)",
+                "operationId": "1fe68864331882e27d5e3448c61768c1",
+                "responses": {
+                    "200": {
+                        "description": "Líneas completas obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/lineas-inversion": {
+            "get": {
+                "tags": [
+                    "LineasInversion"
+                ],
+                "summary": "Obtener todas las líneas de inversión",
+                "description": "Obtener todas las líneas de inversión disponibles.\n\nResponse:\n{\n    \"success\": true,\n    \"message\": \"Líneas de inversión obtenidas exitosamente\",\n    \"data\": [\n        {\n            \"id\": 1,\n            \"linea_credito\": \"EDUCACION SUPERIOR (20 SMLMV)\",\n            \"monto_maximo_pesos\": 23200000,\n            \"plazo_maximo\": \"60 meses\",\n            \"tasas_interes_anual\": {\n                \"categoria_a\": \"10%\",\n                \"categoria_b\": \"11%\",\n                \"categoria_c\": \"14%\"\n            },\n            \"requisitos\": [...]\n        }\n    ]\n}",
+                "operationId": "5822678c188833c27177744bc78650ba",
+                "responses": {
+                    "200": {
+                        "description": "Líneas de inversión obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/lineas-inversion/{linea_id}": {
+            "get": {
+                "tags": [
+                    "LineasInversion"
+                ],
+                "summary": "Obtener línea de inversión por ID",
+                "description": "Obtener una línea de inversión específica por su ID.\n\nArgs:\n    * @param int $linea_id ID de la línea de inversión\nReturns:\n    * JsonResponse\nResponse:\n    * {\n        \"success\": true,\n        \"message\": \"Línea de inversión obtenida exitosamente\",\n        \"data\": {...}\n    }",
+                "operationId": "6d042142c4a56d8f137fd4e8b3be5d0e",
+                "parameters": [
+                    {
+                        "name": "linea_id",
+                        "in": "path",
+                        "description": "ID de la línea",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Línea obtenida"
+                    },
+                    "404": {
+                        "description": "Línea no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/lineas-inversion/categoria/{categoria}": {
+            "get": {
+                "tags": [
+                    "LineasInversion"
+                ],
+                "summary": "Obtener líneas por categoría",
+                "description": "Obtener líneas de inversión por categoría.\n\nArgs:\n    * @param string $categoria Categoría de la línea (EDUCACION, VIVIENDA, etc.)\nReturns:\n    * JsonResponse\nResponse:\n    * {\n        \"success\": true,\n        \"message\": \"Líneas de inversión por categoría obtenidas\",\n        \"data\": [...]\n    }",
+                "operationId": "deda1b1c0690d440dd9014eab8b766e6",
+                "parameters": [
+                    {
+                        "name": "categoria",
+                        "in": "path",
+                        "description": "Categoría",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Líneas por categoría obtenidas"
+                    },
+                    "404": {
+                        "description": "Categoría no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/mobile/qr-token": {
+            "get": {
+                "tags": [
+                    "MobileAuth"
+                ],
+                "summary": "Generar token QR para autorización móvil",
+                "description": "Genera un token temporal para el QR basado en la sesión actual.",
+                "operationId": "07a7824051874c4a8bdf578bd099de3f",
+                "responses": {
+                    "200": {
+                        "description": "Token QR generado"
+                    },
+                    "401": {
+                        "description": "Sesión no válida"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/mobile/authorize/{token}": {
+            "post": {
+                "tags": [
+                    "MobileAuth"
+                ],
+                "summary": "Autorizar acceso móvil",
+                "description": "Endpoint llamado por la app móvil para autorizar el acceso en el frontend.",
+                "operationId": "6e1ab49221480cbd1f528558cbcf6c78",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "description": "Token de autorización",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Autorización completada"
+                    },
+                    "400": {
+                        "description": "Token inválido"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/mobile/auth-status": {
+            "get": {
+                "tags": [
+                    "MobileAuth"
+                ],
+                "summary": "Obtener estado de autenticación móvil",
+                "description": "Obtiene el estado de autenticación móvil",
+                "operationId": "1229aea56fe82df29ec29297907751d4",
+                "responses": {
+                    "200": {
+                        "description": "Estado obtenido"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Obtener notificaciones del usuario",
+                "description": "Obtener todas las notificaciones del usuario autenticado\n\nGET /api/notifications\n\nQuery params:\n- unread: boolean (opcional) - Solo notificaciones no leídas\n- limit: int (opcional) - Límite de resultados (default: 50)",
+                "operationId": "b1274a2aaae8a4295a7e1925e8d8090f",
+                "parameters": [
+                    {
+                        "name": "unread",
+                        "in": "query",
+                        "description": "Solo no leídas",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Límite de resultados",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notificaciones obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/unread-count": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Obtener contador de notificaciones no leídas",
+                "description": "Obtener contador de notificaciones no leídas\n\nGET /api/notifications/unread-count",
+                "operationId": "85697ee523a5dace428185c95efb9f2f",
+                "responses": {
+                    "200": {
+                        "description": "Contador obtenido"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/{id}/read": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Marcar notificación como leída",
+                "description": "Marcar una notificación como leída\n\nPUT /api/notifications/{id}/read",
+                "operationId": "8bc5203b95eaa5cf8614a66ced103386",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID de la notificación",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notificación marcada como leída"
+                    },
+                    "404": {
+                        "description": "Notificación no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/notifications/mark-all-read": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Marcar todas las notificaciones como leídas",
+                "description": "Marcar todas las notificaciones como leídas\n\nPUT /api/notifications/mark-all-read",
+                "operationId": "48969f1c1523374341cf86b5610b3e03",
+                "responses": {
+                    "200": {
+                        "description": "Notificaciones marcadas como leídas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "500": {
+                        "description": "Error del servidor"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/perfil": {
+            "get": {
+                "tags": [
+                    "Perfil"
+                ],
+                "summary": "Obtener perfil de usuario",
+                "description": "Obtiene el perfil del usuario autenticado.\n\nReturns:\n    Datos del perfil del usuario",
+                "operationId": "8b7568ff62c47e21dfe7f8f2eb0d34a7",
+                "responses": {
+                    "200": {
+                        "description": "Perfil obtenido"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Usuario no encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/postulaciones": {
+            "get": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Listar postulaciones",
+                "description": "Listar postulaciones con filtros",
+                "operationId": "c4d7cf726c0bae214189504a9ede723d",
+                "responses": {
+                    "200": {
+                        "description": "Listado de postulaciones"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
             "post": {
                 "tags": [
                     "Postulaciones"
@@ -303,6 +1425,805 @@
                     }
                 ]
             }
+        },
+        "/postulaciones/{postulacion_id}": {
+            "get": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Obtener postulación",
+                "description": "Obtener una postulación específica",
+                "operationId": "32adb797d6ca63306df668526d008152",
+                "parameters": [
+                    {
+                        "name": "postulacion_id",
+                        "in": "path",
+                        "description": "ID de la postulación",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Postulación encontrada"
+                    },
+                    "404": {
+                        "description": "Postulación no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Eliminar postulación",
+                "description": "Eliminar una postulación",
+                "operationId": "0f907a0fd6822009efa063f4a66bea6e",
+                "parameters": [
+                    {
+                        "name": "postulacion_id",
+                        "in": "path",
+                        "description": "ID de la postulación",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Postulación eliminada"
+                    },
+                    "404": {
+                        "description": "Postulación no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/postulaciones/{postulacion_id}/estado": {
+            "patch": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Actualizar estado de postulación",
+                "description": "Actualizar el estado de una postulación",
+                "operationId": "9f57f9d9642c58d41bbac9f8e6edd7e2",
+                "parameters": [
+                    {
+                        "name": "postulacion_id",
+                        "in": "path",
+                        "description": "ID de la postulación",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "estado"
+                                ],
+                                "properties": {
+                                    "estado": {
+                                        "type": "string",
+                                        "example": "EN_REVISION"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Estado actualizado"
+                    },
+                    "404": {
+                        "description": "Postulación no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/postulaciones/estadisticas": {
+            "get": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Obtener estadísticas de postulaciones",
+                "description": "Obtener estadísticas de postulaciones",
+                "operationId": "eed4efdccd1a70595f79a2c63770afa6",
+                "responses": {
+                    "200": {
+                        "description": "Estadísticas obtenidas"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/postulaciones/buscar": {
+            "post": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Buscar postulaciones",
+                "description": "Buscar postulaciones",
+                "operationId": "da288266a3521355cdc5731d34e35cfe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Resultados de búsqueda"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/postulaciones/sala/unirse": {
+            "post": {
+                "tags": [
+                    "Postulaciones"
+                ],
+                "summary": "Unirse a sala de postulación",
+                "description": "Unirse a sala de postulación (simulado WebSocket)",
+                "operationId": "15c88a6d5d1dbc22c87f9012027887a4",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "postulacion_id"
+                                ],
+                                "properties": {
+                                    "postulacion_id": {
+                                        "type": "string",
+                                        "example": "uuid"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Unión exitosa"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/conyuge-trabajador": {
+            "post": {
+                "tags": [
+                    "Postulante"
+                ],
+                "summary": "Buscar cónyuges de trabajador",
+                "description": "Consulta cónyuges de trabajador mediante API externa",
+                "operationId": "cdaf3b7186737a675a27bae5d2ed3c39",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "cedtra",
+                                    "estado"
+                                ],
+                                "properties": {
+                                    "cedtra": {
+                                        "description": "Cédula del trabajador",
+                                        "type": "integer",
+                                        "example": 123456789
+                                    },
+                                    "estado": {
+                                        "description": "Estado del trabajador",
+                                        "type": "string",
+                                        "example": "A"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Cónyuges encontrados"
+                    },
+                    "422": {
+                        "description": "Datos inválidos"
+                    },
+                    "502": {
+                        "description": "Error en API externa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito/{solicitud_id}/documentos/requeridos": {
+            "get": {
+                "tags": [
+                    "SolicitudDocumentos"
+                ],
+                "summary": "Listar documentos requeridos",
+                "description": "Lista los documentos requeridos para una solicitud según el tipo de crédito.",
+                "operationId": "8355af4e2788cc25ca3e54e6874146a0",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Documentos requeridos listados"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito/{solicitud_id}/documentos": {
+            "get": {
+                "tags": [
+                    "SolicitudDocumentos"
+                ],
+                "summary": "Listar documentos de solicitud",
+                "description": "Lista los documentos de una solicitud.",
+                "operationId": "453040321904f3c03c0e1d8e69ac198a",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Documentos listados"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "SolicitudDocumentos"
+                ],
+                "summary": "Agregar documento a solicitud",
+                "description": "Agrega un documento a una solicitud.",
+                "operationId": "90b5a29e21a9a7c181d95be8352d22f1",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "tipo_documento",
+                                    "archivo"
+                                ],
+                                "properties": {
+                                    "tipo_documento": {
+                                        "type": "string",
+                                        "example": "cedula"
+                                    },
+                                    "archivo": {
+                                        "description": "Archivo del documento",
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Documento agregado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito/{solicitud_id}/documentos/{documento_id}": {
+            "delete": {
+                "tags": [
+                    "SolicitudDocumentos"
+                ],
+                "summary": "Eliminar documento de solicitud",
+                "description": "Elimina un documento de una solicitud.",
+                "operationId": "e7a3d8b9f9757154ade8413a6ef0c1c9",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "documento_id",
+                        "in": "path",
+                        "description": "ID del documento",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Documento eliminado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Documento no encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes/{solicitud_id}/generar-pdf": {
+            "post": {
+                "tags": [
+                    "SolicitudPdf"
+                ],
+                "summary": "Generar PDF de solicitud",
+                "description": "Genera el PDF de una solicitud de crédito con soporte para convenios y firmantes.\nEste endpoint reemplaza el antiguo '/api/solicitud-credito/xml' (deprecado).",
+                "operationId": "9cad4fd1c897ae7eddbb935153e683bb",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "PDF generado exitosamente"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes/{solicitud_id}/descargar-pdf": {
+            "get": {
+                "tags": [
+                    "SolicitudPdf"
+                ],
+                "summary": "Descargar PDF de solicitud",
+                "description": "Descarga el PDF previamente generado de una solicitud.",
+                "operationId": "b6500383b902e4ce3792b2347a615ebc",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "PDF descargado"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "PDF no encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes/{solicitud_id}/estado-pdf": {
+            "get": {
+                "tags": [
+                    "SolicitudPdf"
+                ],
+                "summary": "Verificar estado de PDF",
+                "description": "Verifica si una solicitud tiene PDF generado y retorna su estado.",
+                "operationId": "5b019799d62a4ca8f710de69d776a54d",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Estado del PDF"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito": {
+            "get": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Listar solicitudes de crédito",
+                "description": "Lista solicitudes de crédito con filtros básicos por GET (compatibilidad).",
+                "operationId": "1f9fd5b0c5db89c1df960e67cd81b893",
+                "responses": {
+                    "200": {
+                        "description": "Listado de solicitudes"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Crear solicitud de crédito",
+                "description": "Crea una nueva solicitud de crédito con validación.",
+                "operationId": "d08642f78a18d22f69513aa591f4a647",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "monto_solicitado",
+                                    "plazo_meses",
+                                    "solicitante"
+                                ],
+                                "properties": {
+                                    "monto_solicitado": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 10000000
+                                    },
+                                    "plazo_meses": {
+                                        "type": "integer",
+                                        "example": 12
+                                    },
+                                    "solicitante": {
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Solicitud creada exitosamente"
+                    },
+                    "422": {
+                        "description": "Error de validación"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito/{solicitud_id}": {
+            "get": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Obtener solicitud de crédito",
+                "description": "Obtiene una solicitud específica con validación.",
+                "operationId": "847e06984e72d9316bcc70da7387f6ea",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Solicitud encontrada"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Actualizar solicitud de crédito",
+                "description": "Actualiza una solicitud con validación.",
+                "operationId": "6702d66b6dde7283cfa558a8df022aec",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Solicitud actualizada"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Eliminar solicitud de crédito",
+                "description": "Elimina (desiste) una solicitud con validación.",
+                "operationId": "30352fb3eed4d930aa421679adbc9a1d",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Solicitud eliminada"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/solicitudes-credito/{solicitud_id}/finalizar": {
+            "post": {
+                "tags": [
+                    "SolicitudesCredito"
+                ],
+                "summary": "Finalizar solicitud de crédito",
+                "description": "Finaliza el proceso de una solicitud, cambiando el estado a 'ENVIADO_PENDIENTE_APROBACION'.",
+                "operationId": "cc198caf29298907fe263925bfb0c268",
+                "parameters": [
+                    {
+                        "name": "solicitud_id",
+                        "in": "path",
+                        "description": "ID de la solicitud",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Solicitud finalizada"
+                    },
+                    "404": {
+                        "description": "Solicitud no encontrada"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
         }
     },
     "components": {
@@ -316,6 +2237,18 @@
     },
     "tags": [
         {
+            "name": "AdminConvenios",
+            "description": "AdminConvenios"
+        },
+        {
+            "name": "AdminDashboard",
+            "description": "AdminDashboard"
+        },
+        {
+            "name": "AdminUsuarios",
+            "description": "AdminUsuarios"
+        },
+        {
             "name": "Auth",
             "description": "Auth"
         },
@@ -324,8 +2257,48 @@
             "description": "Convenios"
         },
         {
+            "name": "FirmaDigital",
+            "description": "FirmaDigital"
+        },
+        {
+            "name": "LineasCredito",
+            "description": "LineasCredito"
+        },
+        {
+            "name": "LineasInversion",
+            "description": "LineasInversion"
+        },
+        {
+            "name": "MobileAuth",
+            "description": "MobileAuth"
+        },
+        {
+            "name": "Notifications",
+            "description": "Notifications"
+        },
+        {
+            "name": "Perfil",
+            "description": "Perfil"
+        },
+        {
             "name": "Postulaciones",
             "description": "Postulaciones"
+        },
+        {
+            "name": "Postulante",
+            "description": "Postulante"
+        },
+        {
+            "name": "SolicitudDocumentos",
+            "description": "SolicitudDocumentos"
+        },
+        {
+            "name": "SolicitudPdf",
+            "description": "SolicitudPdf"
+        },
+        {
+            "name": "SolicitudesCredito",
+            "description": "SolicitudesCredito"
         }
     ]
 }

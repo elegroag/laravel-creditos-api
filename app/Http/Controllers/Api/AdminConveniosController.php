@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class AdminConveniosController extends Controller
 {
@@ -34,6 +35,24 @@ class AdminConveniosController extends Controller
      * - busqueda: búsqueda por razón social, NIT o representante
      * - nit: filtro por NIT
      */
+    #[OA\Get(
+        path: '/admin/convenios',
+        tags: ['AdminConvenios'],
+        summary: 'Listar convenios administrativos',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'Número de página', schema: new OA\Schema(type: 'integer', default: 1)),
+            new OA\Parameter(name: 'limit', in: 'query', required: false, description: 'Límite por página', schema: new OA\Schema(type: 'integer', default: 20)),
+            new OA\Parameter(name: 'estado', in: 'query', required: false, description: 'Estado del convenio', schema: new OA\Schema(type: 'string', enum: ['Activo', 'Inactivo'])),
+            new OA\Parameter(name: 'busqueda', in: 'query', required: false, description: 'Búsqueda por razón social', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'nit', in: 'query', required: false, description: 'Filtro por NIT', schema: new OA\Schema(type: 'string'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Lista de convenios'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 422, description: 'Parámetros inválidos')
+        ]
+    )]
     public function index(Request $request): JsonResponse
     {
         try {
@@ -159,6 +178,26 @@ class AdminConveniosController extends Controller
     /**
      * Obtener detalles de una empresa con convenio específica
      */
+    #[OA\Get(
+        path: '/admin/convenios/{id}',
+        tags: ['AdminConvenios'],
+        summary: 'Obtener convenio por ID',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID del convenio',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Convenio encontrado'),
+            new OA\Response(response: 404, description: 'Convenio no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function show(string $id): JsonResponse
     {
         try {
@@ -201,6 +240,28 @@ class AdminConveniosController extends Controller
     /**
      * Crear una nueva empresa con convenio
      */
+    #[OA\Post(
+        path: '/admin/convenios',
+        tags: ['AdminConvenios'],
+        summary: 'Crear convenio',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['nit', 'razon_social', 'representante_nombre'],
+                properties: [
+                    new OA\Property(property: 'nit', type: 'string', example: '900123456'),
+                    new OA\Property(property: 'razon_social', type: 'string', example: 'Empresa SA'),
+                    new OA\Property(property: 'representante_nombre', type: 'string', example: 'Juan Pérez')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Convenio creado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function store(Request $request): JsonResponse
     {
         try {

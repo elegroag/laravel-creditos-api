@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 class PostulanteController extends Controller
 {
@@ -26,6 +27,27 @@ class PostulanteController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/conyuge-trabajador',
+        tags: ['Postulante'],
+        summary: 'Buscar cónyuges de trabajador',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['cedtra', 'estado'],
+                properties: [
+                    new OA\Property(property: 'cedtra', type: 'integer', example: 123456789, description: 'Cédula del trabajador'),
+                    new OA\Property(property: 'estado', type: 'string', example: 'A', description: 'Estado del trabajador')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Cónyuges encontrados'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 502, description: 'Error en API externa')
+        ]
+    )]
     public function buscarConyugeTrabajador(Request $request): JsonResponse
     {
         try {

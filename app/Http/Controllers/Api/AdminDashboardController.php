@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
+use OpenApi\Attributes as OA;
 
 /**
  * Controlador para obtener estadísticas del dashboard administrativo
@@ -24,6 +25,17 @@ class AdminDashboardController extends Controller
     /**
      * Obtener estadísticas completas del dashboard
      */
+    #[OA\Get(
+        path: '/admin/dashboard/estadisticas',
+        tags: ['AdminDashboard'],
+        summary: 'Obtener estadísticas del dashboard',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 403, description: 'Acceso denegado')
+        ]
+    )]
     public function obtenerEstadisticasGenerales(Request $request): JsonResponse
     {
         try {

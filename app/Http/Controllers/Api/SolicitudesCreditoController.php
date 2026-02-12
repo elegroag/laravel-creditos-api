@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class SolicitudesCreditoController extends Controller
 {
@@ -41,6 +42,28 @@ class SolicitudesCreditoController extends Controller
     /**
      * Crea una nueva solicitud de crédito con validación.
      */
+    #[OA\Post(
+        path: '/solicitudes-credito',
+        tags: ['SolicitudesCredito'],
+        summary: 'Crear solicitud de crédito',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['monto_solicitado', 'plazo_meses', 'solicitante'],
+                properties: [
+                    new OA\Property(property: 'monto_solicitado', type: 'number', format: 'float', example: 10000000),
+                    new OA\Property(property: 'plazo_meses', type: 'integer', example: 12),
+                    new OA\Property(property: 'solicitante', type: 'object')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud creada exitosamente'),
+            new OA\Response(response: 422, description: 'Error de validación'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function crearSolicitudCredito(Request $request): JsonResponse
     {
         try {
@@ -119,6 +142,16 @@ class SolicitudesCreditoController extends Controller
     /**
      * Lista solicitudes de crédito con filtros básicos por GET (compatibilidad).
      */
+    #[OA\Get(
+        path: '/solicitudes-credito',
+        tags: ['SolicitudesCredito'],
+        summary: 'Listar solicitudes de crédito',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Listado de solicitudes'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function listarSolicitudesCredito(Request $request): JsonResponse
     {
         try {
@@ -365,6 +398,26 @@ class SolicitudesCreditoController extends Controller
     /**
      * Obtiene una solicitud específica con validación.
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}',
+        tags: ['SolicitudesCredito'],
+        summary: 'Obtener solicitud de crédito',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud encontrada'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -406,6 +459,30 @@ class SolicitudesCreditoController extends Controller
     /**
      * Actualiza una solicitud con validación.
      */
+    #[OA\Put(
+        path: '/solicitudes-credito/{solicitud_id}',
+        tags: ['SolicitudesCredito'],
+        summary: 'Actualizar solicitud de crédito',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(type: 'object')
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud actualizada'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function actualizarSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -490,6 +567,26 @@ class SolicitudesCreditoController extends Controller
     /**
      * Elimina (desiste) una solicitud con validación.
      */
+    #[OA\Delete(
+        path: '/solicitudes-credito/{solicitud_id}',
+        tags: ['SolicitudesCredito'],
+        summary: 'Eliminar solicitud de crédito',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud eliminada'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function eliminarSolicitudCredito(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -547,6 +644,26 @@ class SolicitudesCreditoController extends Controller
     /**
      * Finaliza el proceso de una solicitud, cambiando el estado a 'ENVIADO_PENDIENTE_APROBACION'.
      */
+    #[OA\Post(
+        path: '/solicitudes-credito/{solicitud_id}/finalizar',
+        tags: ['SolicitudesCredito'],
+        summary: 'Finalizar solicitud de crédito',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud finalizada'),
+            new OA\Response(response: 404, description: 'Solicitud no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function finalizarProcesoSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {

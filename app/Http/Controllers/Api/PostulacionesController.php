@@ -146,6 +146,16 @@ class PostulacionesController extends Controller
     /**
      * Listar postulaciones con filtros
      */
+    #[OA\Get(
+        path: '/postulaciones',
+        tags: ['Postulaciones'],
+        summary: 'Listar postulaciones',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Listado de postulaciones'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function listarPostulaciones(Request $request): JsonResponse
     {
         try {
@@ -221,6 +231,26 @@ class PostulacionesController extends Controller
     /**
      * Obtener una postulación específica
      */
+    #[OA\Get(
+        path: '/postulaciones/{postulacion_id}',
+        tags: ['Postulaciones'],
+        summary: 'Obtener postulación',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'postulacion_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la postulación',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Postulación encontrada'),
+            new OA\Response(response: 404, description: 'Postulación no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerPostulacion(string $postulacionId): JsonResponse
     {
         try {
@@ -266,6 +296,35 @@ class PostulacionesController extends Controller
     /**
      * Actualizar el estado de una postulación
      */
+    #[OA\Patch(
+        path: '/postulaciones/{postulacion_id}/estado',
+        tags: ['Postulaciones'],
+        summary: 'Actualizar estado de postulación',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'postulacion_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la postulación',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['estado'],
+                properties: [
+                    new OA\Property(property: 'estado', type: 'string', example: 'EN_REVISION')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Estado actualizado'),
+            new OA\Response(response: 404, description: 'Postulación no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function actualizarEstado(Request $request, string $postulacionId): JsonResponse
     {
         try {
@@ -355,6 +414,26 @@ class PostulacionesController extends Controller
     /**
      * Eliminar una postulación
      */
+    #[OA\Delete(
+        path: '/postulaciones/{postulacion_id}',
+        tags: ['Postulaciones'],
+        summary: 'Eliminar postulación',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'postulacion_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la postulación',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Postulación eliminada'),
+            new OA\Response(response: 404, description: 'Postulación no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function eliminarPostulacion(string $postulacionId): JsonResponse
     {
         try {
@@ -400,6 +479,16 @@ class PostulacionesController extends Controller
     /**
      * Obtener estadísticas de postulaciones
      */
+    #[OA\Get(
+        path: '/postulaciones/estadisticas',
+        tags: ['Postulaciones'],
+        summary: 'Obtener estadísticas de postulaciones',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerEstadisticas(): JsonResponse
     {
         try {
@@ -466,6 +555,20 @@ class PostulacionesController extends Controller
     /**
      * Buscar postulaciones
      */
+    #[OA\Post(
+        path: '/postulaciones/buscar',
+        tags: ['Postulaciones'],
+        summary: 'Buscar postulaciones',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(type: 'object')
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Resultados de búsqueda'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function buscarPostulaciones(Request $request): JsonResponse
     {
         try {
@@ -618,6 +721,25 @@ class PostulacionesController extends Controller
     /**
      * Unirse a sala de postulación (simulado WebSocket)
      */
+    #[OA\Post(
+        path: '/postulaciones/sala/unirse',
+        tags: ['Postulaciones'],
+        summary: 'Unirse a sala de postulación',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['postulacion_id'],
+                properties: [
+                    new OA\Property(property: 'postulacion_id', type: 'string', example: 'uuid')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Unión exitosa'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function unirseSalaPostulacion(Request $request): JsonResponse
     {
         try {

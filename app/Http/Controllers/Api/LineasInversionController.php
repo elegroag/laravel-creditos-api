@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 class LineasInversionController extends Controller
 {
@@ -44,6 +45,17 @@ class LineasInversionController extends Controller
      *     ]
      * }
      */
+    #[OA\Get(
+        path: '/lineas-inversion',
+        tags: ['LineasInversion'],
+        summary: 'Obtener todas las líneas de inversión',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Líneas de inversión obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerTodas(): JsonResponse
     {
         try {
@@ -78,19 +90,36 @@ class LineasInversionController extends Controller
      * Obtener una línea de inversión específica por su ID.
      *
      * Args:
-     * linea_id: ID de la línea de inversión
-     *
+     *     * @param int $linea_id ID de la línea de inversión
+     * Returns:
+     *     * JsonResponse
      * Response:
-     * {
-     *     "success": true,
-     *     "message": "Línea de inversión obtenida exitosamente",
-     *     "data": {
-     *         "id": 1,
-     *         "linea_credito": "EDUCACION SUPERIOR (20 SMLMV)",
-     *         ...
+     *     * {
+     *         "success": true,
+     *         "message": "Línea de inversión obtenida exitosamente",
+     *         "data": {...}
      *     }
-     * }
      */
+    #[OA\Get(
+        path: '/lineas-inversion/{linea_id}',
+        tags: ['LineasInversion'],
+        summary: 'Obtener línea de inversión por ID',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'linea_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la línea',
+                schema: new OA\Schema(type: 'integer')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Línea obtenida'),
+            new OA\Response(response: 404, description: 'Línea no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerPorId(int $linea_id): JsonResponse
     {
         try {
@@ -133,18 +162,39 @@ class LineasInversionController extends Controller
     }
 
     /**
-     * Obtener líneas de inversión filtradas por categoría de tasa.
+     * Obtener líneas de inversión por categoría.
      *
      * Args:
-     * categoria: Categoría ('A', 'B', 'C')
-     *
+     *     * @param string $categoria Categoría de la línea (EDUCACION, VIVIENDA, etc.)
+     * Returns:
+     *     * JsonResponse
      * Response:
-     * {
-     *     "success": true,
-     *     "message": "Líneas de inversión por categoría obtenidas exitosamente",
-     *     "data": [...]
-     * }
+     *     * {
+     *         "success": true,
+     *         "message": "Líneas de inversión por categoría obtenidas",
+     *         "data": [...]
+     *     }
      */
+    #[OA\Get(
+        path: '/lineas-inversion/categoria/{categoria}',
+        tags: ['LineasInversion'],
+        summary: 'Obtener líneas por categoría',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'categoria',
+                in: 'path',
+                required: true,
+                description: 'Categoría',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Líneas por categoría obtenidas'),
+            new OA\Response(response: 404, description: 'Categoría no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function obtenerPorCategoria(string $categoria): JsonResponse
     {
         try {
