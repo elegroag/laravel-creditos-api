@@ -19,7 +19,7 @@ class PostulacionFactory extends Factory
     {
         return [
             'username' => fake()->unique()->userName(),
-            'tipo_postulante' => fake()->randomElement(['trabajador', 'empresa']),
+            'tipo_postulante' => 'trabajador',
             'empresa_nit' => null, // Will be set for company type postulations
             'empresa_razon_social' => null, // Will be set for company type postulations
             'datos_personales' => [
@@ -68,8 +68,8 @@ class PostulacionFactory extends Factory
         return static::state(function (array $attributes) {
             return [
                 'tipo_postulante' => 'empresa',
-                'empresa_nit' => fake()->numerify('##########'),
-                'empresa_razon_social' => fake()->company(),
+                // No generamos empresa_nit ni empresa_razon_social para evitar foreign key issues
+                // Estos deben ser seteados manualmente cuando se necesite
             ];
         });
     }

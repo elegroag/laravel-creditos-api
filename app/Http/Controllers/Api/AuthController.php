@@ -14,6 +14,7 @@ use App\Http\Resources\Auth\LoginResource;
 use App\Http\Resources\Auth\RegisterResource;
 use App\Http\Resources\Auth\VerifyResource;
 use App\Http\Resources\ErrorResource;
+use OpenApi\Attributes as OA;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -41,6 +42,32 @@ class AuthController extends Controller
 
     /**
      * Login user and return token.
+     *
+    #[OA\Post(
+        path: '/auth/login',
+        tags: ['Auth'],
+        summary: 'Login de usuario',
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['username', 'password'],
+                properties: [
+                    new OA\Property(property: 'username', type: 'string', example: 'usuario123'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Login exitoso'
+            ),
+            new OA\Response(
+                response: 401,
+                description: 'Credenciales inválidas'
+            ),
+        ]
+    )]
      */
     public function login(LoginRequest $request): JsonResponse
     {
@@ -86,6 +113,49 @@ class AuthController extends Controller
 
     /**
      * Register a new user.
+     *
+    #[OA\Post(
+        path: '/auth/register',
+        tags: ['Auth'],
+        summary: 'Registro de usuario',
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: [
+                    'tipo_documento',
+                    'numero_documento',
+                    'nombres',
+                    'apellidos',
+                    'telefono',
+                    'email',
+                    'username',
+                    'password',
+                    'confirmar_password'
+                ],
+                properties: [
+                    new OA\Property(property: 'tipo_documento', type: 'string', example: 'CC'),
+                    new OA\Property(property: 'numero_documento', type: 'string', example: '123456789'),
+                    new OA\Property(property: 'nombres', type: 'string', example: 'Juan'),
+                    new OA\Property(property: 'apellidos', type: 'string', example: 'Pérez'),
+                    new OA\Property(property: 'telefono', type: 'string', example: '3001234567'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'juan.perez@correo.com'),
+                    new OA\Property(property: 'username', type: 'string', example: 'juanperez'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password'),
+                    new OA\Property(property: 'confirmar_password', type: 'string', format: 'password')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: 'Registro exitoso'
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Error de validación/negocio'
+            ),
+        ]
+    )]
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -206,6 +276,23 @@ class AuthController extends Controller
     /**
      * Verify JWT token and return user info.
      * Comportamiento idéntico al endpoint de Python.
+     *
+    #[OA\Get(
+        path: '/auth/verify',
+        tags: ['Auth'],
+        summary: 'Verificar token JWT y obtener info de usuario',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Token válido'
+            ),
+            new OA\Response(
+                response: 401,
+                description: 'Token inválido'
+            ),
+        ]
+    )]
      */
     public function verify(Request $request): JsonResponse
     {

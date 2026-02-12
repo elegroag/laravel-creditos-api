@@ -8,9 +8,9 @@ use App\Http\Resources\ErrorResource;
 use App\Models\EmpresaConvenio;
 use App\Services\ConvenioValidationService;
 use App\Services\TrabajadorService;
+use OpenApi\Attributes as OA;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -37,6 +37,34 @@ class ConveniosController extends Controller
      * @param string $nit_empresa NIT de la empresa
      * @param string $cedula_trabajador Cédula del trabajador
      * @return JsonResponse
+     *
+    #[OA\Get(
+        path: '/convenios/validar/{nit_empresa}/{cedula_trabajador}',
+        tags: ['Convenios'],
+        summary: 'Validar convenio por NIT y cédula',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'nit_empresa',
+                in: 'path',
+                required: true,
+                description: 'NIT de la empresa',
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'cedula_trabajador',
+                in: 'path',
+                required: true,
+                description: 'Cédula del trabajador',
+                schema: new OA\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Validación exitosa'),
+            new OA\Response(response: 400, description: 'Error de validación de negocio'),
+            new OA\Response(response: 404, description: 'Convenio/Trabajador no encontrado'),
+        ]
+    )]
      */
     public function validarConvenioTrabajador(string $nit_empresa, string $cedula_trabajador): JsonResponse
     {
@@ -98,6 +126,29 @@ class ConveniosController extends Controller
      * }
      *
      * @return JsonResponse
+     *
+    #[OA\Post(
+        path: '/convenios/validar',
+        tags: ['Convenios'],
+        summary: 'Validar convenio (POST)',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['nit_empresa', 'cedula_trabajador'],
+                properties: [
+                    new OA\Property(property: 'nit_empresa', type: 'string', example: '900123456'),
+                    new OA\Property(property: 'cedula_trabajador', type: 'string', example: '123456789'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Validación exitosa'),
+            new OA\Response(response: 422, description: 'Error de validación (campos requeridos)'),
+            new OA\Response(response: 400, description: 'Error de negocio'),
+            new OA\Response(response: 404, description: 'Convenio/Trabajador no encontrado'),
+        ]
+    )]
      */
     public function validarConvenioPost(Request $request): JsonResponse
     {
@@ -175,22 +226,17 @@ class ConveniosController extends Controller
     public function obtenerConvenioActivo(Request $request): JsonResponse
     {
         try {
-            $authUser = Auth::user();
-
             $currentUser = $request->get('current_user');
             $authenticatedUser = $request->get('authenticated_user');
 
             $numeroDocumento = null;
-            if ($authUser && isset($authUser->numero_documento) && $authUser->numero_documento) {
-                $numeroDocumento = (string) $authUser->numero_documento;
+
+            if (is_array($authenticatedUser)) {
+                $numeroDocumento = $authenticatedUser['user']['numero_documento'] ?? null;
             }
 
             if (!$numeroDocumento && is_array($currentUser)) {
                 $numeroDocumento = $currentUser['numero_documento'] ?? null;
-            }
-
-            if (!$numeroDocumento && is_array($authenticatedUser)) {
-                $numeroDocumento = $authenticatedUser['user']['numero_documento'] ?? null;
             }
 
             if (!$numeroDocumento) {

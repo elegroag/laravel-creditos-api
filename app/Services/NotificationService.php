@@ -22,7 +22,7 @@ class NotificationService
     {
         try {
             // Determinar el tipo y ID del notifiable
-            $notifiableType = is_array($notifiable) ? 'User' : get_class($notifiable);
+            $notifiableType = is_array($notifiable) ? 'User' : 'User';
             $notifiableId = is_array($notifiable)
                 ? ($notifiable['username'] ?? $notifiable['id'] ?? 'unknown')
                 : ($notifiable->username ?? $notifiable->id ?? 'unknown');
@@ -235,10 +235,10 @@ class NotificationService
     public function getUserNotifications($user, bool $onlyUnread = false, int $limit = 50)
     {
         try {
-            $notifiableType = is_array($user) ? 'User' : get_class($user);
+            $notifiableType = is_array($user) ? 'User' : 'User';
             $notifiableId = is_array($user)
                 ? ($user['username'] ?? $user['id'] ?? 'unknown')
-                : ($user->id ?? $user->username ?? 'unknown');
+                : ($user->username ?? $user->id ?? 'unknown');
 
             $query = Notification::where('notifiable_type', $notifiableType)
                 ->where('notifiable_id', $notifiableId)
@@ -268,10 +268,10 @@ class NotificationService
     public function countUnread($user): int
     {
         try {
-            $notifiableType = is_array($user) ? 'User' : get_class($user);
+            $notifiableType = is_array($user) ? 'User' : 'User';
             $notifiableId = is_array($user)
                 ? ($user['username'] ?? $user['id'] ?? 'unknown')
-                : ($user->id ?? $user->username ?? 'unknown');
+                : ($user->username ?? $user->id ?? 'unknown');
 
             return Notification::where('notifiable_type', $notifiableType)
                 ->where('notifiable_id', $notifiableId)
@@ -297,10 +297,10 @@ class NotificationService
     public function markAsRead(string $notificationId, $user): bool
     {
         try {
-            $notifiableType = is_array($user) ? 'User' : get_class($user);
+            $notifiableType = is_array($user) ? 'User' : 'User';
             $notifiableId = is_array($user)
                 ? ($user['username'] ?? $user['id'] ?? 'unknown')
-                : ($user->id ?? $user->username ?? 'unknown');
+                : ($user->username ?? $user->id ?? 'unknown');
 
             $notification = Notification::where('id', $notificationId)
                 ->where('notifiable_type', $notifiableType)
@@ -333,10 +333,10 @@ class NotificationService
     public function markAllAsRead($user): int
     {
         try {
-            $notifiableType = is_array($user) ? 'User' : get_class($user);
+            $notifiableType = is_array($user) ? 'User' : 'User';
             $notifiableId = is_array($user)
                 ? ($user['username'] ?? $user['id'] ?? 'unknown')
-                : ($user->id ?? $user->username ?? 'unknown');
+                : ($user->username ?? $user->id ?? 'unknown');
 
             return Notification::where('notifiable_type', $notifiableType)
                 ->where('notifiable_id', $notifiableId)
@@ -362,10 +362,10 @@ class NotificationService
     public function delete(string $notificationId, $user): bool
     {
         try {
-            $notifiableType = is_array($user) ? 'User' : get_class($user);
+            $notifiableType = is_array($user) ? 'User' : 'User';
             $notifiableId = is_array($user)
                 ? ($user['username'] ?? $user['id'] ?? 'unknown')
-                : ($user->id ?? $user->username ?? 'unknown');
+                : ($user->username ?? $user->id ?? 'unknown');
 
             $notification = Notification::where('id', $notificationId)
                 ->where('notifiable_type', $notifiableType)
