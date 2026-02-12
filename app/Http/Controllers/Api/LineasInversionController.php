@@ -233,15 +233,24 @@ class LineasInversionController extends Controller
     }
 
     /**
-     * Inicializar la colección de líneas de inversión con datos por defecto.
-     * Este endpoint es principalmente para administración.
-     *
-     * Response:
-     * {
-     *     "success": true,
-     *     "message": "Líneas de inversión inicializadas exitosamente"
-     * }
+     * Inicializar líneas de inversión
+     * @return JsonResponse
+     *     {
+     *         "success": true,
+     *         "data": null,
+     *         "message": "Líneas de inversión inicializadas exitosamente"
+     *     }
      */
+    #[OA\Post(
+        path: '/lineas-inversion/inicializar',
+        tags: ['LineasInversion'],
+        summary: 'Inicializar líneas de inversión',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Líneas inicializadas'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function inicializarLineas(): JsonResponse
     {
         try {
@@ -281,6 +290,17 @@ class LineasInversionController extends Controller
     /**
      * Obtener estadísticas de líneas de inversión
      */
+    #[OA\Get(
+        path: '/lineas-inversion/estadisticas',
+        tags: ['LineasInversion'],
+        summary: 'Obtener estadísticas de líneas de inversión',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticas(): JsonResponse
     {
         try {
@@ -322,6 +342,21 @@ class LineasInversionController extends Controller
     /**
      * Buscar líneas de inversión por texto
      */
+    #[OA\Get(
+        path: '/lineas-inversion/buscar',
+        tags: ['LineasInversion'],
+        summary: 'Buscar líneas de inversión',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'q', in: 'query', required: true, description: 'Texto de búsqueda', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'categoria', in: 'query', required: false, description: 'Filtrar por categoría', schema: new OA\Schema(type: 'string'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Resultados de búsqueda'),
+            new OA\Response(response: 422, description: 'Parámetros inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function buscarLineas(Request $request): JsonResponse
     {
         try {
@@ -401,6 +436,26 @@ class LineasInversionController extends Controller
     /**
      * Comparar líneas de inversión
      */
+    #[OA\Post(
+        path: '/lineas-inversion/comparar',
+        tags: ['LineasInversion'],
+        summary: 'Comparar líneas de inversión',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['lineas'],
+                properties: [
+                    new OA\Property(property: 'lineas', type: 'array', items: new OA\Items(type: 'integer'), example: [1, 2, 3], description: 'Array de IDs de líneas a comparar')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Comparación completada'),
+            new OA\Response(response: 422, description: 'Parámetros inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function compararLineas(Request $request): JsonResponse
     {
         try {

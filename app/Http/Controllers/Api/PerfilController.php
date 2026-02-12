@@ -116,14 +116,36 @@ class PerfilController extends Controller
     }
 
     /**
-     * Actualiza el perfil del usuario autenticado.
+     * Actualizar perfil del usuario
      *
-     * Args:
-     * update_data: Datos de actualización validados
-     *
+     * PUT /api/perfil
+     * 
      * Returns:
      *     Perfil actualizado
      */
+    #[OA\Put(
+        path: '/perfil',
+        tags: ['Perfil'],
+        summary: 'Actualizar perfil',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'nombres', type: 'string', example: 'Juan'),
+                    new OA\Property(property: 'apellidos', type: 'string', example: 'Pérez'),
+                    new OA\Property(property: 'telefono', type: 'string', example: '3001234567'),
+                    new OA\Property(property: 'direccion', type: 'string', example: 'Calle 123 #45-67')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Perfil actualizado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function actualizarPerfil(Request $request): JsonResponse
     {
         try {
@@ -252,14 +274,35 @@ class PerfilController extends Controller
     }
 
     /**
-     * Cambia la contraseña del usuario autenticado.
+     * Cambiar contraseña del usuario
      *
-     * Args:
-     * password_data: Datos de cambio de contraseña validados
-     *
+     * PUT /api/perfil/password
+     * 
      * Returns:
      *     Confirmación de cambio
      */
+    #[OA\Put(
+        path: '/perfil/password',
+        tags: ['Perfil'],
+        summary: 'Cambiar contraseña',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['password_actual', 'password_nuevo'],
+                properties: [
+                    new OA\Property(property: 'password_actual', type: 'string', example: 'password123'),
+                    new OA\Property(property: 'password_nuevo', type: 'string', example: 'newpassword456')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Contraseña cambiada'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function cambiarPassword(Request $request): JsonResponse
     {
         try {
@@ -337,14 +380,24 @@ class PerfilController extends Controller
     }
 
     /**
-     * Obtiene la actividad reciente del usuario (solicitudes, documentos, etc.).
+     * Obtener actividad reciente del usuario
      *
-     * Args:
-     * query_params: Parámetros de consulta validados
-     *
+     * GET /api/perfil/actividad
+     * 
      * Returns:
      *     Actividad reciente del usuario
      */
+    #[OA\Get(
+        path: '/perfil/actividad',
+        tags: ['Perfil'],
+        summary: 'Obtener actividad reciente',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Actividad obtenida'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerActividadUsuario(Request $request): JsonResponse
     {
         try {
@@ -437,6 +490,17 @@ class PerfilController extends Controller
     /**
      * Obtiene estadísticas del perfil del usuario
      */
+    #[OA\Get(
+        path: '/perfil/estadisticas',
+        tags: ['Perfil'],
+        summary: 'Obtener estadísticas del perfil',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticasPerfil(Request $request): JsonResponse
     {
         try {
@@ -527,6 +591,17 @@ class PerfilController extends Controller
     /**
      * Obtiene configuración del perfil (preferencias, etc.)
      */
+    #[OA\Get(
+        path: '/perfil/configuracion',
+        tags: ['Perfil'],
+        summary: 'Obtener configuración del perfil',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Configuración obtenida'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerConfiguracionPerfil(Request $request): JsonResponse
     {
         try {
@@ -579,6 +654,28 @@ class PerfilController extends Controller
     /**
      * Actualiza configuración del perfil
      */
+    #[OA\Put(
+        path: '/perfil/configuracion',
+        tags: ['Perfil'],
+        summary: 'Actualizar configuración del perfil',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'notificaciones_email', type: 'boolean', example: true),
+                    new OA\Property(property: 'notificaciones_push', type: 'boolean', example: false),
+                    new OA\Property(property: 'idioma', type: 'string', example: 'es')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Configuración actualizada'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function actualizarConfiguracionPerfil(Request $request): JsonResponse
     {
         try {

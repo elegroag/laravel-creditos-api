@@ -202,6 +202,27 @@ class NotificationController extends Controller
      *
      * DELETE /api/notifications/{id}
      */
+    #[OA\Delete(
+        path: '/notifications/{id}',
+        tags: ['Notifications'],
+        summary: 'Eliminar notificación',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID de la notificación',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Notificación eliminada'),
+            new OA\Response(response: 404, description: 'Notificación no encontrada'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function destroy(Request $request, string $id): JsonResponse
     {
         try {

@@ -9,6 +9,7 @@ use App\Models\SolicitudCredito;
 use App\Models\SolicitudDocumento;
 use App\Services\SolicitudService;
 use App\Services\UserService;
+use App\Services\SolicitudDocumentoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -23,11 +24,13 @@ class SolicitudDocumentosController extends Controller
 {
     protected SolicitudService $solicitudService;
     protected UserService $userService;
+    protected SolicitudDocumentoService $documentoService;
 
-    public function __construct(SolicitudService $solicitudService, UserService $userService)
+    public function __construct(SolicitudService $solicitudService, UserService $userService, SolicitudDocumentoService $documentoService)
     {
         $this->solicitudService = $solicitudService;
         $this->userService = $userService;
+        $this->documentoService = $documentoService;
     }
 
     /**
@@ -39,27 +42,37 @@ class SolicitudDocumentosController extends Controller
         return $authenticatedUser['user'] ?? [];
     }
 
-    /**
-     * Validar si el usuario autenticado puede acceder a una solicitud.
-     */
-    private function canAccessSolicitud(array $userData, array $solicitud): bool
-    {
-        $username = $userData['username'] ?? null;
-        $userRoles = $userData['roles'] ?? [];
-
-        $isAdministrator = in_array('administrator', $userRoles);
-        $isAdviser = in_array('adviser', $userRoles);
-
-        if ($isAdministrator || $isAdviser) {
-            return true;
-        }
-
-        return $username && ($solicitud['owner_username'] ?? '') === $username;
-    }
 
     /**
      * Descarga directa de documento por ID (compatibilidad frontend).
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}/documentos/{documento_id}/download',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Descargar documento por ID',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'documento_id',
+                in: 'path',
+                required: true,
+                description: 'ID del documento',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Documento descargado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Documento no encontrado')
+        ]
+    )]
     public function downloadDocumentoById(Request $request, string $documentoId, string $solicitudId): BinaryFileResponse|JsonResponse
     {
         try {
@@ -76,7 +89,7 @@ class SolicitudDocumentosController extends Controller
 
             $solicitud = $solicitudModel->toArray();
 
-            if (!$this->canAccessSolicitud($userData, $solicitud)) {
+            if (!$this->documentoService->canAccessSolicitud($userData, $solicitud)) {
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
@@ -113,6 +126,33 @@ class SolicitudDocumentosController extends Controller
     /**
      * Vista previa directa de documento por ID (inline para PDF/imagenes).
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}/documentos/{documento_id}/preview',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Vista previa de documento',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'documento_id',
+                in: 'path',
+                required: true,
+                description: 'ID del documento',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Vista previa generada'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Documento no encontrado')
+        ]
+    )]
     public function previewDocumentoById(Request $request, string $documentoId, string $solicitudId): BinaryFileResponse|JsonResponse
     {
         try {
@@ -129,7 +169,7 @@ class SolicitudDocumentosController extends Controller
 
             $solicitud = $solicitudModel->toArray();
 
-            if (!$this->canAccessSolicitud($userData, $solicitud)) {
+            if (!$this->documentoService->canAccessSolicitud($userData, $solicitud)) {
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
@@ -201,7 +241,7 @@ class SolicitudDocumentosController extends Controller
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {
@@ -234,7 +274,7 @@ class SolicitudDocumentosController extends Controller
             $detalleModalidad = $lineaCredito['detalle_modalidad'] ?? '';
 
             // Definir documentos requeridos según el tipo de crédito
-            $documentosRequeridos = $this->obtenerDocumentosPorTipoCredito($detalleModalidad);
+            $documentosRequeridos = $this->documentoService->obtenerDocumentosPorTipoCredito($detalleModalidad);
 
             Log::info('Documentos requeridos obtenidos', [
                 'solicitud_id' => $solicitudId,
@@ -286,7 +326,7 @@ class SolicitudDocumentosController extends Controller
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {
@@ -373,7 +413,7 @@ class SolicitudDocumentosController extends Controller
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {
@@ -432,7 +472,7 @@ class SolicitudDocumentosController extends Controller
             ];
 
             // Generar nombre único para el archivo
-            $fileName = $this->generarNombreArchivo($solicitudId, $documentoRequeridoId, $file->getClientOriginalExtension());
+            $nombreArchivo = $this->documentoService->generarNombreArchivo($solicitudId, $documentoRequeridoId, $file->getClientOriginalExtension());
 
             // Crear directorio para la solicitud si no existe
             $solicitudDir = storage_path("app/solicitudes/{$solicitudId}");
@@ -441,7 +481,7 @@ class SolicitudDocumentosController extends Controller
             }
 
             // Guardar archivo directamente en el directorio de la solicitud
-            $filePath = "solicitudes/{$solicitudId}/{$fileName}";
+            $filePath = "solicitudes/{$solicitudId}/{$nombreArchivo}";
             $fullPath = storage_path("app/{$filePath}");
 
             if (!move_uploaded_file($file->getPathname(), $fullPath)) {
@@ -452,7 +492,7 @@ class SolicitudDocumentosController extends Controller
             $fileData['id'] = Str::uuid()->toString();
 
             // Agregar documento a la solicitud
-            $solicitudActualizada = $this->agregarDocumentoASolicitud($solicitudId, $fileData);
+            $solicitudActualizada = $this->documentoService->agregarDocumentoASolicitud($solicitudId, $fileData);
 
             Log::info('Documento agregado exitosamente', [
                 'solicitud_id' => $solicitudId,
@@ -511,7 +551,7 @@ class SolicitudDocumentosController extends Controller
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {
@@ -539,7 +579,7 @@ class SolicitudDocumentosController extends Controller
             }
 
             // Eliminar documento
-            $solicitudActualizada = $this->eliminarDocumentoDeSolicitud($solicitudId, $documentoId);
+            $solicitudActualizada = $this->documentoService->eliminarDocumentoDeSolicitud($solicitudId, $documentoId);
 
             if (!$solicitudActualizada) {
                 return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
@@ -570,11 +610,38 @@ class SolicitudDocumentosController extends Controller
     /**
      * Descargar un documento de una solicitud
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/{solicitud_id}/documentos/{documento_id}/descargar',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Descargar documento de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitud_id',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'documento_id',
+                in: 'path',
+                required: true,
+                description: 'ID del documento',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Documento descargado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 404, description: 'Documento no encontrado')
+        ]
+    )]
     public function descargarDocumento(Request $request, string $solicitudId, string $documentoId): JsonResponse
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {
@@ -865,11 +932,22 @@ class SolicitudDocumentosController extends Controller
     /**
      * Obtener estadísticas de documentos
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/documentos/estadisticas',
+        tags: ['SolicitudDocumentos'],
+        summary: 'Obtener estadísticas de documentos',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticasDocumentos(Request $request): JsonResponse
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
+            $userData = $this->documentoService->getAuthenticatedUser($request);
             $username = $userData['username'];
 
             if (!$username) {

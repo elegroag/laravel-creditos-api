@@ -228,6 +228,17 @@ class LineasCreditoController extends Controller
     /**
      * Verificar disponibilidad del servicio externo
      */
+    #[OA\Get(
+        path: '/lineas-credito/disponibilidad',
+        tags: ['LineasCredito'],
+        summary: 'Verificar disponibilidad del servicio',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Servicio disponible'),
+            new OA\Response(response: 503, description: 'Servicio no disponible'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function verificarDisponibilidad(): JsonResponse
     {
         try {
@@ -270,6 +281,17 @@ class LineasCreditoController extends Controller
     /**
      * Obtener estadísticas de líneas de crédito
      */
+    #[OA\Get(
+        path: '/lineas-credito/estadisticas',
+        tags: ['LineasCredito'],
+        summary: 'Obtener estadísticas de líneas de crédito',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticas(): JsonResponse
     {
         try {

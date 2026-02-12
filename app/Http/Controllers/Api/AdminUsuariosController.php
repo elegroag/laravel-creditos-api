@@ -363,6 +363,35 @@ class AdminUsuariosController extends Controller
     /**
      * Crear un nuevo usuario
      */
+    #[OA\Post(
+        path: '/admin/usuarios',
+        tags: ['AdminUsuarios'],
+        summary: 'Crear nuevo usuario',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['username', 'nombres', 'apellidos', 'email', 'password', 'tipo_documento', 'numero_documento'],
+                properties: [
+                    new OA\Property(property: 'username', type: 'string', example: 'jperez'),
+                    new OA\Property(property: 'nombres', type: 'string', example: 'Juan'),
+                    new OA\Property(property: 'apellidos', type: 'string', example: 'Pérez'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'juan@ejemplo.com'),
+                    new OA\Property(property: 'password', type: 'string', example: 'password123'),
+                    new OA\Property(property: 'tipo_documento', type: 'string', example: 'CC'),
+                    new OA\Property(property: 'numero_documento', type: 'string', example: '12345678'),
+                    new OA\Property(property: 'telefono', type: 'string', example: '3001234567'),
+                    new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'), example: ['user'])
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Usuario creado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function crearUsuario(Request $request): JsonResponse
     {
         try {
@@ -452,6 +481,39 @@ class AdminUsuariosController extends Controller
     /**
      * Actualizar un usuario existente
      */
+    #[OA\Put(
+        path: '/admin/usuarios/{userId}',
+        tags: ['AdminUsuarios'],
+        summary: 'Actualizar usuario',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'userId',
+                in: 'path',
+                required: true,
+                description: 'ID del usuario',
+                schema: new OA\Schema(type: 'string', format: 'uuid')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'nombres', type: 'string', example: 'Juan'),
+                    new OA\Property(property: 'apellidos', type: 'string', example: 'Pérez'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'juan@ejemplo.com'),
+                    new OA\Property(property: 'telefono', type: 'string', example: '3001234567'),
+                    new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'), example: ['user', 'adviser'])
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Usuario actualizado'),
+            new OA\Response(response: 404, description: 'Usuario no encontrado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function actualizarUsuario(Request $request, string $userId): JsonResponse
     {
         try {
@@ -575,6 +637,26 @@ class AdminUsuariosController extends Controller
     /**
      * Eliminar un usuario
      */
+    #[OA\Delete(
+        path: '/admin/usuarios/{userId}',
+        tags: ['AdminUsuarios'],
+        summary: 'Eliminar usuario',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'userId',
+                in: 'path',
+                required: true,
+                description: 'ID del usuario',
+                schema: new OA\Schema(type: 'string', format: 'uuid')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Usuario eliminado'),
+            new OA\Response(response: 404, description: 'Usuario no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function eliminarUsuario(string $userId): JsonResponse
     {
         try {
@@ -621,6 +703,36 @@ class AdminUsuariosController extends Controller
     /**
      * Cambiar el estado de un usuario (active/inactive)
      */
+    #[OA\Put(
+        path: '/admin/usuarios/{userId}/estado',
+        tags: ['AdminUsuarios'],
+        summary: 'Cambiar estado de usuario',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'userId',
+                in: 'path',
+                required: true,
+                description: 'ID del usuario',
+                schema: new OA\Schema(type: 'string', format: 'uuid')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['estado'],
+                properties: [
+                    new OA\Property(property: 'estado', type: 'string', enum: ['active', 'inactive'], example: 'active')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Estado cambiado'),
+            new OA\Response(response: 404, description: 'Usuario no encontrado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function cambiarEstadoUsuario(Request $request, string $userId): JsonResponse
     {
         try {
@@ -695,6 +807,21 @@ class AdminUsuariosController extends Controller
     /**
      * Exportar lista de usuarios a CSV
      */
+    #[OA\Get(
+        path: '/admin/usuarios/export',
+        tags: ['AdminUsuarios'],
+        summary: 'Exportar usuarios a CSV',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'rol', in: 'query', required: false, description: 'Filtrar por rol', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'estado', in: 'query', required: false, description: 'Filtrar por estado', schema: new OA\Schema(type: 'string'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'CSV exportado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function exportarUsuarios(Request $request): JsonResponse
     {
         try {

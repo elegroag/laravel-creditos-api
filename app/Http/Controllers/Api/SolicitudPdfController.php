@@ -372,6 +372,27 @@ class SolicitudPdfController extends Controller
     /**
      * Eliminar PDF de una solicitud
      */
+    #[OA\Delete(
+        path: '/solicitud-pdf/{solicitudId}',
+        tags: ['SolicitudPdf'],
+        summary: 'Eliminar PDF de solicitud',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'solicitudId',
+                in: 'path',
+                required: true,
+                description: 'ID de la solicitud',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'PDF eliminado'),
+            new OA\Response(response: 404, description: 'PDF no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function eliminarPdfSolicitud(Request $request, string $solicitudId): JsonResponse
     {
         try {
@@ -434,6 +455,17 @@ class SolicitudPdfController extends Controller
     /**
      * Obtener estadísticas de PDFs generados
      */
+    #[OA\Get(
+        path: '/solicitud-pdf/estadisticas',
+        tags: ['SolicitudPdf'],
+        summary: 'Obtener estadísticas de PDFs',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticasPdf(Request $request): JsonResponse
     {
         try {

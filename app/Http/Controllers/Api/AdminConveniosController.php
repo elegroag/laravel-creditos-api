@@ -339,6 +339,41 @@ class AdminConveniosController extends Controller
     /**
      * Actualizar una empresa con convenio existente
      */
+    #[OA\Put(
+        path: '/admin/convenios/{id}',
+        tags: ['AdminConvenios'],
+        summary: 'Actualizar convenio',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID del convenio',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['nit', 'razon_social', 'representante_documento', 'representante_nombre'],
+                properties: [
+                    new OA\Property(property: 'nit', type: 'string', example: '900123456'),
+                    new OA\Property(property: 'razon_social', type: 'string', example: 'Empresa S.A.S.'),
+                    new OA\Property(property: 'representante_documento', type: 'string', example: '12345678'),
+                    new OA\Property(property: 'representante_nombre', type: 'string', example: 'Juan Pérez'),
+                    new OA\Property(property: 'telefono', type: 'string', example: '3001234567'),
+                    new OA\Property(property: 'correo', type: 'string', example: 'contacto@empresa.com')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Convenio actualizado'),
+            new OA\Response(response: 404, description: 'Convenio no encontrado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function update(Request $request, string $id): JsonResponse
     {
         try {
@@ -408,6 +443,26 @@ class AdminConveniosController extends Controller
     /**
      * Eliminar una empresa con convenio
      */
+    #[OA\Delete(
+        path: '/admin/convenios/{id}',
+        tags: ['AdminConvenios'],
+        summary: 'Eliminar convenio',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID del convenio',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Convenio eliminado'),
+            new OA\Response(response: 404, description: 'Convenio no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function destroy(string $id): JsonResponse
     {
         try {
@@ -443,6 +498,26 @@ class AdminConveniosController extends Controller
     /**
      * Cambiar el estado de una empresa con convenio (Activo/Inactivo)
      */
+    #[OA\Put(
+        path: '/admin/convenios/{id}/toggle-estado',
+        tags: ['AdminConvenios'],
+        summary: 'Cambiar estado de convenio',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(
+                name: 'id',
+                in: 'path',
+                required: true,
+                description: 'ID del convenio',
+                schema: new OA\Schema(type: 'string')
+            )
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Estado cambiado'),
+            new OA\Response(response: 404, description: 'Convenio no encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function toggleEstado(Request $request, string $id): JsonResponse
     {
         try {
@@ -504,6 +579,17 @@ class AdminConveniosController extends Controller
     /**
      * Exportar lista de empresas con convenios a CSV
      */
+    #[OA\Get(
+        path: '/admin/convenios/export',
+        tags: ['AdminConvenios'],
+        summary: 'Exportar convenios a CSV',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'CSV exportado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function export(): JsonResponse
     {
         try {
@@ -567,6 +653,29 @@ class AdminConveniosController extends Controller
      * Importar empresas con convenios desde Excel
      * Formato esperado: NIT, Razón Social, Representante Documento, Representante Nombre, Teléfono, Correo, Fecha Vencimiento, Estado
      */
+    #[OA\Post(
+        path: '/admin/convenios/import',
+        tags: ['AdminConvenios'],
+        summary: 'Importar convenios desde Excel',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\MediaType(
+                mediaType: 'multipart/form-data',
+                schema: new OA\Schema(
+                    properties: [
+                        new OA\Property(property: 'file', type: 'string', format: 'binary', description: 'Archivo Excel')
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Importación completada'),
+            new OA\Response(response: 400, description: 'Error en el archivo'),
+            new OA\Response(response: 422, description: 'Formato inválido'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function import(Request $request): JsonResponse
     {
         try {

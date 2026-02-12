@@ -308,6 +308,17 @@ class SolicitudesCreditoController extends Controller
     /**
      * Lista todas las solicitudes de crédito sin paginación ni límites por usuario.
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/for-user',
+        tags: ['SolicitudesCredito'],
+        summary: 'Listar solicitudes para usuario',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitudes listadas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function listarSolicitudesCreditoForUser(Request $request): JsonResponse
     {
         try {
@@ -345,6 +356,17 @@ class SolicitudesCreditoController extends Controller
     /**
      * Lista solicitudes del usuario autenticado en formato resumen (sin payload).
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/mis-solicitudes-resumen',
+        tags: ['SolicitudesCredito'],
+        summary: 'Listar mis solicitudes en resumen',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Resumen de solicitudes'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function listarMisSolicitudesResumen(Request $request): JsonResponse
     {
         try {
@@ -760,6 +782,17 @@ class SolicitudesCreditoController extends Controller
     /**
      * Obtiene la lista de estados de solicitud disponibles.
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/estados',
+        tags: ['SolicitudesCredito'],
+        summary: 'Obtener estados de solicitud',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estados obtenidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadosSolicitud(): JsonResponse
     {
         try {
@@ -777,6 +810,17 @@ class SolicitudesCreditoController extends Controller
     /**
      * Obtener estadísticas de solicitudes
      */
+    #[OA\Get(
+        path: '/solicitudes-credito/estadisticas',
+        tags: ['SolicitudesCredito'],
+        summary: 'Obtener estadísticas de solicitudes',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Estadísticas obtenidas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function obtenerEstadisticasSolicitudes(Request $request): JsonResponse
     {
         try {
@@ -811,6 +855,26 @@ class SolicitudesCreditoController extends Controller
     /**
      * Buscar solicitudes
      */
+    #[OA\Post(
+        path: '/solicitudes-credito/buscar',
+        tags: ['SolicitudesCredito'],
+        summary: 'Buscar solicitudes',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'query', type: 'string', example: '12345'),
+                    new OA\Property(property: 'estado', type: 'string', example: 'Pendiente')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitudes encontradas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 422, description: 'Datos inválidos')
+        ]
+    )]
     public function buscarSolicitudes(Request $request): JsonResponse
     {
         try {
@@ -875,6 +939,20 @@ class SolicitudesCreditoController extends Controller
         }
     }
 
+    /**
+     * Contar solicitudes por estado
+     */
+    #[OA\Get(
+        path: '/solicitudes-credito/contar-por-estado',
+        tags: ['SolicitudesCredito'],
+        summary: 'Contar solicitudes por estado',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Conteo obtenido'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function contarSolicitudesPorEstado(Request $request)
     {
         try {
@@ -916,6 +994,25 @@ class SolicitudesCreditoController extends Controller
         }
     }
 
+    /**
+     * Listar solicitudes de crédito con paginación
+     */
+    #[OA\Get(
+        path: '/solicitudes-credito/paginado',
+        tags: ['SolicitudesCredito'],
+        summary: 'Listar solicitudes paginadas',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'limit', in: 'query', required: true, description: 'Límite de resultados', schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'offset', in: 'query', required: true, description: 'Desplazamiento', schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'estado', in: 'query', required: false, description: 'Estado de la solicitud', schema: new OA\Schema(type: 'string'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitudes listadas'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function listarSolicitudesCreditoPaginado($limit, $offset, $estado)
     {
         try {
@@ -967,6 +1064,28 @@ class SolicitudesCreditoController extends Controller
     /**
      * Guardar solicitud
      */
+    /**
+     * Guardar solicitud
+     */
+    #[OA\Post(
+        path: '/solicitudes-credito/guardar',
+        tags: ['SolicitudesCredito'],
+        summary: 'Guardar solicitud',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'solicitud', type: 'object', description: 'Datos de la solicitud')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Solicitud guardada'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 422, description: 'Datos inválidos')
+        ]
+    )]
     public function guardarSolicitud(Request $request)
     {
         try {
@@ -1036,6 +1155,29 @@ class SolicitudesCreditoController extends Controller
         }
     }
 
+    /**
+     * Buscar número de solicitud disponible
+     */
+    #[OA\Post(
+        path: '/solicitudes-credito/buscar-numero-disponible',
+        tags: ['SolicitudesCredito'],
+        summary: 'Buscar número de solicitud disponible',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['linea_credito'],
+                properties: [
+                    new OA\Property(property: 'linea_credito', type: 'string', example: '001', description: 'Línea de crédito')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Número disponible encontrado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 422, description: 'Datos inválidos')
+        ]
+    )]
     public function buscarNumeroSolicitudDisponible(Request $request)
     {
         $validator = Validator::make($request->all(), [

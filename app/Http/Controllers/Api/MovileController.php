@@ -194,6 +194,28 @@ class MovileController extends Controller
     /**
      * Confirma capturas de documentos desde entidad digital.
      */
+    #[OA\Post(
+        path: '/mobile/confirm-capturas',
+        tags: ['Mobile'],
+        summary: 'Confirmar capturas de documentos',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['username', 'capturas'],
+                properties: [
+                    new OA\Property(property: 'username', type: 'string', example: 'jperez'),
+                    new OA\Property(property: 'capturas', type: 'array', items: new OA\Items(type: 'object'))
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Capturas confirmadas'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function confirmCapturas(Request $request): JsonResponse
     {
         try {
@@ -311,6 +333,17 @@ class MovileController extends Controller
     /**
      * Revoca el token QR generado
      */
+    #[OA\Delete(
+        path: '/mobile/qr-token/revoke',
+        tags: ['Mobile'],
+        summary: 'Revocar token QR',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Token revocado'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function revokeQrToken(): JsonResponse
     {
         try {
@@ -349,6 +382,17 @@ class MovileController extends Controller
     /**
      * Obtiene información del dispositivo móvil
      */
+    #[OA\Get(
+        path: '/mobile/device-info',
+        tags: ['Mobile'],
+        summary: 'Obtener información del dispositivo',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Información del dispositivo'),
+            new OA\Response(response: 401, description: 'No autorizado'),
+            new OA\Response(response: 500, description: 'Error del servidor')
+        ]
+    )]
     public function getDeviceInfo(Request $request): JsonResponse
     {
         try {
@@ -397,6 +441,27 @@ class MovileController extends Controller
     /**
      * Valida y refresca el token QR
      */
+    #[OA\Post(
+        path: '/mobile/qr-token/validate',
+        tags: ['Mobile'],
+        summary: 'Validar token QR',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['qr_token'],
+                properties: [
+                    new OA\Property(property: 'qr_token', type: 'string', example: 'abc123token')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Token validado'),
+            new OA\Response(response: 404, description: 'Token no encontrado'),
+            new OA\Response(response: 422, description: 'Datos inválidos'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function validateQrToken(Request $request): JsonResponse
     {
         try {
