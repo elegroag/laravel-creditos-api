@@ -505,9 +505,9 @@ class TrabajadorService extends EloquentService
     public function obtenerPuntosAsesoresPorUsuario(User $user): ?array
     {
         try {
-            $response = $this->externalApiService->get("puntos/asesores/" . $user->username);
+            $response = $this->externalApiService->get("creditos/puntos-asesor/" . $user->username);
 
-            if ($response['success'] && isset($response['data'])) {
+            if ($response['status'] && isset($response['data'])) {
                 return $response['data'];
             }
 

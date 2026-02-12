@@ -409,7 +409,14 @@ class AuthenticationService extends EloquentService
                 'applications.delete',
                 'applications.view_all',
                 'applications.approve',
-                'applications.reject'
+                'applications.reject',
+                'solicitudes.manage',
+                'solicitudes.view',
+                'convenios.manage',
+                'convenios.view',
+                'firmas.manage',
+                'firmas.view',
+                'system.admin'
             ],
             'user_empresa' => [
                 'applications.create',

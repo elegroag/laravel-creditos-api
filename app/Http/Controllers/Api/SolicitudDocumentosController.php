@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
 
 class SolicitudDocumentosController extends Controller
@@ -35,6 +36,141 @@ class SolicitudDocumentosController extends Controller
     {
         $authenticatedUser = $request->get('authenticated_user');
         return $authenticatedUser['user'] ?? [];
+    }
+
+    /**
+     * Validar si el usuario autenticado puede acceder a una solicitud.
+     */
+    private function canAccessSolicitud(array $userData, array $solicitud): bool
+    {
+        $username = $userData['username'] ?? null;
+        $userRoles = $userData['roles'] ?? [];
+
+        $isAdministrator = in_array('administrator', $userRoles);
+        $isAdviser = in_array('adviser', $userRoles);
+
+        if ($isAdministrator || $isAdviser) {
+            return true;
+        }
+
+        return $username && ($solicitud['owner_username'] ?? '') === $username;
+    }
+
+    /**
+     * Descarga directa de documento por ID (compatibilidad frontend).
+     */
+    public function downloadDocumentoById(Request $request, string $documentoId, string $solicitudId): BinaryFileResponse|JsonResponse
+    {
+        try {
+            $userData = $this->getAuthenticatedUser($request);
+
+            if (!($userData['username'] ?? null)) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
+            }
+
+            $solicitudModel = $this->solicitudService->getById($solicitudId);
+            if (!$solicitudModel) {
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
+            }
+
+            $solicitud = $solicitudModel->toArray();
+
+            if (!$this->canAccessSolicitud($userData, $solicitud)) {
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
+            }
+
+            $documento = SolicitudDocumento::where('id', $documentoId)
+                ->where('solicitud_id', $solicitudId)
+                ->first();
+
+            if (!$documento) {
+                return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
+            }
+
+            $ruta = (string) ($documento->ruta_archivo ?? '');
+            if (!$ruta || !Storage::disk('local')->exists($ruta)) {
+                return ErrorResource::notFound('Archivo no encontrado en el sistema')->response();
+            }
+
+            $fullPath = Storage::disk('local')->path($ruta);
+
+            return response()->download($fullPath, $documento->nombre_original ?? basename($fullPath));
+        } catch (\Exception $e) {
+            Log::error('Error al descargar documento por id', [
+                'solicitud_id' => $solicitudId,
+                'documento_id' => $documentoId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al descargar documento', [
+                'trace' => $e->getMessage()
+            ])->response();
+        }
+    }
+
+    /**
+     * Vista previa directa de documento por ID (inline para PDF/imagenes).
+     */
+    public function previewDocumentoById(Request $request, string $documentoId, string $solicitudId): BinaryFileResponse|JsonResponse
+    {
+        try {
+            $userData = $this->getAuthenticatedUser($request);
+
+            if (!($userData['username'] ?? null)) {
+                return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
+            }
+
+            $solicitudModel = $this->solicitudService->getById($solicitudId);
+            if (!$solicitudModel) {
+                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
+            }
+
+            $solicitud = $solicitudModel->toArray();
+
+            if (!$this->canAccessSolicitud($userData, $solicitud)) {
+                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
+            }
+
+            $documento = SolicitudDocumento::where('id', $documentoId)
+                ->where('solicitud_id', $solicitudId)
+                ->first();
+
+            if (!$documento) {
+                return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
+            }
+
+            $ruta = (string) ($documento->ruta_archivo ?? '');
+            if (!$ruta || !Storage::disk('local')->exists($ruta)) {
+                return ErrorResource::notFound('Archivo no encontrado en el sistema')->response();
+            }
+
+            $fullPath = Storage::disk('local')->path($ruta);
+            $mime = (string) ($documento->tipo_mime ?? 'application/octet-stream');
+
+            $isInlineAllowed = str_starts_with($mime, 'image/') || $mime === 'application/pdf';
+            if (!$isInlineAllowed) {
+                return response()->download($fullPath, $documento->nombre_original ?? basename($fullPath));
+            }
+
+            $fileName = $documento->nombre_original ?? basename($fullPath);
+
+            return response()->file($fullPath, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al previsualizar documento por id', [
+                'solicitud_id' => $solicitudId,
+                'documento_id' => $documentoId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ErrorResource::serverError('Error interno al previsualizar documento', [
+                'trace' => $e->getMessage()
+            ])->response();
+        }
     }
 
     /**

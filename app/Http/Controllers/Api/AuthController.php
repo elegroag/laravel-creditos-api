@@ -304,13 +304,13 @@ class AuthController extends Controller
             // Get additional data for advisers
             $usuarioSisuData = null;
             $trabajadorData = null;
-            $puntosAsesores = null;
+            $puntosAsesorias = null;
 
             if ($user && $user->numero_documento) {
                 try {
                     $usuarioSisuData = $this->trabajadorService->obtenerDatosUsuarioSisu($user);
                     $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($user->numero_documento);
-                    $puntosAsesores = $this->trabajadorService->obtenerPuntosAsesoresPorUsuario($user);
+                    $puntosAsesorias = $this->trabajadorService->obtenerPuntosAsesoresPorUsuario($user);
                 } catch (\Exception $e) {
                     Log::warning("No se pudieron obtener datos adicionales del asesor: " . $e->getMessage());
                 }
@@ -325,8 +325,8 @@ class AuthController extends Controller
                 $authResult['user']['trabajador'] = $trabajadorData;
             }
 
-            if ($puntosAsesores) {
-                $authResult['user']['puntos_asesores'] = $puntosAsesores;
+            if ($puntosAsesorias) {
+                $authResult['user']['puntos_asesorias'] = $puntosAsesorias;
             }
 
             return ApiResource::success($authResult, 'Solicitud encontrada')

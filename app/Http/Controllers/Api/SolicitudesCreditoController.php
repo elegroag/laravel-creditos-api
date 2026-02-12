@@ -767,12 +767,15 @@ class SolicitudesCreditoController extends Controller
 
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
+            $isAdviser = in_array('adviser', $userRoles);
+
+            $hasAccess = $isAdmin || $isAdviser;
 
             Log::info('Contando solicitudes por estado', [
-                'is_admin' => $isAdmin
+                'has_access' => $hasAccess
             ]);
 
-            $resultados = $this->solicitudService->contarSolicitudesPorEstado($isAdmin ? null : $username);
+            $resultados = $this->solicitudService->contarSolicitudesPorEstado($hasAccess ? null : $username);
 
             // Transformar el array de resultados a un objeto con estados como claves
             $estadosConteo = [];
@@ -803,7 +806,11 @@ class SolicitudesCreditoController extends Controller
             $username = $userData['username'];
 
             $userRoles = $userData['roles'] ?? [];
+
             $isAdmin = in_array('administrator', $userRoles);
+            $isAdviser = in_array('adviser', $userRoles);
+
+            $hasAccess = $isAdmin || $isAdviser;
 
             Log::info('Listando solicitudes paginadas', [
                 'limit' => $limit,
@@ -812,7 +819,7 @@ class SolicitudesCreditoController extends Controller
                 'is_admin' => $isAdmin
             ]);
 
-            $resultados = $this->solicitudService->listarSolicitudesCreditoPaginado($limit, $offset, $estado, $isAdmin ? null : $username);
+            $resultados = $this->solicitudService->listarSolicitudesCreditoPaginado($limit, $offset, $estado, $hasAccess ? null : $username);
 
             return ApiResource::success([
                 'collection' => $resultados,

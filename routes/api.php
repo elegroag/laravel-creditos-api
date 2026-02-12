@@ -25,6 +25,7 @@ require __DIR__ . '/api/firmas.php';
 require __DIR__ . '/api/solicitud-credito.php';
 require __DIR__ . '/api/solicitudes-credito.php';
 require __DIR__ . '/api/solicitud-documentos.php';
+require __DIR__ . '/api/documentos.php';
 require __DIR__ . '/api/solicitud-pdf.php';
 require __DIR__ . '/api/mobile.php';
 require __DIR__ . '/api/lineas-credito.php';
