@@ -38,6 +38,7 @@ class ConveniosController extends Controller
      * @param string $cedula_trabajador Cédula del trabajador
      * @return JsonResponse
      *
+     * */
     #[OA\Get(
         path: '/convenios/validar/{nit_empresa}/{cedula_trabajador}',
         tags: ['Convenios'],
@@ -65,7 +66,6 @@ class ConveniosController extends Controller
             new OA\Response(response: 404, description: 'Convenio/Trabajador no encontrado'),
         ]
     )]
-     */
     public function validarConvenioTrabajador(string $nit_empresa, string $cedula_trabajador): JsonResponse
     {
         try {
@@ -126,7 +126,7 @@ class ConveniosController extends Controller
      * }
      *
      * @return JsonResponse
-     *
+     * */
     #[OA\Post(
         path: '/convenios/validar',
         tags: ['Convenios'],
@@ -149,7 +149,6 @@ class ConveniosController extends Controller
             new OA\Response(response: 404, description: 'Convenio/Trabajador no encontrado'),
         ]
     )]
-     */
     public function validarConvenioPost(Request $request): JsonResponse
     {
         try {

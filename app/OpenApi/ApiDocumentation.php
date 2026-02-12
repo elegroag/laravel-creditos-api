@@ -6,7 +6,6 @@ namespace App\OpenApi;
 
 use OpenApi\Attributes as OA;
 
-/*
 #[OA\Info(
     version: '1.0.0',
     title: 'COMFACA Crédito API',
@@ -19,6 +18,5 @@ use OpenApi\Attributes as OA;
     scheme: 'bearer',
     bearerFormat: 'JWT'
 )]
-*/
 
 final class ApiDocumentation {}

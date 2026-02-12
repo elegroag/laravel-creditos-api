@@ -43,6 +43,7 @@ class AuthController extends Controller
     /**
      * Login user and return token.
      *
+     */
     #[OA\Post(
         path: '/auth/login',
         tags: ['Auth'],
@@ -68,7 +69,6 @@ class AuthController extends Controller
             ),
         ]
     )]
-     */
     public function login(LoginRequest $request): JsonResponse
     {
         try {
@@ -114,6 +114,8 @@ class AuthController extends Controller
     /**
      * Register a new user.
      *
+     * 
+     */
     #[OA\Post(
         path: '/auth/register',
         tags: ['Auth'],
@@ -156,7 +158,6 @@ class AuthController extends Controller
             ),
         ]
     )]
-     */
     public function register(RegisterRequest $request): JsonResponse
     {
         try {
@@ -277,6 +278,8 @@ class AuthController extends Controller
      * Verify JWT token and return user info.
      * Comportamiento idéntico al endpoint de Python.
      *
+     * 
+     */
     #[OA\Get(
         path: '/auth/verify',
         tags: ['Auth'],
@@ -293,7 +296,6 @@ class AuthController extends Controller
             ),
         ]
     )]
-     */
     public function verify(Request $request): JsonResponse
     {
         try {

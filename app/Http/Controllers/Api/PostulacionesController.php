@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use OpenApi\Attributes as OA;
 
 class PostulacionesController extends Controller
 {
@@ -26,6 +27,27 @@ class PostulacionesController extends Controller
     /**
      * Crear una nueva postulación
      */
+    #[OA\Post(
+        path: '/postulaciones',
+        tags: ['Postulaciones'],
+        summary: 'Crear nueva postulación',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['monto_solicitado', 'plazo_meses'],
+                properties: [
+                    new OA\Property(property: 'monto_solicitado', type: 'number', format: 'float', example: 10000000),
+                    new OA\Property(property: 'plazo_meses', type: 'integer', example: 12)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Postulación creada exitosamente'),
+            new OA\Response(response: 422, description: 'Error de validación'),
+            new OA\Response(response: 401, description: 'No autorizado')
+        ]
+    )]
     public function crearPostulacion(Request $request): JsonResponse
     {
         try {
