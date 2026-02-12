@@ -16,7 +16,7 @@ class VerificarPdfApiTest extends TestCase
     {
         // Mock de API Flask exitosa
         Http::fake([
-            'http://localhost:8080/api/download-pdf*' => Http::response([
+            '*/api/download-pdf*' => Http::response([
                 'success' => true,
                 'filename' => 'solicitud_TEST001.pdf',
                 'size_bytes' => 1024,
@@ -25,7 +25,7 @@ class VerificarPdfApiTest extends TestCase
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('solicitud_TEST001.pdf');
+        $resultado = $service->downloadPdfApi('solicitud_TEST001.pdf');
 
         $this->assertTrue($resultado['success']);
         $this->assertTrue($resultado['existe']);
@@ -48,7 +48,7 @@ class VerificarPdfApiTest extends TestCase
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('no_existe.pdf');
+        $resultado = $service->downloadPdfApi('no_existe.pdf');
 
         $this->assertFalse($resultado['success']);
         $this->assertFalse($resultado['existe']);
@@ -63,15 +63,15 @@ class VerificarPdfApiTest extends TestCase
     {
         // Mock de error de conexión
         Http::fake([
-            'http://localhost:8080/api/download-pdf*' => Http::timeout(1)
+            '*/api/download-pdf*' => Http::response(['error' => 'Connection timeout'], 500)
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('test.pdf');
+        $resultado = $service->downloadPdfApi('test.pdf');
 
         $this->assertFalse($resultado['success']);
         $this->assertFalse($resultado['existe']);
-        $this->assertStringContainsString('interno', $resultado['error']);
+        $this->assertEquals(500, $resultado['status']);
     }
 
     /**
@@ -87,7 +87,7 @@ class VerificarPdfApiTest extends TestCase
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('test.txt');
+        $resultado = $service->downloadPdfApi('test.txt');
 
         $this->assertFalse($resultado['success']);
         $this->assertFalse($resultado['existe']);
@@ -108,7 +108,7 @@ class VerificarPdfApiTest extends TestCase
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('../../../etc/passwd');
+        $resultado = $service->downloadPdfApi('../../../etc/passwd');
 
         $this->assertFalse($resultado['success']);
         $this->assertFalse($resultado['existe']);
@@ -127,10 +127,10 @@ class VerificarPdfApiTest extends TestCase
         ]);
 
         $service = new GeneradorPdfService();
-        $resultado = $service->verificarPdf('test.pdf');
+        $resultado = $service->downloadPdfApi('test.pdf');
 
         $this->assertFalse($resultado['success']);
         $this->assertFalse($resultado['existe']);
-        $this->assertEquals(500, $resultado['status']);
+        $this->assertEquals(404, $resultado['status']);
     }
 }

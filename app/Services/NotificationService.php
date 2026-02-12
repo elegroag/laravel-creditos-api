@@ -25,7 +25,7 @@ class NotificationService
             $notifiableType = is_array($notifiable) ? 'User' : get_class($notifiable);
             $notifiableId = is_array($notifiable)
                 ? ($notifiable['username'] ?? $notifiable['id'] ?? 'unknown')
-                : ($notifiable->id ?? $notifiable->username ?? 'unknown');
+                : ($notifiable->username ?? $notifiable->id ?? 'unknown');
 
             $notification = new Notification([
                 'id' => Str::uuid(),
@@ -64,7 +64,7 @@ class NotificationService
     public function notifyFirmaCompletada(Postulacion $solicitud, array $additionalData = []): void
     {
         try {
-            $ownerUsername = $solicitud->owner_username;
+            $ownerUsername = $solicitud->username;
 
             if (!$ownerUsername) {
                 Log::warning('No se pudo notificar firma completada: owner_username no encontrado', [
@@ -111,7 +111,7 @@ class NotificationService
     public function notifyFirmaRechazada(Postulacion $solicitud, array $additionalData = []): void
     {
         try {
-            $ownerUsername = $solicitud->owner_username;
+            $ownerUsername = $solicitud->username;
 
             if (!$ownerUsername) {
                 return;
@@ -151,7 +151,7 @@ class NotificationService
     public function notifyFirmaExpirada(Postulacion $solicitud, array $additionalData = []): void
     {
         try {
-            $ownerUsername = $solicitud->owner_username;
+            $ownerUsername = $solicitud->username;
 
             if (!$ownerUsername) {
                 return;
@@ -192,7 +192,7 @@ class NotificationService
     public function notifyEstadoActualizado(Postulacion $solicitud, string $estadoAnterior, string $estadoNuevo): void
     {
         try {
-            $ownerUsername = $solicitud->owner_username;
+            $ownerUsername = $solicitud->username;
 
             if (!$ownerUsername) {
                 return;

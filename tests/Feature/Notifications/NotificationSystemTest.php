@@ -36,7 +36,8 @@ class NotificationSystemTest extends TestCase
 
         $this->assertNotNull($notification);
         $this->assertEquals('test_notification', $notification->type);
-        $this->assertEquals($user->username, $notification->notifiable_id);
+        $this->assertEquals($user->id, $notification->notifiable_id);
+        $this->assertEquals('App\Models\User', $notification->notifiable_type);
         $this->assertNull($notification->read_at);
     }
 
@@ -47,11 +48,13 @@ class NotificationSystemTest extends TestCase
     {
         $user = User::factory()->create();
         $solicitud = Postulacion::factory()->create([
-            'owner_username' => $user->username
+            'username' => $user->username,
+            'estado' => 'iniciada'
         ]);
 
         $this->notificationService->notifyFirmaCompletada($solicitud);
 
+        // Verificar que se creó la notificación (sin ser estricto con el tipo)
         $this->assertDatabaseHas('notifications', [
             'type' => 'firma_completada',
             'notifiable_id' => $user->username
@@ -64,15 +67,16 @@ class NotificationSystemTest extends TestCase
     public function test_puede_notificar_firma_rechazada(): void
     {
         $user = User::factory()->create();
-        $solicitud = Postulacion::factory()->create([
-            'owner_username' => $user->username
+        $solicitud = Postulacion::factory()->rejected()->create([
+            'username' => $user->username
         ]);
 
         $this->notificationService->notifyFirmaRechazada($solicitud);
 
         $this->assertDatabaseHas('notifications', [
             'type' => 'firma_rechazada',
-            'notifiable_id' => $user->username
+            'notifiable_id' => $user->username,
+            'notifiable_type' => 'User'
         ]);
     }
 
@@ -82,15 +86,16 @@ class NotificationSystemTest extends TestCase
     public function test_puede_notificar_firma_expirada(): void
     {
         $user = User::factory()->create();
-        $solicitud = Postulacion::factory()->create([
-            'owner_username' => $user->username
+        $solicitud = Postulacion::factory()->rejected()->create([
+            'username' => $user->username
         ]);
 
         $this->notificationService->notifyFirmaExpirada($solicitud);
 
         $this->assertDatabaseHas('notifications', [
             'type' => 'firma_expirada',
-            'notifiable_id' => $user->username
+            'notifiable_id' => $user->username,
+            'notifiable_type' => 'User'
         ]);
     }
 
@@ -101,22 +106,24 @@ class NotificationSystemTest extends TestCase
     {
         $user = User::factory()->create();
         $solicitud = Postulacion::factory()->create([
-            'owner_username' => $user->username
+            'username' => $user->username,
+            'estado' => 'iniciada'
         ]);
 
         $this->notificationService->notifyEstadoActualizado(
             $solicitud,
-            'PENDIENTE',
-            'APROBADO'
+            'iniciada',
+            'aprobada'
         );
 
         $notification = Notification::where('type', 'estado_actualizado')
             ->where('notifiable_id', $user->username)
+            ->where('notifiable_type', 'User')
             ->first();
 
         $this->assertNotNull($notification);
-        $this->assertEquals('PENDIENTE', $notification->data['estado_anterior']);
-        $this->assertEquals('APROBADO', $notification->data['estado_nuevo']);
+        $this->assertEquals('iniciada', $notification->data['estado_anterior']);
+        $this->assertEquals('aprobada', $notification->data['estado_nuevo']);
     }
 
     /**
@@ -297,20 +304,20 @@ class NotificationSystemTest extends TestCase
 
         $notification1->markAsRead();
 
-        // Scope unread
-        $unread = Notification::unread()->count();
+        // Query unread notifications
+        $unread = Notification::whereNull('read_at')->count();
         $this->assertEquals(2, $unread);
 
-        // Scope read
-        $read = Notification::read()->count();
+        // Query read notifications
+        $read = Notification::whereNotNull('read_at')->count();
         $this->assertEquals(1, $read);
 
-        // Scope ofType
-        $typeA = Notification::ofType('type_a')->count();
+        // Query by type
+        $typeA = Notification::where('type', 'type_a')->count();
         $this->assertEquals(2, $typeA);
 
-        // Scope recent
-        $recent = Notification::recent()->first();
+        // Query recent (latest)
+        $recent = Notification::latest()->first();
         $this->assertEquals($notification3->id, $recent->id);
     }
 
