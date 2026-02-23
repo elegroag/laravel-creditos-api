@@ -11,36 +11,18 @@ use App\Models\FirmanteSolicitud;
 use App\Models\EmpresaConvenio;
 use App\Exceptions\ValidationException;
 use Carbon\Carbon;
+use DebugException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SolicitudService extends EloquentService
 {
-    /**
-     * Create a new solicitud.
-     */
-    public function create(array $data, string $ownerUsername): SolicitudCredito
+    protected $externalApiService;
+
+    public function __construct()
     {
-        try {
-            // Generate unique solicitud number
-            $numeroSolicitud = $this->generarNumeroSolicitud();
-
-            // Prepare solicitud data
-            $solicitudData = array_merge([
-                'numero_solicitud' => $numeroSolicitud,
-                'owner_username' => $ownerUsername,
-                'estado' => 'PENDIENTE',
-                'fecha_radicado' => $data['fecha_radicado'] ?? now(),
-                'created_at' => now(),
-                'updated_at' => now()
-            ], $data);
-
-            return SolicitudCredito::create($solicitudData);
-        } catch (\Exception $e) {
-            $this->handleDatabaseError($e, 'creación de solicitud');
-            throw new \Exception('Error al crear solicitud');
-        }
+        $this->externalApiService = new ExternalApiService();
     }
 
     /**
@@ -618,17 +600,6 @@ class SolicitudService extends EloquentService
         }
     }
 
-    /**
-     * Generate unique solicitud number.
-     */
-    private function generarNumeroSolicitud(): string
-    {
-        do {
-            $numero = 'SOL-' . date('Y') . '-' . str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
-        } while (SolicitudCredito::where('numero_solicitud', $numero)->exists());
-
-        return $numero;
-    }
 
     public function contarSolicitudesPorEstado(?string $username = null): array
     {
@@ -788,7 +759,7 @@ class SolicitudService extends EloquentService
     private function guardarOActualizarPayload(string $numeroSolicitud, array $data): void
     {
         $externalApiService = new ExternalApiService();
-        $response = $externalApiService->post('/creditos/tipo_creditos');
+        $response = $externalApiService->post('/creditos/tipo-creditos');
         $isSuccess = ($response['status'] ?? true) && !isset($response['error']);
 
         $tasa_mes = 0;
@@ -883,25 +854,6 @@ class SolicitudService extends EloquentService
             $existingSolicitante->update($solicitanteData);
         } else {
             SolicitudSolicitante::create($solicitanteData);
-        }
-    }
-
-    /**
-     * Calcular antigüedad en meses desde la fecha de vinculación
-     */
-    private function calcularAntiguedadMeses(?string $fechaVinculacion): int
-    {
-        if (!$fechaVinculacion) {
-            return 1; // Por defecto 1 mes si no hay fecha
-        }
-
-        try {
-            $fechaVinculacion = Carbon::createFromFormat('Y-m-d', $fechaVinculacion);
-            $fechaActual = Carbon::now();
-
-            return $fechaVinculacion->diffInMonths($fechaActual);
-        } catch (\Exception $e) {
-            return 1; // Por defecto 1 mes si hay error en el cálculo
         }
     }
 
@@ -1043,5 +995,134 @@ class SolicitudService extends EloquentService
             'empresa_nit' => $empresaNit,
             'empresa_razon_social' => $empresaConvenio->razon_social
         ]);
+    }
+
+    /**
+     * Create a new solicitud.
+     */
+    public function createSolicitudUseApi(string $solicitud_id): SolicitudCredito
+    {
+        $solicitud = SolicitudCredito::where('numero_solicitud', $solicitud_id)->first();
+        if (!$solicitud) {
+            throw new DebugException("Solicitud no encontrada {$solicitud_id}", 404);
+        }
+
+        $solicitante = $solicitud->solicitante;
+        $payload = $solicitud->payload;
+
+        // Datos principales de la solicitud
+        $valorSolicitud = $solicitud->valor_solicitud ?? 0;
+        $plazoMeses = $solicitud->plazo_meses ?? 0;
+        $tasaInteres = $solicitud->tasa_interes ?? 0;
+        $fechaRadicado = $solicitud->fecha_radicado?->format('Y-m-d') ?? date('Y-m-d');
+
+        // Datos del solicitante
+        $numeroDocumento = $solicitante->numero_documento ?? '';
+        $codigoCategoria = $solicitante->codigo_categoria ?? '';
+        $salario = $solicitante->salario ?? 0;
+        $ciudad = $solicitante->ciudad ?? '';
+
+        // Datos laborales y financieros del payload
+        $datosLaborales = $payload->informacion_laboral ?? [];
+        $ingresosDescuentos = $payload->ingresos_descuentos ?? [];
+        $informacionEconomica = $payload->informacion_economica ?? [];
+
+        // Mapear los datos de la solicitud al payload de la API
+        $payloadApi = [
+            'documento' => $numeroDocumento,
+            'fecha' => $fechaRadicado,
+            'ofiafi' => '01', // Oficina afiliada (valor por defecto)
+            'usuario' => $solicitud->owner_username ?? 'SYSTEM',
+            'numdoc' => $numeroDocumento,
+            'codcat' => $codigoCategoria,
+            'forpag' => 'M', // Forma de pago (M=Mensual)
+            'pigsub' => 'N', // Pignoración subsidio (N=No)
+            'sueldo' => $salario,
+            'otring' => $ingresosDescuentos['otros_ingresos'] ?? 0,
+            'otrcre' => $informacionEconomica['total_otros_creditos'] ?? 0,
+            'cappag' => $valorSolicitud,
+            'numcue' => $datosLaborales['numero_cuenta'] ?? '',
+            'tipcue' => $datosLaborales['tipo_cuenta'] ?? 'A', // A=Ahorros
+            'codcue' => $datosLaborales['codigo_cuenta'] ?? '',
+            'mancat' => $codigoCategoria,
+            'tipcre' => $solicitud->tipo_credito ?? 'CONSUMO',
+            'perpag' => $plazoMeses,
+            'facfin' => ($tasaInteres / 100), // Convertir a factor
+            'nocts' => $plazoMeses,
+            'nitseg' => $datosLaborales['nit_seguro'] ?? '',
+            'facseg' => 0.01, // Factor seguro (1% por defecto)
+            'valcre' => $valorSolicitud,
+            'tipapr' => 'N', // Tipo aprobación (N=Normal)
+            'tipinv' => 'N', // Tipo inversión (N=Normal)
+            'estado' => $solicitud->estado ?? 'PENDIENTE',
+            'fecrec' => $fechaRadicado,
+            'usuest' => $solicitud->owner_username ?? 'SYSTEM',
+            'fecest' => $fechaRadicado,
+            'acta' => '',
+            'modrec' => 'API',
+            'valapr' => $valorSolicitud,
+            'nota' => 'Solicitud generada via API',
+            'migrado' => 'N',
+            'operacion' => 'CREAR',
+            'numcre' => '',
+            'cancelado' => 'N',
+            'aprseg' => 'N',
+            'documentos' => json_encode($solicitud->documentos->pluck('tipo_documento')->toArray() ?? [])
+        ];
+
+        // Realizar petición a la API externa usando ExternalApiService
+        $response = $this->externalApiService->post('/creditos/crear-solicitud', $payloadApi);
+
+        // Verificar si la respuesta contiene error
+        if (!$response['success'] ?? true || isset($response['error'])) {
+            Log::warning('API externa retornó error para crear solicitud', [
+                'solicitud_id' => $solicitud_id,
+                'error' => $response['error'] ?? 'Error desconocido',
+                'status_code' => $response['status_code'] ?? null
+            ]);
+
+            throw new DebugException("Error creando la solicitud mediante api", 502, null, [
+                'api_error' => $response['error'] ?? 'Error desconocido',
+                'api_status_code' => $response['status_code'] ?? null
+            ]);
+        }
+
+        Log::info('Solicitud enviada exitosamente', [
+            'solicitud_id' => $solicitud_id,
+        ]);
+
+        return $solicitud;
+    }
+
+
+    public function consultarSolicitudUseApi(string $solicitud_id): SolicitudCredito
+    {
+        $solicitud = SolicitudCredito::where('numero_solicitud', $solicitud_id)->first();
+        if (!$solicitud) {
+            throw new DebugException("Solicitud no encontrada {$solicitud_id}", 404);
+        }
+
+        // Realizar petición a la API externa usando ExternalApiService
+        $response = $this->externalApiService->get('/creditos/consultar-solicitud/' . $solicitud_id);
+
+        // Verificar si la respuesta contiene error
+        if (!$response['success'] ?? true || isset($response['error'])) {
+            Log::warning('API externa retornó error para consultar solicitud', [
+                'solicitud_id' => $solicitud_id,
+                'error' => $response['error'] ?? 'Error desconocido',
+                'status_code' => $response['status_code'] ?? null
+            ]);
+
+            throw new DebugException("Error consultando la solicitud mediante api", 502, null, [
+                'api_error' => $response['error'] ?? 'Error desconocido',
+                'api_status_code' => $response['status_code'] ?? null
+            ]);
+        }
+
+        Log::info('Solicitud consultada exitosamente', [
+            'solicitud_id' => $solicitud_id,
+        ]);
+
+        return $solicitud;
     }
 }

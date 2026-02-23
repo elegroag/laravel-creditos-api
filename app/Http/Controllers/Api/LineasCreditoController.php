@@ -39,7 +39,7 @@ class LineasCreditoController extends Controller
     {
         try {
             // Realizar la consulta a la API externa
-            $response = $this->externalApiService->post('/creditos/datos_generales');
+            $response = $this->externalApiService->post('/creditos/datos-generales');
 
             // Verificar si la respuesta fue exitosa
             $isSuccess = ($response['success'] ?? true) && !isset($response['error']);
@@ -51,27 +51,25 @@ class LineasCreditoController extends Controller
                 ])->response()->setStatusCode(500);
             }
 
-            $responseData = $response;
-
             // Verificar si la respuesta contiene error (para respuestas directas de API externa)
-            if (isset($responseData['error']) && $responseData['error']) {
+            if (isset($response['error']) && $response['error']) {
                 Log::warning('API externa retornó error - parámetros', [
-                    'error' => $responseData['error'] ?? 'Error desconocido',
-                    'detail' => $responseData['detail'] ?? null
+                    'error' => $response['error'] ?? 'Error desconocido',
+                    'detail' => $response['detail'] ?? null
                 ]);
 
                 return ErrorResource::errorResponse('Error al consultar datos generales', [
-                    'external_error' => $responseData['error'] ?? 'Error desconocido',
-                    'external_detail' => $responseData['detail'] ?? null
+                    'external_error' => $response['error'] ?? 'Error desconocido',
+                    'external_detail' => $response['detail'] ?? null
                 ])->response()->setStatusCode(400);
             }
 
             Log::info('Parámetros generales obtenidos exitosamente', [
-                'data_keys' => array_keys($responseData['data'] ?? [])
+                'data_keys' => array_keys($response['data'] ?? [])
             ]);
 
             return ApiResource::success(
-                $responseData['data'] ?? [],
+                $response['data'] ?? [],
                 'Datos generales obtenidos exitosamente'
             )->response();
         } catch (\Exception $e) {
@@ -106,7 +104,7 @@ class LineasCreditoController extends Controller
     {
         try {
             // Realizar la consulta a la API externa
-            $response = $this->externalApiService->post('/creditos/tipo_creditos');
+            $response = $this->externalApiService->post('/creditos/tipo-creditos');
 
             Log::info('tip creditos', array_keys($response));
             // Verificar si la respuesta fue exitosa
@@ -123,25 +121,23 @@ class LineasCreditoController extends Controller
                 ])->response()->setStatusCode(500);
             }
 
-            $responseData = $response;
-
             // Verificar si la respuesta contiene error (para respuestas directas de API externa)
-            if (isset($responseData['error']) && $responseData['error']) {
+            if (isset($response['error']) && $response['error']) {
                 Log::warning('API externa retornó error - tipos crédito', [
-                    'error' => $responseData['error'] ?? 'Error desconocido',
-                    'detail' => $responseData['detail'] ?? null
+                    'error' => $response['error'] ?? 'Error desconocido',
+                    'detail' => $response['detail'] ?? null
                 ]);
 
                 return ErrorResource::errorResponse('Error al consultar tipos de crédito', [
-                    'external_error' => $responseData['error'] ?? 'Error desconocido',
-                    'external_detail' => $responseData['detail'] ?? null
+                    'external_error' => $response['error'] ?? 'Error desconocido',
+                    'external_detail' => $response['detail'] ?? null
                 ])->response()->setStatusCode(400);
             }
 
-            Log::info('Tipos de crédito obtenidos exitosamente', ['count' => count($responseData['data'] ?? [])]);
+            Log::info('Tipos de crédito obtenidos exitosamente', ['count' => count($response['data'] ?? [])]);
 
             return ApiResource::success(
-                $responseData['data'] ?? [],
+                $response['data'] ?? [],
                 'Tipos de crédito obtenidos exitosamente'
             )
                 ->response();

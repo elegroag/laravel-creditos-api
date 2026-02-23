@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use DebugException;
 use OpenApi\Attributes as OA;
 
 class SolicitudesCreditoController extends Controller
@@ -24,8 +25,10 @@ class SolicitudesCreditoController extends Controller
     protected SolicitudService $solicitudService;
     protected UserService $userService;
 
-    public function __construct(SolicitudService $solicitudService, UserService $userService)
-    {
+    public function __construct(
+        SolicitudService $solicitudService,
+        UserService $userService
+    ) {
         $this->solicitudService = $solicitudService;
         $this->userService = $userService;
     }
@@ -1208,5 +1211,26 @@ class SolicitudesCreditoController extends Controller
 
         return ApiResource::success($radicado, 'Solicitud encontrada')
             ->response();
+    }
+
+    public function enviarSolicitudUseApi(string $solicitud_id)
+    {
+        try {
+            if (empty($solicitud_id)) {
+                return ErrorResource::errorResponse('ID de solicitud es requerido', [
+                    'solicitud_id' => $solicitud_id
+                ])->response()->setStatusCode(400);
+            }
+            $out = $this->solicitudService->createSolicitudUseApi($solicitud_id);
+            return ApiResource::success($out, 'Solicitud enviada exitosamente')->response();
+        } catch (DebugException $e) {
+            Log::error('Error enviando solicitud', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ErrorResource::errorResponse('Error enviando la soliictud', [
+                'error' => $e->getMessage()
+            ])->response()->setStatusCode(500);
+        }
     }
 }

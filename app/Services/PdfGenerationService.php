@@ -222,7 +222,11 @@ class PdfGenerationService
             'pdf_generado' => json_encode($pdfInfo)
         ]);
 
-        $dataSaved = $this->guardarPdfDesdeBase64($pdfData['api_filename'] ?? null, $pdfData['api_content']);
+        $dataSaved = $this->guardarPdfDesdeBase64(
+            $pdfData['api_filename'] ?? null,
+            $pdfData['api_content'],
+            $solicitud->numero_solicitud
+        );
 
         Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
 
@@ -353,7 +357,7 @@ class PdfGenerationService
         }
     }
 
-    public function guardarPdfDesdeBase64(string $filename, string $base64Content): array
+    public function guardarPdfDesdeBase64(string $filename, string $base64Content, string $solicitudId): array
     {
         try {
             // Decodificar base64
@@ -363,10 +367,10 @@ class PdfGenerationService
                 throw new \Exception('Error al decodificar contenido base64');
             }
 
-            // Crear directorio si no existe
-            $directory = 'pdfs/solicitudes';
-            if (!Storage::disk('public')->exists($directory)) {
-                Storage::disk('public')->makeDirectory($directory);
+            // Guardar en la misma carpeta de documentos de la solicitud
+            $directory = "solicitudes/{$solicitudId}";
+            if (!Storage::disk('local')->exists($directory)) {
+                Storage::disk('local')->makeDirectory($directory);
             }
 
             // Generar nombre de archivo único
@@ -379,7 +383,7 @@ class PdfGenerationService
             $fullPath = "{$directory}/{$uniqueFilename}";
 
             // Guardar archivo en storage
-            $saved = Storage::disk('public')->put($fullPath, $pdfContent);
+            $saved = Storage::disk('local')->put($fullPath, $pdfContent);
 
             if (!$saved) {
                 throw new \Exception('Error al guardar archivo en storage');

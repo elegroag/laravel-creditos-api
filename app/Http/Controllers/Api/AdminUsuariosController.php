@@ -974,7 +974,7 @@ class AdminUsuariosController extends Controller
     private function obtenerPuntosAsesorias(string $numeroDocumento): array
     {
         try {
-            $response = $this->externalApiService->get('creditos/usuarios_creditos');
+            $response = $this->externalApiService->get('creditos/usuarios-creditos');
 
             if ($response['success'] && $response['data']) {
                 return array_filter($response['data'], function ($user) use ($numeroDocumento) {
@@ -1000,7 +1000,7 @@ class AdminUsuariosController extends Controller
     private function validarAsesorExterno(string $numeroDocumento): array
     {
         try {
-            $response = $this->externalApiService->post('creditos/usuarios_creditos', []);
+            $response = $this->externalApiService->post('creditos/usuarios-creditos', []);
 
             if ($response['status'] && $response['data']) {
                 $puntosAsesorias = array_filter($response['data'], function ($user) use ($numeroDocumento) {
