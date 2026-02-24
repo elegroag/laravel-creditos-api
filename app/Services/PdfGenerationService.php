@@ -98,13 +98,9 @@ class PdfGenerationService
             // Guardar información del PDF en la solicitud
             $pdfData = $resultado['data'] ?? [];
 
-            #Log::info('PDF Data', ['pdfData' => $pdfData]);
-
             if (!empty($pdfData)) {
                 $this->guardarInfoPdfEnSolicitud($solicitud, $pdfData);
             }
-
-            Log::info('PDF generado exitosamente con API Flask', ['solicitud_id' => $solicitudId]);
 
             return [
                 'success' => true,
@@ -206,8 +202,6 @@ class PdfGenerationService
 
         if (!$solicitud)  return null;
 
-        Log::info('guardarInfoPdfEnSolicitud - solicitud', ['solicitud' => $solicitud]);
-
         $pdfInfo = [
             'api_path' => $pdfData['api_path'] ?? null,
             'api_filename' => $pdfData['api_filename'] ?? null,
@@ -215,7 +209,7 @@ class PdfGenerationService
             'generated_by' => 'pdf_generation_service'
         ];
 
-        Log::info('guardarInfoPdfEnSolicitud - pdfInfo', ['pdfInfo' => $pdfInfo]);
+        Log::info('filename api', [$pdfData['api_filename']]);
 
         // Actualizar el campo pdf_generado en la solicitud
         $solicitud->update([
@@ -228,7 +222,7 @@ class PdfGenerationService
             $solicitud->numero_solicitud
         );
 
-        Log::info('guardarInfoPdfEnSolicitud - dataSaved', ['dataSaved' => $dataSaved]);
+        Log::info('ruta_archivo', ['ruta_archivo' => $dataSaved['ruta_archivo']]);
 
         //si existe el DocumentoPostulante se debe borrar
         DocumentoPostulante::where('solicitud_id', $solicitud->numero_solicitud)
@@ -251,7 +245,7 @@ class PdfGenerationService
             'activo' => 1
         ];
 
-        Log::info('Data DocumentoPostulante', ['data' => $data]);
+        Log::info('Documento Postulante PDF', ['data' => $data]);
 
         $dataSaved = DocumentoPostulante::create($data);
         return $dataSaved;
@@ -359,55 +353,33 @@ class PdfGenerationService
 
     public function guardarPdfDesdeBase64(string $filename, string $base64Content, string $solicitudId): array
     {
-        try {
-            // Decodificar base64
-            $pdfContent = base64_decode($base64Content);
+        // Decodificar base64
+        $pdfContent = base64_decode($base64Content);
 
-            if ($pdfContent === false) {
-                throw new \Exception('Error al decodificar contenido base64');
-            }
-
-            // Guardar en la misma carpeta de documentos de la solicitud
-            $directory = "solicitudes/{$solicitudId}";
-            if (!Storage::disk('local')->exists($directory)) {
-                Storage::disk('local')->makeDirectory($directory);
-            }
-
-            // Generar nombre de archivo único
-            $timestamp = now()->format('YmdHis');
-            $safeFilename = pathinfo($filename, PATHINFO_FILENAME);
-            $extension = pathinfo($filename, PATHINFO_EXTENSION);
-            $uniqueFilename = "{$safeFilename}_{$timestamp}.{$extension}";
-
-            // Ruta completa del archivo
-            $fullPath = "{$directory}/{$uniqueFilename}";
-
-            // Guardar archivo en storage
-            $saved = Storage::disk('local')->put($fullPath, $pdfContent);
-
-            if (!$saved) {
-                throw new \Exception('Error al guardar archivo en storage');
-            }
-
-            Log::info('PDF guardado exitosamente', [
-                'original_filename' => $filename,
-                'saved_path' => $fullPath,
-                'size_bytes' => strlen($pdfContent)
-            ]);
-
-            return [
-                'tamano_bytes' => strlen($pdfContent),
-                'tipo_mime' => 'application/pdf',
-                'ruta_archivo' => $fullPath,
-                'saved_filename' => basename($uniqueFilename)
-            ];
-        } catch (\Exception $e) {
-            Log::error('Error al guardar PDF desde base64', [
-                'filename' => $filename,
-                'error' => $e->getMessage()
-            ]);
-
-            throw $e;
+        if ($pdfContent === false) {
+            throw new Exception('Error al decodificar contenido base64');
         }
+
+        // Guardar en la misma carpeta de documentos de la solicitud
+        $directory = "solicitudes/{$solicitudId}";
+        if (!Storage::disk('local')->exists($directory)) Storage::disk('local')->makeDirectory($directory);
+
+
+        // Ruta completa del archivo
+        $fullPath = "{$directory}/{$filename}";
+
+        // Guardar archivo en storage
+        $saved = Storage::disk('local')->put($fullPath, $pdfContent);
+
+        if (!$saved) {
+            throw new Exception('Error al guardar archivo en storage');
+        }
+
+        return [
+            'tamano_bytes' => strlen($pdfContent),
+            'tipo_mime' => 'application/pdf',
+            'ruta_archivo' => $fullPath,
+            'saved_filename' => basename($filename)
+        ];
     }
 }
