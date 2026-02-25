@@ -90,7 +90,7 @@ class LineasCreditoController extends Controller
      * Obtener tipos de crédito disponibles
      */
     #[OA\Get(
-        path: '/lineas_credito/tipo_creditos',
+        path: '/lineas_credito/tipo-creditos',
         tags: ['LineasCredito'],
         summary: 'Obtener tipos de crédito',
         security: [['bearerAuth' => []]],

@@ -10,7 +10,7 @@ Route::middleware('auth.jwt')->group(function () {
         // Protected routes (require authentication)
         // Endpoints principales
         Route::get('parametros', [LineasCreditoController::class, 'obtenerParametros']);
-        Route::get('tipo_creditos', [LineasCreditoController::class, 'obtenerTiposCreditos']);
+        Route::get('tipo-creditos', [LineasCreditoController::class, 'obtenerTiposCreditos']);
 
         // Endpoints adicionales
         Route::get('completo', [LineasCreditoController::class, 'obtenerLineasCredito']);
