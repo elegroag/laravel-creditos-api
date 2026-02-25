@@ -96,7 +96,7 @@ class ConvenioValidationService
 
         $mesesServicio = $this->calcularMesesServicio($fechaAfiliacion);
 
-        if ($mesesServicio < 6) {
+        if ($mesesServicio < 1) {
             throw new \Exception(
                 'El trabajador no cumple con el tiempo mínimo de servicio'
             );
