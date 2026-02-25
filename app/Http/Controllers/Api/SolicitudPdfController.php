@@ -179,19 +179,12 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
-            Log::info('Descargando PDF de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username
-            ]);
-
-            // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
                 return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
             }
 
-            // Verificar permisos (admin o propietario)
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
@@ -208,33 +201,19 @@ class SolicitudPdfController extends Controller
                     ->setStatusCode(400);
             }
 
-            // Verificar si el archivo existe físicamente
-            $pdfPath = $pdfData->ruta_archivo;
-            $fullPath = storage_path("app/public/{$pdfPath}");
-
-            if (!file_exists($fullPath)) {
+            if (!Storage::disk('public')->exists($pdfData->ruta_archivo)) {
                 return ErrorResource::errorResponse('El archivo PDF no se encuentra en el servidor')
                     ->response()
                     ->setStatusCode(404);
             }
 
-            // Leer el archivo y convertir a base64
-            $pdfContent = file_get_contents($fullPath);
-            if ($pdfContent === false) {
-                return ErrorResource::errorResponse('Error al leer el archivo PDF')
-                    ->response()
-                    ->setStatusCode(500);
-            }
+            // Obtener ruta completa del archivo usando Storage
+            $fullPath = Storage::disk('public')->path($pdfData->ruta_archivo);
 
-            $base64Content = base64_encode($pdfContent);
-            $filename = $pdfData->saved_filename ?? 'solicitud.pdf';
-            $sizeBytes = filesize($fullPath);
-
-            // Retornar el archivo PDF directamente
             return response()->file($fullPath, [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-                'Content-Length' => $sizeBytes
+                'Content-Disposition' => 'attachment; filename="' . $pdfData->saved_filename . '"',
+                'Content-Length' => filesize($fullPath)
             ]);
         } catch (\Exception $e) {
             Log::error('Error al descargar PDF', [
@@ -277,7 +256,6 @@ class SolicitudPdfController extends Controller
     public function verificarEstadoPdf(Request $request, string $solicitudId): JsonResponse
     {
         try {
-            // Obtener datos del usuario desde el middleware JWT
             $userData = $this->getAuthenticatedUser($request);
             $username = $userData['username'];
 
@@ -285,12 +263,6 @@ class SolicitudPdfController extends Controller
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
-            Log::info('Verificando estado del PDF', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username
-            ]);
-
-            // Verificar que la solicitud existe
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
@@ -309,10 +281,6 @@ class SolicitudPdfController extends Controller
                 ->where("activo", 1)
                 ->where("tipo_documento", 'pdf')
                 ->first();
-
-            Log::info('PDF Data', [
-                'pdfData' => $pdfData
-            ]);
 
             $estado = [
                 'solicitud_id' => $solicitudId,

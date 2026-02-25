@@ -202,12 +202,6 @@ class SolicitudDocumentoService
                 'activo' => true
             ]);
 
-            Log::info('Documento guardado en base de datos', [
-                'documento_id' => $documento->id,
-                'solicitud_id' => $solicitudId,
-                'documento_uuid' => $fileData['id']
-            ]);
-
             return [
                 'documento' => $documento->toArray(),
                 'solicitud' => $solicitud->fresh()->toArray()
@@ -242,8 +236,8 @@ class SolicitudDocumentoService
                 throw new \Exception("Solicitud no encontrada: {$solicitudId}");
             }
 
-            $documento = SolicitudDocumento::where('solicitud_id', $solicitud->id)
-                ->where('documento_id', $documentoId)
+            $documento = SolicitudDocumento::where('solicitud_id', $solicitud->numero_solicitud)
+                ->where('documento_uuid', $documentoId)
                 ->first();
 
             if (!$documento) {

@@ -361,15 +361,12 @@ class PdfGenerationService
         }
 
         // Guardar en la misma carpeta de documentos de la solicitud
-        $directory = "solicitudes/{$solicitudId}";
-        if (!Storage::disk('local')->exists($directory)) Storage::disk('local')->makeDirectory($directory);
+        if (!Storage::disk('public')->exists($solicitudId)) Storage::disk('public')->makeDirectory($solicitudId);
 
-
-        // Ruta completa del archivo
-        $fullPath = "{$directory}/{$filename}";
+        $filePath = "{$solicitudId}/{$filename}";
 
         // Guardar archivo en storage
-        $saved = Storage::disk('local')->put($fullPath, $pdfContent);
+        $saved = Storage::disk('public')->put($filePath, $pdfContent);
 
         if (!$saved) {
             throw new Exception('Error al guardar archivo en storage');
@@ -378,7 +375,7 @@ class PdfGenerationService
         return [
             'tamano_bytes' => strlen($pdfContent),
             'tipo_mime' => 'application/pdf',
-            'ruta_archivo' => $fullPath,
+            'ruta_archivo' => $filePath,
             'saved_filename' => basename($filename)
         ];
     }

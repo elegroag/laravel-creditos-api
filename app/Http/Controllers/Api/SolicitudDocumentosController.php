@@ -93,7 +93,7 @@ class SolicitudDocumentosController extends Controller
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
-            $documento = SolicitudDocumento::where('id', $documentoId)
+            $documento = SolicitudDocumento::where('documento_uuid', $documentoId)
                 ->where('solicitud_id', $solicitudId)
                 ->first();
 
@@ -102,11 +102,11 @@ class SolicitudDocumentosController extends Controller
             }
 
             $ruta = (string) ($documento->ruta_archivo ?? '');
-            if (!$ruta || !Storage::disk('local')->exists($ruta)) {
+            if (!$ruta || !Storage::disk('public')->exists($ruta)) {
                 return ErrorResource::notFound('Archivo no encontrado en el sistema')->response();
             }
 
-            $fullPath = Storage::disk('local')->path($ruta);
+            $fullPath = Storage::disk('public')->path($ruta);
 
             return response()->download($fullPath, $documento->nombre_original ?? basename($fullPath));
         } catch (\Exception $e) {
@@ -173,7 +173,7 @@ class SolicitudDocumentosController extends Controller
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
-            $documento = SolicitudDocumento::where('id', $documentoId)
+            $documento = SolicitudDocumento::where('documento_uuid', $documentoId)
                 ->where('solicitud_id', $solicitudId)
                 ->first();
 
@@ -443,14 +443,6 @@ class SolicitudDocumentosController extends Controller
             $documentoRequeridoId = $data['documento_requerido_id'];
             $file = $request->file('documento');
 
-            Log::info('Agregando documento a solicitud', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'documento_requerido_id' => $documentoRequeridoId,
-                'file_size' => $file->getSize(),
-                'file_type' => $file->getMimeType()
-            ]);
-
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -462,43 +454,33 @@ class SolicitudDocumentosController extends Controller
                 return ErrorResource::forbidden('No autorizado para modificar esta solicitud')->response();
             }
 
-            // Preparar datos del documento
-            $fileData = [
-                'documento_requerido_id' => $documentoRequeridoId,
-                'nombre_original' => $file->getClientOriginalName(),
-                'tipo_mime' => $file->getMimeType(),
-                'tamano' => $file->getSize(),
-                'fecha_subida' => Carbon::now()->toISOString()
-            ];
-
             // Generar nombre único para el archivo
             $nombreArchivo = $this->documentoService->generarNombreArchivo($solicitudId, $documentoRequeridoId, $file->getClientOriginalExtension());
 
             // Crear directorio para la solicitud si no existe
-            $solicitudDir = storage_path("app/solicitudes/{$solicitudId}");
-            if (!file_exists($solicitudDir)) {
-                mkdir($solicitudDir, 0775, true);
-            }
+            Storage::disk('public')->makeDirectory($solicitudId);
 
-            // Guardar archivo directamente en el directorio de la solicitud
-            $filePath = "solicitudes/{$solicitudId}/{$nombreArchivo}";
-            $fullPath = storage_path("app/{$filePath}");
+            // Guardar archivo usando Storage
+            $filePath = $solicitudId . '/' . $nombreArchivo;
+            $storedPath = Storage::disk('public')->putFileAs($solicitudId, $file, $nombreArchivo);
 
-            if (!move_uploaded_file($file->getPathname(), $fullPath)) {
+            if (!$storedPath) {
                 throw new \Exception('No se pudo guardar el archivo');
             }
 
-            $fileData['ruta_archivo'] = $filePath;
-            $fileData['id'] = Str::uuid()->toString();
+            // Preparar datos del documento
+            $fileData = [
+                'id' => Str::uuid()->toString(),
+                'documento_requerido_id' => $documentoRequeridoId,
+                'nombre_original' => $file->getClientOriginalName(),
+                'tipo_mime' => $file->getMimeType(),
+                'tamano' => $file->getSize(),
+                'fecha_subida' => Carbon::now()->toISOString(),
+                'ruta_archivo' => $filePath
+            ];
 
             // Agregar documento a la solicitud
             $solicitudActualizada = $this->documentoService->agregarDocumentoASolicitud($solicitudId, $fileData);
-
-            Log::info('Documento agregado exitosamente', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $fileData['id'],
-                'ruta_archivo' => $filePath
-            ]);
 
             return ApiResource::success($solicitudActualizada, 'Documento agregado exitosamente')->response();
         } catch (\Exception $e) {
@@ -559,13 +541,6 @@ class SolicitudDocumentosController extends Controller
             }
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-
-            Log::info('Eliminando documento de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
 
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
@@ -637,7 +612,7 @@ class SolicitudDocumentosController extends Controller
             new OA\Response(response: 404, description: 'Documento no encontrado')
         ]
     )]
-    public function descargarDocumento(Request $request, string $solicitudId, string $documentoId): JsonResponse
+    public function descargarDocumento(Request $request, string $solicitudId, string $documentoId): BinaryFileResponse|JsonResponse
     {
         try {
             // Obtener datos del usuario desde el middleware JWT
@@ -649,12 +624,6 @@ class SolicitudDocumentosController extends Controller
             }
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-
-            Log::info('Descargando documento de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'username' => $username
-            ]);
 
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
@@ -683,29 +652,21 @@ class SolicitudDocumentosController extends Controller
             }
 
             // Verificar que el archivo exista
-            $filePath = $documento['ruta_archivo'] ?? '';
+            $ruta_archivo = $documento['ruta_archivo'] ?? '';
 
-            if (!Storage::disk('public')->exists($filePath)) {
+            if (!Storage::disk('public')->exists($ruta_archivo)) {
                 return ErrorResource::errorResponse('Archivo no encontrado en el sistema')
                     ->response()
                     ->setStatusCode(404);
             }
 
-            // Obtener URL de descarga
-            $downloadUrl = Storage::url($filePath);
+            $filePath = Storage::disk('public')->path($ruta_archivo);
 
-            Log::info('URL de descarga generada', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'download_url' => $downloadUrl
+            return response()->file($filePath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $documento['nombre_original'] . '"',
+                'Content-Length' => filesize($filePath)
             ]);
-
-            return ApiResource::success([
-                'download_url' => $downloadUrl,
-                'nombre_original' => $documento['nombre_original'] ?? '',
-                'tipo_mime' => $documento['tipo_mime'] ?? '',
-                'tamano' => $documento['tamano'] ?? 0
-            ], 'URL de descarga generada')->response();
         } catch (\Exception $e) {
             Log::error('Error al descargar documento', [
                 'solicitud_id' => $solicitudId,
