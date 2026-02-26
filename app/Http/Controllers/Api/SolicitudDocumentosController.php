@@ -622,51 +622,36 @@ class SolicitudDocumentosController extends Controller
             if (!$username) {
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-            $userRoles = $userData['roles'] ?? [];
-            $isAdmin = in_array('admin', $userRoles);
 
-            // Verificar que la solicitud existe y permisos
-            $solicitud = $this->solicitudService->getById($solicitudId);
-
-            if (!$solicitud) {
-                return ErrorResource::notFound("Solicitud no encontrada: {$solicitudId}")->response();
-            }
-
-            if (!$isAdmin && ($solicitud['owner_username'] ?? '') !== $username) {
-                return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
-            }
-
-            // Buscar documento
-            $documentos = $solicitud['documentos'] ?? [];
-            $documento = null;
-
-            foreach ($documentos as $doc) {
-                if ($doc['id'] === $documentoId) {
-                    $documento = $doc;
-                    break;
-                }
-            }
+            $documento = SolicitudDocumento::where('solicitud_id', $solicitudId)
+                ->where('documento_uuid', $documentoId)
+                ->first();
 
             if (!$documento) {
                 return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
             }
 
-            // Verificar que el archivo exista
-            $ruta_archivo = $documento['ruta_archivo'] ?? '';
+            /** @var \Illuminate\Filesystem\FilesystemAdapter $publicDisk */
+            $publicDisk = Storage::disk('public');
 
-            if (!Storage::disk('public')->exists($ruta_archivo)) {
+            if (!$publicDisk->exists($documento->ruta_archivo)) {
                 return ErrorResource::errorResponse('Archivo no encontrado en el sistema')
                     ->response()
                     ->setStatusCode(404);
             }
 
-            $filePath = Storage::disk('public')->path($ruta_archivo);
+            $filePath = $publicDisk->path($documento->ruta_archivo);
 
-            return response()->file($filePath, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $documento['nombre_original'] . '"',
+            $mimeType = $publicDisk->mimeType($documento->ruta_archivo) ?? 'application/octet-stream';
+            $fileName = basename($documento->ruta_archivo);
+
+            $response = response()->download($filePath, $fileName, [
+                'Content-Type' => $mimeType,
                 'Content-Length' => filesize($filePath)
             ]);
+            $response->headers->set('Access-Control-Expose-Headers', 'Content-Disposition');
+
+            return $response;
         } catch (\Exception $e) {
             Log::error('Error al descargar documento', [
                 'solicitud_id' => $solicitudId,
