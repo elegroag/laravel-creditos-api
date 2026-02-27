@@ -91,13 +91,13 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "audit": {
+            "ignore": [
+                "PKSA-y2cr-5h3j-g3ys"
+            ]
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true,
-    "audit": {
-        "ignore": {
-            "PKSA-y2cr-5h3j-g3ys": true
-        }
-    }
+    "prefer-stable": true
 }
