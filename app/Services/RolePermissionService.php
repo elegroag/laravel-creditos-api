@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 class RolePermissionService
 {
@@ -24,9 +23,19 @@ class RolePermissionService
                 'name' => 'Admin',
                 'description' => 'Administrador con acceso amplio',
                 'permissions' => [
-                    'manage_users', 'view_users', 'create_users', 'update_users', 'delete_users',
-                    'manage_solicitudes', 'view_solicitudes', 'create_solicitudes', 'update_solicitudes', 'delete_solicitudes',
-                    'view_reports', 'export_data', 'manage_settings'
+                    'manage_users',
+                    'view_users',
+                    'create_users',
+                    'update_users',
+                    'delete_users',
+                    'manage_solicitudes',
+                    'view_solicitudes',
+                    'create_solicitudes',
+                    'update_solicitudes',
+                    'delete_solicitudes',
+                    'view_reports',
+                    'export_data',
+                    'manage_settings'
                 ],
                 'level' => 90
             ],
@@ -34,8 +43,12 @@ class RolePermissionService
                 'name' => 'Adviser',
                 'description' => 'Asesor de crédito',
                 'permissions' => [
-                    'view_solicitudes', 'create_solicitudes', 'update_solicitudes',
-                    'view_reports', 'manage_documents', 'approve_solicitudes'
+                    'view_solicitudes',
+                    'create_solicitudes',
+                    'update_solicitudes',
+                    'view_reports',
+                    'manage_documents',
+                    'approve_solicitudes'
                 ],
                 'level' => 70
             ],
@@ -43,8 +56,11 @@ class RolePermissionService
                 'name' => 'User Trabajador',
                 'description' => 'Trabajador con acceso a solicitudes',
                 'permissions' => [
-                    'view_own_solicitudes', 'create_solicitudes', 'update_own_solicitudes',
-                    'manage_own_documents', 'view_reports'
+                    'view_own_solicitudes',
+                    'create_solicitudes',
+                    'update_own_solicitudes',
+                    'manage_own_documents',
+                    'view_reports'
                 ],
                 'level' => 50
             ],
@@ -52,7 +68,9 @@ class RolePermissionService
                 'name' => 'User Empresa',
                 'description' => 'Usuario de empresa',
                 'permissions' => [
-                    'view_own_solicitudes', 'create_solicitudes', 'update_own_solicitudes',
+                    'view_own_solicitudes',
+                    'create_solicitudes',
+                    'update_own_solicitudes',
                     'manage_own_documents'
                 ],
                 'level' => 40
@@ -80,7 +98,7 @@ class RolePermissionService
             'create_users' => 'Crear usuarios',
             'update_users' => 'Actualizar usuarios',
             'delete_users' => 'Eliminar usuarios',
-            
+
             // Gestión de solicitudes
             'manage_solicitudes' => 'Gestionar solicitudes',
             'view_solicitudes' => 'Ver solicitudes',
@@ -89,26 +107,26 @@ class RolePermissionService
             'delete_solicitudes' => 'Eliminar solicitudes',
             'approve_solicitudes' => 'Aprobar solicitudes',
             'reject_solicitudes' => 'Rechazar solicitudes',
-            
+
             // Permisos propios
             'view_own_solicitudes' => 'Ver solicitudes propias',
             'update_own_solicitudes' => 'Actualizar solicitudes propias',
             'manage_own_documents' => 'Gestionar documentos propios',
-            
+
             // Gestión de documentos
             'manage_documents' => 'Gestionar documentos',
             'upload_documents' => 'Subir documentos',
             'delete_documents' => 'Eliminar documentos',
-            
+
             // Reportes y exportación
             'view_reports' => 'Ver reportes',
             'export_data' => 'Exportar datos',
             'generate_reports' => 'Generar reportes',
-            
+
             // Configuración
             'manage_settings' => 'Gestionar configuración',
             'view_settings' => 'Ver configuración',
-            
+
             // Información pública
             'view_public_info' => 'Ver información pública'
         ];
@@ -121,30 +139,20 @@ class RolePermissionService
     {
         try {
             $systemRoles = self::getSystemRoles();
-            
+
             if (!isset($systemRoles[$role])) {
-                Log::warning('Intento de asignar rol no existente', [
-                    'user_id' => $user->id,
-                    'username' => $user->username,
-                    'role' => $role
-                ]);
                 return false;
             }
 
             $currentRoles = $this->getUserRoles($user);
-            
+
             // Evitar duplicados
             if (in_array($role, $currentRoles)) {
-                Log::info('El usuario ya tiene el rol', [
-                    'user_id' => $user->id,
-                    'username' => $user->username,
-                    'role' => $role
-                ]);
                 return true;
             }
 
             $currentRoles[] = $role;
-            
+
             $user->update([
                 'roles' => json_encode($currentRoles),
                 'updated_at' => now()
@@ -153,22 +161,8 @@ class RolePermissionService
             // Limpiar cache
             $this->clearUserCache($user->id);
 
-            Log::info('Rol asignado exitosamente', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'role' => $role,
-                'new_roles' => $currentRoles
-            ]);
-
             return true;
-
         } catch (\Exception $e) {
-            Log::error('Error al asignar rol', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'role' => $role,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }
@@ -180,18 +174,13 @@ class RolePermissionService
     {
         try {
             $currentRoles = $this->getUserRoles($user);
-            
+
             if (!in_array($role, $currentRoles)) {
-                Log::info('El usuario no tiene el rol a remover', [
-                    'user_id' => $user->id,
-                    'username' => $user->username,
-                    'role' => $role
-                ]);
                 return true;
             }
 
             $currentRoles = array_values(array_diff($currentRoles, [$role]));
-            
+
             $user->update([
                 'roles' => json_encode($currentRoles),
                 'updated_at' => now()
@@ -200,22 +189,8 @@ class RolePermissionService
             // Limpiar cache
             $this->clearUserCache($user->id);
 
-            Log::info('Rol removido exitosamente', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'role' => $role,
-                'new_roles' => $currentRoles
-            ]);
-
             return true;
-
         } catch (\Exception $e) {
-            Log::error('Error al remover rol', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'role' => $role,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }
@@ -227,16 +202,11 @@ class RolePermissionService
     {
         try {
             $systemPermissions = array_keys(self::getSystemPermissions());
-            
+
             // Validar que todos los permisos existan
             foreach ($permissions as $permission) {
                 if (!in_array($permission, $systemPermissions)) {
-                    Log::warning('Permiso no existente', [
-                        'user_id' => $user->id,
-                        'username' => $user->username,
-                        'permission' => $permission
-                    ]);
-                    return false;
+                    continue;
                 }
             }
 
@@ -248,21 +218,8 @@ class RolePermissionService
             // Limpiar cache
             $this->clearUserCache($user->id);
 
-            Log::info('Permisos asignados exitosamente', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'permissions' => $permissions
-            ]);
-
             return true;
-
         } catch (\Exception $e) {
-            Log::error('Error al asignar permisos', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'permissions' => $permissions,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }
@@ -273,7 +230,7 @@ class RolePermissionService
     public function getUserRoles(User $user): array
     {
         $cacheKey = "user_roles_{$user->id}";
-        
+
         return Cache::remember($cacheKey, 3600, function () use ($user) {
             if (isset($user->roles)) {
                 return is_array($user->roles) ? $user->roles : json_decode($user->roles, true) ?? [];
@@ -288,7 +245,7 @@ class RolePermissionService
     public function getUserPermissions(User $user): array
     {
         $cacheKey = "user_permissions_{$user->id}";
-        
+
         return Cache::remember($cacheKey, 3600, function () use ($user) {
             $roles = $this->getUserRoles($user);
             $permissions = [];
@@ -337,18 +294,18 @@ class RolePermissionService
     private function getRolePermissions(string $role): array
     {
         $systemRoles = self::getSystemRoles();
-        
+
         if (isset($systemRoles[$role])) {
             $roleData = $systemRoles[$role];
-            
+
             // Si el rol tiene todos los permisos
             if (in_array('*', $roleData['permissions'])) {
                 return array_keys(self::getSystemPermissions());
             }
-            
+
             return $roleData['permissions'];
         }
-        
+
         return [];
     }
 
@@ -369,7 +326,7 @@ class RolePermissionService
         try {
             $users = User::all();
             $systemRoles = self::getSystemRoles();
-            
+
             $stats = [
                 'total_users' => $users->count(),
                 'role_distribution' => [],
@@ -406,11 +363,7 @@ class RolePermissionService
             $stats['most_common_roles'] = array_slice($stats['role_distribution'], 0, 5, true);
 
             return $stats;
-
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de roles', [
-                'error' => $e->getMessage()
-            ]);
             return [];
         }
     }

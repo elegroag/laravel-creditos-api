@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -26,21 +25,8 @@ class NumeroSolicitudService
             // Generar número de solicitud
             $numeroSolicitud = sprintf('%06d-%d-%s', $secuencia, $vigencia, $lineaCredito);
 
-            Log::info('Número de solicitud generado', [
-                'linea_credito' => $lineaCredito,
-                'vigencia' => $vigencia,
-                'secuencia' => $secuencia,
-                'numero_solicitud' => $numeroSolicitud
-            ]);
-
             return $numeroSolicitud;
         } catch (\Exception $e) {
-            Log::error('Error al generar número de solicitud', [
-                'linea_credito' => $lineaCredito,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             throw $e;
         }
     }
@@ -70,13 +56,6 @@ class NumeroSolicitudService
                         'updated_at' => Carbon::now()
                     ]);
 
-                Log::debug('Secuencia incrementada', [
-                    'linea_credito' => $lineaCredito,
-                    'vigencia' => $vigencia,
-                    'secuencia_anterior' => $registro->numeric_secuencia,
-                    'nueva_secuencia' => $nuevaSecuencia
-                ]);
-
                 return $nuevaSecuencia;
             } else {
                 // Crear nuevo registro con secuencia 1
@@ -90,13 +69,6 @@ class NumeroSolicitudService
                     'vigencia' => $vigencia,
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now()
-                ]);
-
-                Log::debug('Nuevo registro creado', [
-                    'linea_credito' => $lineaCredito,
-                    'vigencia' => $vigencia,
-                    'secuencia' => $nuevaSecuencia,
-                    'radicado' => $radicado
                 ]);
 
                 return $nuevaSecuencia;
@@ -121,18 +93,8 @@ class NumeroSolicitudService
                 ->where('numero_solicitud', $numeroSolicitud)
                 ->exists();
 
-            if ($exists) {
-                Log::info('Número de solicitud ya existe en solicitudes', [
-                    'numero_solicitud' => $numeroSolicitud
-                ]);
-            }
-
             return $exists;
         } catch (\Exception $e) {
-            Log::error('Error al validar existencia de número de solicitud', [
-                'numero_solicitud' => $numeroSolicitud,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }
@@ -154,10 +116,6 @@ class NumeroSolicitudService
                 'numero_solicitud' => $numeroSolicitud
             ];
         } catch (\Exception $e) {
-            Log::error('Error al parsear número de solicitud', [
-                'numero_solicitud' => $numeroSolicitud,
-                'error' => $e->getMessage()
-            ]);
             return null;
         }
     }
@@ -203,13 +161,8 @@ class NumeroSolicitudService
                 }
             }
 
-            Log::info('Estadísticas de números de solicitud obtenidas', $estadisticas);
-
             return $estadisticas;
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de números de solicitud', [
-                'error' => $e->getMessage()
-            ]);
             return [];
         }
     }
@@ -220,13 +173,7 @@ class NumeroSolicitudService
     public function reiniciarSecuencia(string $lineaCredito, int $vigencia): bool
     {
         try {
-            Log::info('Reiniciando secuencia de número de solicitud', [
-                'linea_credito' => $lineaCredito,
-                'vigencia' => $vigencia
-            ]);
-
-            // Usar transacción para atomicidad
-            DB::transaction(function () use ($lineaCredito, $vigencia) {
+            return DB::transaction(function () use ($lineaCredito, $vigencia) {
                 // Eliminar registro existente si existe
                 DB::table('numero_solicitudes')
                     ->where('linea_credito', $lineaCredito)
@@ -245,22 +192,10 @@ class NumeroSolicitudService
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now()
                 ]);
+
+                return true;
             });
-
-            Log::info('Secuencia reiniciada exitosamente', [
-                'linea_credito' => $lineaCredito,
-                'vigencia' => $vigencia
-            ]);
-
-            return true;
         } catch (\Exception $e) {
-            Log::error('Error al reiniciar secuencia de número de solicitud', [
-                'linea_credito' => $lineaCredito,
-                'vigencia' => $vigencia,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return false;
         }
     }
@@ -305,10 +240,6 @@ class NumeroSolicitudService
 
             return true;
         } catch (\Exception $e) {
-            Log::error('Error al validar formato de número de solicitud', [
-                'numero_solicitud' => $numeroSolicitud,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }

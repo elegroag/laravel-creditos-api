@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
@@ -26,12 +25,6 @@ class FirmaPlusService
     public function enviarDocumentoParaFirma(string $documentoPath, array $firmantes, array $metadata): array
     {
         try {
-            Log::info('Enviando documento a FirmaPlus', [
-                'documento_path' => $documentoPath,
-                'num_firmantes' => count($firmantes),
-                'metadata' => $metadata
-            ]);
-
             // Preparar payload para FirmaPlus
             $payload = [
                 'documento' => base64_encode(file_get_contents($documentoPath)),
@@ -53,18 +46,9 @@ class FirmaPlusService
 
             $resultado = $response->json();
 
-            Log::info('Documento enviado a FirmaPlus exitosamente', [
-                'transaccion_id' => $resultado['transaccion_id'] ?? null
-            ]);
-
             return $resultado;
         } catch (\Exception $e) {
-            Log::error('Error en FirmaPlusService::enviarDocumentoParaFirma', [
-                'error' => $e->getMessage(),
-                'documento_path' => $documentoPath
-            ]);
-
-            throw $e;
+            throw new \Exception('Error al enviar documento a FirmaPlus: ' . $e->getMessage());
         }
     }
 
@@ -74,10 +58,6 @@ class FirmaPlusService
     public function consultarEstadoDocumento(string $transaccionId): array
     {
         try {
-            Log::info('Consultando estado en FirmaPlus', [
-                'transaccion_id' => $transaccionId
-            ]);
-
             $response = Http::get($this->apiUrl . '/documentos/' . $transaccionId . '/estado')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
@@ -90,19 +70,9 @@ class FirmaPlusService
 
             $estado = $response->json();
 
-            Log::info('Estado consultado en FirmaPlus', [
-                'transaccion_id' => $transaccionId,
-                'estado' => $estado['estado'] ?? null
-            ]);
-
             return $estado;
         } catch (\Exception $e) {
-            Log::error('Error en FirmaPlusService::consultarEstadoDocumento', [
-                'error' => $e->getMessage(),
-                'transaccion_id' => $transaccionId
-            ]);
-
-            throw $e;
+            throw new \Exception('Error al consultar estado del documento: ' . $e->getMessage());
         }
     }
 
@@ -112,11 +82,6 @@ class FirmaPlusService
     public function descargarDocumentoFirmado(string $transaccionId, string $rutaDestino): void
     {
         try {
-            Log::info('Descargando documento firmado desde FirmaPlus', [
-                'transaccion_id' => $transaccionId,
-                'ruta_destino' => $rutaDestino
-            ]);
-
             $response = Http::get($this->apiUrl . '/documentos/' . $transaccionId . '/descargar')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
@@ -129,20 +94,8 @@ class FirmaPlusService
 
             // Guardar el archivo
             file_put_contents($rutaDestino, $response->body());
-
-            Log::info('Documento firmado descargado exitosamente', [
-                'transaccion_id' => $transaccionId,
-                'ruta_destino' => $rutaDestino,
-                'size' => filesize($rutaDestino)
-            ]);
         } catch (\Exception $e) {
-            Log::error('Error en FirmaPlusService::descargarDocumentoFirmado', [
-                'error' => $e->getMessage(),
-                'transaccion_id' => $transaccionId,
-                'ruta_destino' => $rutaDestino
-            ]);
-
-            throw $e;
+            throw new \Exception('Error al descargar documento firmado: ' . $e->getMessage());
         }
     }
 
@@ -152,10 +105,6 @@ class FirmaPlusService
     public function cancelarProcesoFirmado(string $transaccionId): array
     {
         try {
-            Log::info('Cancelando proceso de firmado en FirmaPlus', [
-                'transaccion_id' => $transaccionId
-            ]);
-
             $response = Http::post($this->apiUrl . '/documentos/' . $transaccionId . '/cancelar')
                 ->withHeaders([
                     'Authorization' => 'Bearer ' . $this->apiKey,
@@ -168,18 +117,9 @@ class FirmaPlusService
 
             $resultado = $response->json();
 
-            Log::info('Proceso de firmado cancelado en FirmaPlus', [
-                'transaccion_id' => $transaccionId
-            ]);
-
             return $resultado;
         } catch (\Exception $e) {
-            Log::error('Error en FirmaPlusService::cancelarProcesoFirmado', [
-                'error' => $e->getMessage(),
-                'transaccion_id' => $transaccionId
-            ]);
-
-            throw $e;
+            throw new \Exception('Error al cancelar proceso de firmado: ' . $e->getMessage());
         }
     }
 
@@ -203,13 +143,7 @@ class FirmaPlusService
 
             return $resultado['url_firma'] ?? '';
         } catch (\Exception $e) {
-            Log::error('Error en FirmaPlusService::obtenerUrlFirma', [
-                'error' => $e->getMessage(),
-                'transaccion_id' => $transaccionId,
-                'firmante_id' => $firmanteId
-            ]);
-
-            throw $e;
+            throw new \Exception('Error al obtener URL de firma: ' . $e->getMessage());
         }
     }
 
@@ -223,10 +157,6 @@ class FirmaPlusService
 
             return $response->successful();
         } catch (\Exception $e) {
-            Log::error('Error verificando disponibilidad de FirmaPlus', [
-                'error' => $e->getMessage()
-            ]);
-
             return false;
         }
     }
@@ -283,11 +213,6 @@ class FirmaPlusService
 
                 // Verificar que el archivo se descargó correctamente
                 if (file_exists($rutaDestino) && filesize($rutaDestino) > 0) {
-                    Log::info('Documento descargado exitosamente', [
-                        'transaccion_id' => $transaccionId,
-                        'ruta' => $rutaDestino,
-                        'intento' => $intento + 1
-                    ]);
                     return true;
                 }
 
@@ -299,20 +224,10 @@ class FirmaPlusService
                 if ($intento < $maxReintentos) {
                     $waitSeconds = pow(2, $intento);
 
-                    Log::warning("Reintentando descarga de PDF firmado (intento {$intento}/{$maxReintentos})", [
-                        'transaccion_id' => $transaccionId,
-                        'error' => $ultimoError,
-                        'waiting_seconds' => $waitSeconds
-                    ]);
-
                     // Esperar antes de reintentar (backoff exponencial: 2, 4, 8 segundos)
                     sleep($waitSeconds);
                 } else {
-                    Log::error("Falló descarga de PDF firmado después de {$maxReintentos} intentos", [
-                        'transaccion_id' => $transaccionId,
-                        'ultimo_error' => $ultimoError,
-                        'ruta_destino' => $rutaDestino
-                    ]);
+                    throw new \Exception("Falló descarga de PDF firmado después de {$maxReintentos} intentos: {$ultimoError}");
                 }
             }
         }
@@ -329,9 +244,6 @@ class FirmaPlusService
     public function verificarIntegridadPdf(string $rutaPdf): bool
     {
         if (!file_exists($rutaPdf)) {
-            Log::warning('PDF no existe en la ruta especificada', [
-                'ruta' => $rutaPdf
-            ]);
             return false;
         }
 
@@ -339,19 +251,12 @@ class FirmaPlusService
 
         // Verificar tamaño mínimo (1 KB)
         if ($size < 1024) {
-            Log::warning('PDF tiene tamaño sospechosamente pequeño', [
-                'ruta' => $rutaPdf,
-                'size_bytes' => $size
-            ]);
             return false;
         }
 
         // Verificar que sea un PDF válido (magic bytes %PDF-)
         $handle = fopen($rutaPdf, 'r');
         if (!$handle) {
-            Log::error('No se pudo abrir el archivo PDF para verificación', [
-                'ruta' => $rutaPdf
-            ]);
             return false;
         }
 
@@ -359,18 +264,8 @@ class FirmaPlusService
         fclose($handle);
 
         if ($header !== '%PDF-') {
-            Log::error('Archivo no es un PDF válido (magic bytes incorrectos)', [
-                'ruta' => $rutaPdf,
-                'header_hex' => bin2hex($header),
-                'expected' => bin2hex('%PDF-')
-            ]);
             return false;
         }
-
-        Log::info('PDF verificado correctamente', [
-            'ruta' => $rutaPdf,
-            'size_bytes' => $size
-        ]);
 
         return true;
     }

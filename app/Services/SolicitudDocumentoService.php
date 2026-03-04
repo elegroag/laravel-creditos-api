@@ -7,7 +7,6 @@ use App\Models\SolicitudDocumento;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 class SolicitudDocumentoService
 {
@@ -207,10 +206,6 @@ class SolicitudDocumentoService
                 'solicitud' => $solicitud->fresh()->toArray()
             ];
         } catch (\Exception $e) {
-            Log::error('Error al agregar documento a solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
             throw $e;
         }
     }

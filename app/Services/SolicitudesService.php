@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\SolicitudCredito;
 use App\Exceptions\ValidationException;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -44,13 +43,8 @@ class SolicitudesService extends EloquentService
                 'mime_type' => $file->getMimeType(),
                 'size' => $file->getSize(),
                 'path' => $filePath,
-                'url' => Storage::disk('public')->url($filePath)
+                'url' => asset('storage/' . $filePath)
             ];
-
-            $this->log('Document saved successfully', [
-                'solicitud_id' => $solicitudId,
-                'filename' => $uniqueFilename
-            ]);
 
             return $nuevoDocumento;
         } catch (ValidationException $e) {

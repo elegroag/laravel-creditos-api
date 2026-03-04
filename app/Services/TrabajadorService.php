@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Trabajador;
 use App\Models\EmpresaConvenio;
 use App\Models\User;
-use Illuminate\Support\Facades\Log;
 use App\Exceptions\ValidationException;
 use Carbon\Carbon;
 
@@ -445,10 +444,6 @@ class TrabajadorService extends EloquentService
             $response = $this->externalApiService->post('company/buscar_trabajadores', $criteria);
 
             if (!$response['success']) {
-                Log::error('Search workers API error', [
-                    'criteria' => $criteria,
-                    'response' => $response
-                ]);
                 return ['success' => false, 'message' => 'Error en búsqueda externa'];
             }
 
@@ -457,10 +452,6 @@ class TrabajadorService extends EloquentService
                 'data' => $response['data'] ?? []
             ];
         } catch (\Exception $e) {
-            Log::error('Error searching workers externally', [
-                'criteria' => $criteria,
-                'error' => $e->getMessage()
-            ]);
             return [];
         }
     }
@@ -486,15 +477,14 @@ class TrabajadorService extends EloquentService
                         'tipo_funcionario' => $data['tipfun_detalle'] ?? null
                     ];
                 } else {
-                    Log::warning("Asesor {$user->username} no está activo en SISU");
+                    // Asesor no está activo
                 }
             } else {
-                Log::warning("No se pudieron obtener datos del asesor {$user->username}");
+                // No se pudieron obtener datos del asesor
             }
 
             return null;
         } catch (\Exception $e) {
-            Log::error("Error consultando datos del asesor: " . $e->getMessage());
             return null;
         }
     }
@@ -511,10 +501,9 @@ class TrabajadorService extends EloquentService
                 return $response['data'];
             }
 
-            Log::warning("No se pudieron obtener puntos del asesor {$user->username}");
+            // No se pudieron obtener puntos del asesor
             return null;
         } catch (\Exception $e) {
-            Log::error("Error consultando puntos de asesores: " . $e->getMessage());
             return null;
         }
     }
@@ -533,10 +522,9 @@ class TrabajadorService extends EloquentService
                 return $this->extractRelevantData($response['data']);
             }
 
-            Log::warning("No se pudieron obtener datos del trabajador con documento: {$numeroDocumento}");
+            // No se pudieron obtener datos del trabajador
             return null;
         } catch (\Exception $e) {
-            Log::error("Error consultando datos del trabajador: " . $e->getMessage());
             return null;
         }
     }
@@ -552,19 +540,11 @@ class TrabajadorService extends EloquentService
             ]);
 
             if (!$response['success']) {
-                Log::error('External API error', [
-                    'cedula' => $cedula,
-                    'response' => $response
-                ]);
                 return null;
             }
 
             return $this->extractRelevantData($response['data'] ?? []);
         } catch (\Exception $e) {
-            Log::error('Exception getting worker data', [
-                'cedula' => $cedula,
-                'error' => $e->getMessage()
-            ]);
             return null;
         }
     }

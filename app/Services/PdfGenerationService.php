@@ -9,7 +9,6 @@ use App\Models\SolicitudPayload;
 use App\Models\FirmanteSolicitud;
 use App\Models\EmpresaConvenio;
 use App\Models\TipoDocumento;
-use Illuminate\Support\Facades\Log;
 use Exception;
 use Illuminate\Support\Facades\Storage;
 
@@ -34,7 +33,6 @@ class PdfGenerationService
             $solicitud = $this->solicitudService->getById($solicitudId);
 
             if (!$solicitud) {
-                Log::error('Solicitud no encontrada', ['solicitud_id' => $solicitudId]);
                 return [
                     'success' => false,
                     'error' => 'Solicitud no encontrada'
@@ -82,12 +80,6 @@ class PdfGenerationService
             $resultado = $this->generadorPdfService->generarPdfCreditos($data);
 
             if (!$resultado['success']) {
-                Log::error('Error al generar PDF con API Flask', [
-                    'solicitud_id' => $solicitudId,
-                    'error' => $resultado['error'] ?? 'Unknown error',
-                    'status' => $resultado['status'] ?? 'N/A'
-                ]);
-
                 return [
                     'success' => false,
                     'error' => $resultado['error'] ?? 'Error al generar PDF',
@@ -107,12 +99,6 @@ class PdfGenerationService
                 'data' => $pdfData
             ];
         } catch (Exception $e) {
-            Log::error('Error inesperado al generar PDF con API Flask', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return [
                 'success' => false,
                 'error' => 'Error interno al generar PDF',
@@ -163,8 +149,6 @@ class PdfGenerationService
         $laboralData = $payload->informacion_laboral ?? [];
         $economicaData = $payload->informacion_economica ?? [];
 
-        # Log::info("json_to_array", ['json' => $payload->ingresos_descuentos]);
-
         // Separar ingresos y descuentos
         $ingresosDescuentos = $payload->toApiArrayIngresosDescuentos();
 
@@ -190,7 +174,6 @@ class PdfGenerationService
             "pdf_metadata" => $pdfMetadataData,
             'trabajador' => $trabajadorData
         ];
-        Log::info("payloadApi", ['payloadApi' => $payloadApi]);
         return $payloadApi;
     }
 
@@ -209,8 +192,6 @@ class PdfGenerationService
             'generated_by' => 'pdf_generation_service'
         ];
 
-        Log::info('filename api', [$pdfData['api_filename']]);
-
         // Actualizar el campo pdf_generado en la solicitud
         $solicitud->update([
             'pdf_generado' => json_encode($pdfInfo)
@@ -221,8 +202,6 @@ class PdfGenerationService
             $pdfData['api_content'],
             $solicitud->numero_solicitud
         );
-
-        Log::info('ruta_archivo', ['ruta_archivo' => $dataSaved['ruta_archivo']]);
 
         //si existe el DocumentoPostulante se debe borrar
         DocumentoPostulante::where('solicitud_id', $solicitud->numero_solicitud)
@@ -244,8 +223,6 @@ class PdfGenerationService
             'solicitud_id' => $solicitud->numero_solicitud,
             'activo' => 1
         ];
-
-        Log::info('Documento Postulante PDF', ['data' => $data]);
 
         $dataSaved = DocumentoPostulante::create($data);
         return $dataSaved;
@@ -273,11 +250,6 @@ class PdfGenerationService
 
             return !empty($pdfData['api_content']) && !empty($pdfData['api_path']);
         } catch (Exception $e) {
-            Log::error('Error al verificar si existe PDF generado', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
-
             return false;
         }
     }
@@ -302,11 +274,6 @@ class PdfGenerationService
 
             return json_decode($pdfInfo, true);
         } catch (Exception $e) {
-            Log::error('Error al obtener información del PDF', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
-
             return null;
         }
     }
@@ -336,17 +303,8 @@ class PdfGenerationService
             // Limpiar campo pdf_generado
             $solicitud->update(['pdf_generado' => null]);
 
-            Log::info('PDF eliminado de la solicitud', [
-                'solicitud_id' => $solicitudId
-            ]);
-
             return true;
         } catch (Exception $e) {
-            Log::error('Error al eliminar PDF de la solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
-
             return false;
         }
     }

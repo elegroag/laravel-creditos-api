@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\EmpresaConvenio;
 use App\Services\TrabajadorService;
 use App\Services\ExternalApiService;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class ConvenioValidationService
@@ -103,12 +102,6 @@ class ConvenioValidationService
         }
 
         // 8. Construir respuesta exitosa
-        Log::info('Validación de convenio exitosa', [
-            'nit_empresa' => $nitEmpresa,
-            'cedula_trabajador' => $cedulaTrabajador,
-            'meses_servicio' => $mesesServicio
-        ]);
-
         return [
             'elegible' => true,
             'convenio' => [
@@ -155,33 +148,16 @@ class ConvenioValidationService
             $data = $this->externalApiService->obtenerInformacionTrabajador($cedula);
 
             if (!$data) {
-                Log::error('No se obtuvieron datos del trabajador desde ExternalApiService', [
-                    'cedula' => $cedula
-                ]);
                 return null;
             }
 
             // Validar estructura mínima de datos
             if (!isset($data['cedtra']) && !isset($data['cedula'])) {
-                Log::error('Respuesta sin datos de cédula', [
-                    'cedula' => $cedula,
-                    'response_keys' => array_keys($data)
-                ]);
                 return null;
             }
 
-            Log::info('Datos del trabajador obtenidos exitosamente via ExternalApiService', [
-                'cedula' => $cedula,
-                'nit' => $data['nit'] ?? 'N/A'
-            ]);
-
             return $data;
         } catch (\Exception $e) {
-            Log::error('Error al obtener datos del trabajador via ExternalApiService', [
-                'cedula' => $cedula,
-                'error' => $e->getMessage()
-            ]);
-
             return null;
         }
     }
@@ -199,11 +175,6 @@ class ConvenioValidationService
                 ->where('estado', 'Activo')
                 ->first();
         } catch (\Exception $e) {
-            Log::error('Error al buscar convenio por NIT', [
-                'nit' => $nit,
-                'error' => $e->getMessage()
-            ]);
-
             return null;
         }
     }
@@ -222,11 +193,6 @@ class ConvenioValidationService
 
             return $fecha->diffInMonths($ahora);
         } catch (\Exception $e) {
-            Log::error('Error al calcular meses de servicio', [
-                'fecha_afiliacion' => $fechaAfiliacion,
-                'error' => $e->getMessage()
-            ]);
-
             return 0;
         }
     }

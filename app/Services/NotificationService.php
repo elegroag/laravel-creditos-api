@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\Postulacion;
-use Illuminate\Support\Facades\Log;
+use App\Models\SolicitudCredito;
 use Illuminate\Support\Str;
 
 class NotificationService
@@ -37,19 +37,8 @@ class NotificationService
             ]);
 
             $notification->save();
-            Log::info('Notificación creada', [
-                'notification_id' => $notification->id,
-                'type' => $type,
-                'notifiable_id' => $notifiableId,
-                'notifiable_type' => $notifiableType
-            ]);
             return $notification;
         } catch (\Exception $e) {
-            Log::error('Error al crear notificación', [
-                'type' => $type,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
             return null;
         }
     }
@@ -57,29 +46,22 @@ class NotificationService
     /**
      * Notificar sobre firma completada
      *
-     * @param Postulacion $solicitud
+     * @param SolicitudCredito $solicitud
      * @param array $additionalData
      * @return void
      */
-    public function notifyFirmaCompletada(Postulacion $solicitud, array $additionalData = []): void
+    public function notifyFirmaCompletada(SolicitudCredito $solicitud, array $additionalData = []): void
     {
         try {
             $ownerUsername = $solicitud->username;
 
             if (!$ownerUsername) {
-                Log::warning('No se pudo notificar firma completada: owner_username no encontrado', [
-                    'solicitud_id' => $solicitud->id
-                ]);
                 return;
             }
 
             $user = User::where('username', $ownerUsername)->first();
 
             if (!$user) {
-                Log::warning('Usuario no encontrado para notificación', [
-                    'username' => $ownerUsername,
-                    'solicitud_id' => $solicitud->id
-                ]);
                 return;
             }
 
@@ -94,21 +76,18 @@ class NotificationService
 
             $this->create($user, 'firma_completada', $data);
         } catch (\Exception $e) {
-            Log::error('Error al notificar firma completada', [
-                'solicitud_id' => $solicitud->id ?? null,
-                'error' => $e->getMessage()
-            ]);
+            // Error silencioso
         }
     }
 
     /**
      * Notificar sobre firma rechazada
      *
-     * @param Postulacion $solicitud
+     * @param SolicitudCredito $solicitud
      * @param array $additionalData
      * @return void
      */
-    public function notifyFirmaRechazada(Postulacion $solicitud, array $additionalData = []): void
+    public function notifyFirmaRechazada(SolicitudCredito $solicitud, array $additionalData = []): void
     {
         try {
             $ownerUsername = $solicitud->username;
@@ -134,21 +113,18 @@ class NotificationService
 
             $this->create($user, 'firma_rechazada', $data);
         } catch (\Exception $e) {
-            Log::error('Error al notificar firma rechazada', [
-                'solicitud_id' => $solicitud->id ?? null,
-                'error' => $e->getMessage()
-            ]);
+            // Error silencioso
         }
     }
 
     /**
      * Notificar sobre firma expirada
      *
-     * @param Postulacion $solicitud
+     * @param SolicitudCredito $solicitud
      * @param array $additionalData
      * @return void
      */
-    public function notifyFirmaExpirada(Postulacion $solicitud, array $additionalData = []): void
+    public function notifyFirmaExpirada(SolicitudCredito $solicitud, array $additionalData = []): void
     {
         try {
             $ownerUsername = $solicitud->username;
@@ -174,22 +150,19 @@ class NotificationService
 
             $this->create($user, 'firma_expirada', $data);
         } catch (\Exception $e) {
-            Log::error('Error al notificar firma expirada', [
-                'solicitud_id' => $solicitud->id ?? null,
-                'error' => $e->getMessage()
-            ]);
+            // Error silencioso
         }
     }
 
     /**
      * Notificar cambio de estado de solicitud
      *
-     * @param Postulacion $solicitud
+     * @param SolicitudCredito $solicitud
      * @param string $estadoAnterior
      * @param string $estadoNuevo
      * @return void
      */
-    public function notifyEstadoActualizado(Postulacion $solicitud, string $estadoAnterior, string $estadoNuevo): void
+    public function notifyEstadoActualizado(SolicitudCredito $solicitud, string $estadoAnterior, string $estadoNuevo): void
     {
         try {
             $ownerUsername = $solicitud->username;
@@ -217,10 +190,7 @@ class NotificationService
 
             $this->create($user, 'estado_actualizado', $data);
         } catch (\Exception $e) {
-            Log::error('Error al notificar estado actualizado', [
-                'solicitud_id' => $solicitud->id ?? null,
-                'error' => $e->getMessage()
-            ]);
+            // Error silencioso
         }
     }
 
@@ -250,12 +220,7 @@ class NotificationService
 
             return $query->limit($limit)->get();
         } catch (\Exception $e) {
-            Log::error('Error al obtener notificaciones de usuario', [
-                'user_id' => is_array($user) ? ($user['username'] ?? $user['id'] ?? 'unknown') : ($user->username ?? $user->id ?? 'unknown'),
-                'error' => $e->getMessage()
-            ]);
-
-            return collect();
+            return collect([]);
         }
     }
 
@@ -278,11 +243,6 @@ class NotificationService
                 ->unread()
                 ->count();
         } catch (\Exception $e) {
-            Log::error('Error al contar notificaciones no leídas', [
-                'user_id' => is_array($user) ? ($user['username'] ?? $user['id'] ?? 'unknown') : ($user->username ?? $user->id ?? 'unknown'),
-                'error' => $e->getMessage()
-            ]);
-
             return 0;
         }
     }
@@ -314,12 +274,6 @@ class NotificationService
             $notification->markAsRead();
             return true;
         } catch (\Exception $e) {
-            Log::error('Error al marcar notificación como leída', [
-                'notification_id' => $notificationId,
-                'user_id' => is_array($user) ? ($user['username'] ?? $user['id'] ?? 'unknown') : ($user->username ?? $user->id ?? 'unknown'),
-                'error' => $e->getMessage()
-            ]);
-
             return false;
         }
     }
@@ -343,11 +297,6 @@ class NotificationService
                 ->unread()
                 ->update(['read_at' => now()]);
         } catch (\Exception $e) {
-            Log::error('Error al marcar todas las notificaciones como leídas', [
-                'user_id' => is_array($user) ? ($user['username'] ?? $user['id'] ?? 'unknown') : ($user->username ?? $user->id ?? 'unknown'),
-                'error' => $e->getMessage()
-            ]);
-
             return 0;
         }
     }
@@ -379,12 +328,6 @@ class NotificationService
             $notification->delete();
             return true;
         } catch (\Exception $e) {
-            Log::error('Error al eliminar notificación', [
-                'notification_id' => $notificationId,
-                'user_id' => is_array($user) ? ($user['username'] ?? $user['id'] ?? 'unknown') : ($user->username ?? $user->id ?? 'unknown'),
-                'error' => $e->getMessage()
-            ]);
-
             return false;
         }
     }
@@ -404,11 +347,6 @@ class NotificationService
                 ->whereNotNull('read_at')
                 ->delete();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar notificaciones antiguas', [
-                'days' => $days,
-                'error' => $e->getMessage()
-            ]);
-
             return 0;
         }
     }

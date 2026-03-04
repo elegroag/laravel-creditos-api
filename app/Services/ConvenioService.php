@@ -76,11 +76,6 @@ class ConvenioService extends EloquentService
         try {
             $convenio = EmpresaConvenio::updateOrCreate(['nit' => $data['nit']], $data);
 
-            $this->log('Agreement created/updated', [
-                'nit' => $data['nit'],
-                'razon_social' => $data['razon_social'] ?? ''
-            ]);
-
             return $convenio;
         } catch (\Exception $e) {
             $this->handleDatabaseError($e, 'creación/actualización de convenio');
@@ -101,8 +96,6 @@ class ConvenioService extends EloquentService
             }
 
             $convenio->update(['active' => false]);
-
-            $this->log('Agreement deactivated', ['nit' => $nit]);
 
             return true;
         } catch (ValidationException $e) {

@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Services\UserService;
 use App\Validators\UserValidators;
 use App\Exceptions\ValidationException;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Carbon\Carbon;
@@ -164,11 +163,6 @@ class AuthenticationService extends EloquentService
         // Generate token
         $token = $this->generateToken($user);
 
-        $this->log('User registered successfully', [
-            'user_id' => $user->id,
-            'username' => $user->username
-        ]);
-
         return [
             'access_token' => $token,
             'token_type' => 'Bearer',
@@ -199,7 +193,6 @@ class AuthenticationService extends EloquentService
                 'user_id' => $payload['sub']
             ];
         } catch (\Exception $e) {
-            Log::error('Error verificando token: ' . $e->getMessage());
             return null;
         }
     }
@@ -268,11 +261,7 @@ class AuthenticationService extends EloquentService
             $payload = $this->decodeToken($token);
 
             // In a real implementation, you might want to blacklist the token
-            // For now, we'll just log the logout
-            $this->log('User logged out', [
-                'user_id' => $payload['sub'],
-                'username' => $payload['username'] ?? 'unknown'
-            ]);
+            // For now, we'll just return success
 
             return true;
         } catch (\Exception $e) {

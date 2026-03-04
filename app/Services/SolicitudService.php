@@ -14,7 +14,6 @@ use App\Exceptions\ValidationException;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class SolicitudService extends EloquentService
 {
@@ -885,13 +884,7 @@ class SolicitudService extends EloquentService
             // Guardar firmante 2: La empresa del convenio (si tiene NIT)
             $this->guardarFirmanteEmpresa($solicitudId, $solicitante);
         } catch (\Exception $e) {
-            Log::error('Error al guardar firmantes', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            // No lanzar la excepción para no interrumpir el flujo principal
+            // Error silencioso - no interrumpir el flujo principal
         }
     }
 
@@ -926,12 +919,6 @@ class SolicitudService extends EloquentService
                 'rol' => 'SOLICITANTE'
             ]);
         }
-
-        Log::info('Firmante postulante registrado exitosamente', [
-            'solicitud_id' => $solicitudId,
-            'nombre' => $solicitante['nombres']  ?? 'Sin nombre',
-            'documento' => $solicitante['numero_documento'] ?? 'Sin documento'
-        ]);
     }
 
     /**
@@ -942,10 +929,6 @@ class SolicitudService extends EloquentService
         $empresaNit = $solicitante['nit'] ?? null;
 
         if (empty($empresaNit)) {
-            Log::info('No se registra firmante empresa: el solicitante no tiene NIT de empresa', [
-                'solicitud_id' => $solicitudId,
-                'solicitante_data' => array_keys($solicitante)
-            ]);
             return;
         }
 
@@ -955,11 +938,6 @@ class SolicitudService extends EloquentService
             ->first();
 
         if (!$empresaConvenio) {
-            Log::warning('Empresa no encontrada en convenios activos', [
-                'solicitud_id' => $solicitudId,
-                'empresa_nit' => $empresaNit,
-                'estados_disponibles' => EmpresaConvenio::where('nit', $empresaNit)->pluck('estado')
-            ]);
             return;
         }
 
@@ -989,12 +967,6 @@ class SolicitudService extends EloquentService
                 'rol' => 'EMPRESA_PATROCINADORA'
             ]);
         }
-
-        Log::info('Firmante empresa registrado exitosamente', [
-            'solicitud_id' => $solicitudId,
-            'empresa_nit' => $empresaNit,
-            'empresa_razon_social' => $empresaConvenio->razon_social
-        ]);
     }
 
     /**
@@ -1075,21 +1047,11 @@ class SolicitudService extends EloquentService
 
         // Verificar si la respuesta contiene error
         if (!$response['success'] ?? true || isset($response['error'])) {
-            Log::warning('API externa retornó error para crear solicitud', [
-                'solicitud_id' => $solicitud_id,
-                'error' => $response['error'] ?? 'Error desconocido',
-                'status_code' => $response['status_code'] ?? null
-            ]);
-
             throw new DebugException("Error creando la solicitud mediante api", 502, null, [
                 'api_error' => $response['error'] ?? 'Error desconocido',
                 'api_status_code' => $response['status_code'] ?? null
             ]);
         }
-
-        Log::info('Solicitud enviada exitosamente', [
-            'solicitud_id' => $solicitud_id,
-        ]);
 
         return $solicitud;
     }
@@ -1107,21 +1069,11 @@ class SolicitudService extends EloquentService
 
         // Verificar si la respuesta contiene error
         if (!$response['success'] ?? true || isset($response['error'])) {
-            Log::warning('API externa retornó error para consultar solicitud', [
-                'solicitud_id' => $solicitud_id,
-                'error' => $response['error'] ?? 'Error desconocido',
-                'status_code' => $response['status_code'] ?? null
-            ]);
-
             throw new DebugException("Error consultando la solicitud mediante api", 502, null, [
                 'api_error' => $response['error'] ?? 'Error desconocido',
                 'api_status_code' => $response['status_code'] ?? null
             ]);
         }
-
-        Log::info('Solicitud consultada exitosamente', [
-            'solicitud_id' => $solicitud_id,
-        ]);
 
         return $solicitud;
     }
