@@ -10,7 +10,6 @@ use App\Services\UserService;
 use App\Services\ExternalApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -45,8 +44,6 @@ class AdminUsuariosController extends Controller
     public function obtenerEstadisticas(Request $request): JsonResponse
     {
         try {
-            Log::info('Obteniendo estadísticas de usuarios para dashboard');
-
             // Obtener conteo de usuarios por rol
             $conteoRoles = $this->obtenerConteoRoles();
 
@@ -92,18 +89,8 @@ class AdminUsuariosController extends Controller
                 'ultimaActualizacion' => now()->toISOString()
             ];
 
-            Log::info('Estadísticas de usuarios obtenidas exitosamente', [
-                'total_usuarios' => $totalUsuarios,
-                'trabajadores' => $trabajadores
-            ]);
-
             return ApiResource::success($data, 'Estadísticas de usuarios obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de usuarios', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas de usuarios', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -171,12 +158,6 @@ class AdminUsuariosController extends Controller
             $page = $params['page'] ?? 1;
             $limit = $params['limit'] ?? 20;
             $offset = ($page - 1) * $limit;
-
-            Log::info('Obteniendo lista de usuarios', [
-                'page' => $page,
-                'limit' => $limit,
-                'filters' => array_diff_key($params, ['page' => '', 'limit' => ''])
-            ]);
 
             // Construir filtros
             $query = User::query();
@@ -250,19 +231,8 @@ class AdminUsuariosController extends Controller
                 'conteo_estados' => $conteoEstados
             ];
 
-            Log::info('Usuarios obtenidos exitosamente', [
-                'total' => $total,
-                'page' => $page
-            ]);
-
             return ApiResource::success($data, 'Usuarios obtenidos exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener usuarios', [
-                'error' => $e->getMessage(),
-                'params' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener usuarios', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -304,8 +274,6 @@ class AdminUsuariosController extends Controller
                     ->setStatusCode(400);
             }
 
-            Log::info('Obteniendo detalles de usuario', ['user_id' => $userId]);
-
             // Buscar usuario
             $usuario = User::find($userId);
 
@@ -339,19 +307,8 @@ class AdminUsuariosController extends Controller
                 }
             }
 
-            Log::info('Usuario obtenido exitosamente', [
-                'user_id' => $userId,
-                'username' => $usuario->username
-            ]);
-
             return ApiResource::success($usuarioFormateado, 'Usuario obtenido exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener usuario', [
-                'user_id' => $userId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -427,11 +384,6 @@ class AdminUsuariosController extends Controller
 
             $data = $validator->validated();
 
-            Log::info('Creando nuevo usuario', [
-                'username' => $data['username'],
-                'email' => $data['email']
-            ]);
-
             // Validar si el usuario tiene rol de asesor
             $puntosAsesorias = null;
             if (isset($data['roles']) && in_array('adviser', $data['roles'])) {
@@ -456,20 +408,9 @@ class AdminUsuariosController extends Controller
                 'updated_at' => Carbon::now()
             ]);
 
-            Log::info('Usuario creado exitosamente', [
-                'user_id' => $usuario->id,
-                'username' => $usuario->username
-            ]);
-
             return ApiResource::success(['id' => $usuario->id], 'Usuario creado exitosamente')->response()
                 ->setStatusCode(201);
         } catch (\Exception $e) {
-            Log::error('Error al crear usuario', [
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al crear usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -552,11 +493,6 @@ class AdminUsuariosController extends Controller
 
             $data = $validator->validated();
 
-            Log::info('Actualizando usuario', [
-                'user_id' => $userId,
-                'fields' => array_keys($data)
-            ]);
-
             // Verificar que el usuario existe
             $usuario = User::find($userId);
 
@@ -612,20 +548,8 @@ class AdminUsuariosController extends Controller
             // Realizar actualización
             $usuario->update($updateData);
 
-            Log::info('Usuario actualizado exitosamente', [
-                'user_id' => $userId,
-                'username' => $usuario->username
-            ]);
-
             return ApiResource::success(null, 'Usuario actualizado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al actualizar usuario', [
-                'user_id' => $userId,
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al actualizar usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -667,8 +591,6 @@ class AdminUsuariosController extends Controller
                     ->setStatusCode(400);
             }
 
-            Log::info('Eliminando usuario', ['user_id' => $userId]);
-
             // Verificar que el usuario existe
             $usuario = User::find($userId);
 
@@ -679,19 +601,8 @@ class AdminUsuariosController extends Controller
             // Eliminar usuario
             $usuario->delete();
 
-            Log::info('Usuario eliminado exitosamente', [
-                'user_id' => $userId,
-                'username' => $usuario->username
-            ]);
-
             return ApiResource::success(null, 'Usuario eliminado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar usuario', [
-                'user_id' => $userId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al eliminar usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -760,11 +671,6 @@ class AdminUsuariosController extends Controller
             $data = $validator->validated();
             $nuevoEstado = $data['is_active'];
 
-            Log::info('Cambiando estado de usuario', [
-                'user_id' => $userId,
-                'nuevo_estado' => $nuevoEstado
-            ]);
-
             // Verificar que el usuario existe
             $usuario = User::find($userId);
 
@@ -778,24 +684,12 @@ class AdminUsuariosController extends Controller
                 'updated_at' => Carbon::now()
             ]);
 
-            Log::info('Estado de usuario cambiado exitosamente', [
-                'user_id' => $userId,
-                'nuevo_estado' => $nuevoEstado
-            ]);
-
             return ApiResource::success([
                 'id' => $usuario->id,
                 'username' => $usuario->username,
                 'nuevo_estado' => $nuevoEstado
             ], 'Estado del usuario cambiado a ' . $nuevoEstado . ' exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al cambiar estado del usuario', [
-                'user_id' => $userId,
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al cambiar estado del usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -825,8 +719,6 @@ class AdminUsuariosController extends Controller
     public function exportarUsuarios(Request $request): JsonResponse
     {
         try {
-            Log::info('Exportando usuarios a CSV');
-
             // Obtener todos los usuarios (sin paginación para exportación)
             $usuarios = User::orderBy('created_at', 'desc')->get();
 
@@ -869,20 +761,11 @@ class AdminUsuariosController extends Controller
             // Generar CSV
             $csvContent = $this->generarCSV($csvData);
 
-            Log::info('Usuarios exportados exitosamente', [
-                'total' => count($usuarios)
-            ]);
-
             return ApiResource::success([
                 'csv_data' => $csvData,
                 'filename' => 'usuarios_export.csv'
             ], 'Datos exportados exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al exportar usuarios', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al exportar usuarios', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -952,18 +835,8 @@ class AdminUsuariosController extends Controller
                 return $response['data'];
             }
 
-            Log::warning('No se pudieron obtener datos del trabajador', [
-                'cedtra' => $cedtra,
-                'response' => $response
-            ]);
-
             return null;
         } catch (\Exception $e) {
-            Log::error('Error al obtener datos del trabajador', [
-                'cedtra' => $cedtra,
-                'error' => $e->getMessage()
-            ]);
-
             return null;
         }
     }
@@ -985,11 +858,6 @@ class AdminUsuariosController extends Controller
 
             return [];
         } catch (\Exception $e) {
-            Log::error('Error al obtener puntos de asesorías', [
-                'numero_documento' => $numeroDocumento,
-                'error' => $e->getMessage()
-            ]);
-
             return [];
         }
     }
@@ -1016,11 +884,6 @@ class AdminUsuariosController extends Controller
 
             throw new \Exception('El servicio externo no se encuentra disponible');
         } catch (\Exception $e) {
-            Log::error('Error al validar asesor externo', [
-                'numero_documento' => $numeroDocumento,
-                'error' => $e->getMessage()
-            ]);
-
             throw $e;
         }
     }

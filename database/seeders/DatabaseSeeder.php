@@ -27,8 +27,7 @@ class DatabaseSeeder extends Seeder
             SolicitudTimelineSeeder::class,
             EntidadDigitalSeeder::class,
             TipoDocumentoSeeder::class,
-            DocumentosPostulantesSeeder::class,
-            PostulacionesSeeder::class,
+            DocumentosPostulantesSeeder::class
         ]);
 
         $this->command->info('Seeders completados exitosamente!');

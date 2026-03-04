@@ -71,11 +71,11 @@ class AdminConveniosController extends Controller
                     ->setStatusCode(422);
             }
 
-            $page = (int) $request->get('page', 1);
-            $limit = (int) $request->get('limit', 20);
-            $estado = $request->get('estado');
-            $nit = $request->get('nit');
-            $busqueda = $request->get('busqueda');
+            $page = (int) $request->input('page', 1);
+            $limit = (int) $request->input('limit', 20);
+            $estado = $request->input('estado');
+            $nit = $request->input('nit');
+            $busqueda = $request->input('busqueda');
 
             Log::info('Obteniendo empresas con convenios', [
                 'page' => $page,

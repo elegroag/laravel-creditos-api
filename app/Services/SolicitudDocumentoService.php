@@ -258,4 +258,9 @@ class SolicitudDocumentoService
             throw new \Exception("Error al eliminar documento: " . $e->getMessage());
         }
     }
+
+    public function obtenerEstadisticasDocumentos()
+    {
+        return [];
+    }
 }

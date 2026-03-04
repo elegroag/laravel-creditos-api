@@ -10,7 +10,6 @@ use App\Services\ExternalApiService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
@@ -76,11 +75,6 @@ class PostulanteController extends Controller
             $cedtra = $data['cedtra'];
             $estado = strtoupper(trim($data['estado']));
 
-            Log::info('Consultando cónyuges de trabajador', [
-                'cedtra' => $cedtra,
-                'estado' => $estado
-            ]);
-
             // Preparar payload para la API externa
             $apiPayload = [
                 'cedtra' => $cedtra,
@@ -92,38 +86,18 @@ class PostulanteController extends Controller
 
             // Verificar si la respuesta contiene error
             if (!$response['success'] ?? true || isset($response['error'])) {
-                Log::warning('API externa retornó error para cónyuges', [
-                    'cedtra' => $cedtra,
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'status_code' => $response['status_code'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error consultando cónyuges del trabajador', [
                     'api_error' => $response['error'] ?? 'Error desconocido',
                     'api_status_code' => $response['status_code'] ?? null
                 ])->response()->setStatusCode(502);
             }
 
-            Log::info('Cónyuges consultados exitosamente', [
-                'cedtra' => $cedtra,
-                'count' => count($response['data'] ?? [])
-            ]);
-
             return ApiResource::success($response['data'] ?? [], 'Cónyuges consultados exitosamente')->response();
         } catch (ValidationException $e) {
-            Log::warning('Error de validación en buscarConyugeTrabajador', [
-                'errors' => $e->errors()
-            ]);
-
             return ErrorResource::validationError($e->errors(), 'Datos inválidos')
                 ->response()
                 ->setStatusCode(422);
         } catch (\Exception $e) {
-            Log::error('Error inesperado en buscarConyugeTrabajador', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al consultar cónyuges', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -192,28 +166,14 @@ class PostulanteController extends Controller
 
             // Verificar si la respuesta contiene error
             if (!$response['success'] ?? true || isset($response['error'])) {
-                Log::warning('API externa retornó error para crear tercero', [
-                    'cedula' => $solicitante->numero_documento,
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'status_code' => $response['status_code'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error creando tercero', [
                     'api_error' => $response['error'] ?? 'Error desconocido',
                     'api_status_code' => $response['status_code'] ?? null
                 ])->response()->setStatusCode(502);
             }
 
-            Log::info('Tercero creado exitosamente', [
-                'cedula' => $data['cedula'],
-            ]);
-
             return ApiResource::success($response['data'] ?? [], 'Tercero creado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error creando tercero', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
             return ErrorResource::errorResponse('Error creando tercero', [
                 'error' => $e->getMessage()
             ])->response()->setStatusCode(500);
@@ -232,28 +192,14 @@ class PostulanteController extends Controller
 
             // Verificar si la respuesta contiene error
             if (!$response['success'] ?? true || isset($response['error'])) {
-                Log::warning('API externa retornó error para buscar tercero', [
-                    'cedula' => $cedula,
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'status_code' => $response['status_code'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error buscando tercero', [
                     'api_error' => $response['error'] ?? 'Error desconocido',
                     'api_status_code' => $response['status_code'] ?? null
                 ])->response()->setStatusCode(502);
             }
 
-            Log::info('Tercero buscado exitosamente', [
-                'cedula' => $cedula,
-            ]);
-
             return ApiResource::success($response['data'] ?? [], 'Tercero buscado exitosamente')->response();
         } catch (\Throwable $th) {
-            Log::error('Error buscando tercero', [
-                'error' => $th->getMessage(),
-                'trace' => $th->getTraceAsString()
-            ]);
             return ErrorResource::errorResponse('Error buscando tercero', [
                 'error' => $th->getMessage()
             ])->response()->setStatusCode(500);

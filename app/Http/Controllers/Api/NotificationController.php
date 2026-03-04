@@ -8,7 +8,6 @@ use App\Http\Resources\ErrorResource;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
 
 class NotificationController extends Controller
@@ -66,11 +65,6 @@ class NotificationController extends Controller
                 'total' => $notifications->count()
             ], 'Notificaciones obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener notificaciones', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error al obtener notificaciones', [
                 'error' => $e->getMessage()
             ])->response();
@@ -104,10 +98,6 @@ class NotificationController extends Controller
                 'unread_count' => $count
             ], 'Contador obtenido')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener contador de notificaciones', [
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error al obtener contador')->response();
         }
     }
@@ -153,11 +143,6 @@ class NotificationController extends Controller
                 'marked_as_read' => true
             ], 'Notificación marcada como leída')->response();
         } catch (\Exception $e) {
-            Log::error('Error al marcar notificación como leída', [
-                'notification_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error al marcar notificación')->response();
         }
     }
@@ -189,10 +174,6 @@ class NotificationController extends Controller
                 'marked_count' => $count
             ], "Se marcaron {$count} notificaciones como leídas")->response();
         } catch (\Exception $e) {
-            Log::error('Error al marcar todas las notificaciones como leídas', [
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error al marcar notificaciones')->response();
         }
     }
@@ -239,11 +220,6 @@ class NotificationController extends Controller
                 'deleted' => true
             ], 'Notificación eliminada')->response();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar notificación', [
-                'notification_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error al eliminar notificación')->response();
         }
     }

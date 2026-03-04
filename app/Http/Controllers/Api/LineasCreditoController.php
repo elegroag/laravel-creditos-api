@@ -8,7 +8,6 @@ use App\Http\Resources\ErrorResource;
 use App\Services\ExternalApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
 use OpenApi\Attributes as OA;
 
@@ -53,31 +52,17 @@ class LineasCreditoController extends Controller
 
             // Verificar si la respuesta contiene error (para respuestas directas de API externa)
             if (isset($response['error']) && $response['error']) {
-                Log::warning('API externa retornó error - parámetros', [
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'detail' => $response['detail'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error al consultar datos generales', [
                     'external_error' => $response['error'] ?? 'Error desconocido',
                     'external_detail' => $response['detail'] ?? null
                 ])->response()->setStatusCode(400);
             }
 
-            Log::info('Parámetros generales obtenidos exitosamente', [
-                'data_keys' => array_keys($response['data'] ?? [])
-            ]);
-
             return ApiResource::success(
                 $response['data'] ?? [],
                 'Datos generales obtenidos exitosamente'
             )->response();
         } catch (\Exception $e) {
-            Log::error('Error al consultar parámetros generales', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al consultar datos generales', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -106,7 +91,6 @@ class LineasCreditoController extends Controller
             // Realizar la consulta a la API externa
             $response = $this->externalApiService->post('/creditos/tipo-creditos');
 
-            Log::info('tip creditos', array_keys($response));
             // Verificar si la respuesta fue exitosa
 
             //aqui se valida con status no con success
@@ -123,18 +107,11 @@ class LineasCreditoController extends Controller
 
             // Verificar si la respuesta contiene error (para respuestas directas de API externa)
             if (isset($response['error']) && $response['error']) {
-                Log::warning('API externa retornó error - tipos crédito', [
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'detail' => $response['detail'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error al consultar tipos de crédito', [
                     'external_error' => $response['error'] ?? 'Error desconocido',
                     'external_detail' => $response['detail'] ?? null
                 ])->response()->setStatusCode(400);
             }
-
-            Log::info('Tipos de crédito obtenidos exitosamente', ['count' => count($response['data'] ?? [])]);
 
             return ApiResource::success(
                 $response['data'] ?? [],
@@ -167,8 +144,6 @@ class LineasCreditoController extends Controller
     public function obtenerLineasCredito(): JsonResponse
     {
         try {
-            Log::info('Consultando información completa de líneas de crédito');
-
             // Obtener parámetros generales
             $parametrosResponse = $this->obtenerParametros();
             $parametrosData = $parametrosResponse->getData(true);
@@ -201,18 +176,8 @@ class LineasCreditoController extends Controller
                     ->setStatusCode(500);
             }
 
-            Log::info('Información completa de líneas de crédito obtenida', [
-                'parametros_count' => count($combinedData['parametros']),
-                'tipos_count' => count($combinedData['tipos_creditos'])
-            ]);
-
             return ApiResource::success($combinedData, 'Información de líneas de crédito obtenida exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al consultar información completa de líneas de crédito', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al consultar líneas de crédito', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -238,8 +203,6 @@ class LineasCreditoController extends Controller
     public function verificarDisponibilidad(): JsonResponse
     {
         try {
-            Log::info('Verificando disponibilidad del servicio de líneas de crédito');
-
             $startTime = microtime(true);
 
             // Intentar una consulta simple
@@ -249,12 +212,6 @@ class LineasCreditoController extends Controller
 
             $isAvailable = $response['success'] ?? true;
 
-            Log::info('Verificación de disponibilidad completada', [
-                'available' => $isAvailable,
-                'response_time' => $responseTime,
-                'status' => $response['status_code'] ?? 500
-            ]);
-
             return ApiResource::success([
                 'available' => $isAvailable,
                 'response_time_ms' => $responseTime,
@@ -262,10 +219,6 @@ class LineasCreditoController extends Controller
                 'timestamp' => now()->toISOString()
             ], $isAvailable ? 'Servicio disponible' : 'Servicio no disponible')->response();
         } catch (\Exception $e) {
-            Log::error('Error al verificar disponibilidad del servicio', [
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error al verificar disponibilidad del servicio', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -291,8 +244,6 @@ class LineasCreditoController extends Controller
     public function obtenerEstadisticas(): JsonResponse
     {
         try {
-            Log::info('Consultando estadísticas de líneas de crédito');
-
             // Obtener datos básicos
             $parametrosResponse = $this->obtenerParametros();
             $parametrosData = $parametrosResponse->getData(true);
@@ -316,14 +267,8 @@ class LineasCreditoController extends Controller
                 }));
             }
 
-            Log::info('Estadísticas de líneas de crédito calculadas', $estadisticas);
-
             return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de líneas de crédito', [
-                'error' => $e->getMessage()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

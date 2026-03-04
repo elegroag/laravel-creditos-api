@@ -11,7 +11,6 @@ use App\Models\EstadoSolicitud;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
@@ -53,8 +52,6 @@ class AdminDashboardController extends Controller
                 return ErrorResource::forbidden('No autorizado para ver esta solicitud')->response();
             }
 
-            Log::info('Obteniendo estadísticas generales del dashboard');
-
             // Estadísticas de solicitudes
             $statsSolicitudes = $this->obtenerEstadisticasSolicitudes();
 
@@ -75,19 +72,8 @@ class AdminDashboardController extends Controller
                 'ultimaActualizacion' => now()->toISOString()
             ];
 
-            Log::info('Estadísticas generales obtenidas exitosamente', [
-                'total_solicitudes' => $statsSolicitudes['total'],
-                'convenios_activos' => $statsConvenios['activos'],
-                'trabajadores' => $statsUsuarios['trabajadores']
-            ]);
-
             return ApiResource::success($data, 'Estadísticas del dashboard obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas generales', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -171,9 +157,6 @@ class AdminDashboardController extends Controller
                 'porMes' => $solicitudesPorMes
             ];
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de solicitudes', [
-                'error' => $e->getMessage()
-            ]);
             throw $e;
         }
     }
@@ -231,9 +214,6 @@ class AdminDashboardController extends Controller
                 'porTipo' => $porTipo
             ];
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de convenios', [
-                'error' => $e->getMessage()
-            ]);
             throw $e;
         }
     }
@@ -275,9 +255,6 @@ class AdminDashboardController extends Controller
                 'recientes' => $recientes
             ];
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de usuarios', [
-                'error' => $e->getMessage()
-            ]);
             throw $e;
         }
     }
@@ -329,9 +306,6 @@ class AdminDashboardController extends Controller
             // Limitar a 10 actividades más recientes
             return array_slice($actividad, 0, 10);
         } catch (\Exception $e) {
-            Log::error('Error al obtener actividad reciente', [
-                'error' => $e->getMessage()
-            ]);
             throw $e;
         }
     }

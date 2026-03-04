@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
-use App\Models\Postulacion;
+use App\Models\SolicitudCredito;
 use App\Services\FirmaPlusService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -70,7 +70,7 @@ class FirmaDigitalController extends Controller
             }
 
             // Obtener solicitud
-            $solicitud = Postulacion::find($solicitud_id);
+            $solicitud = SolicitudCredito::find($solicitud_id);
 
             if (!$solicitud) {
                 return ErrorResource::notFound('Solicitud no encontrada')->response();
@@ -216,7 +216,7 @@ class FirmaDigitalController extends Controller
                     ->setStatusCode(400);
             }
 
-            $solicitud = Postulacion::find($solicitud_id);
+            $solicitud = SolicitudCredito::find($solicitud_id);
 
             if (!$solicitud) {
                 return ErrorResource::notFound('Solicitud no encontrada')->response();
@@ -340,7 +340,7 @@ class FirmaDigitalController extends Controller
             }
 
             // Buscar solicitud
-            $solicitud = Postulacion::find($solicitudId);
+            $solicitud = SolicitudCredito::find($solicitudId);
 
             if (!$solicitud) {
                 Log::error('Solicitud no encontrada en webhook', [

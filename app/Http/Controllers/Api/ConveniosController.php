@@ -236,8 +236,8 @@ class ConveniosController extends Controller
     public function obtenerConvenioActivo(Request $request): JsonResponse
     {
         try {
-            $currentUser = $request->get('current_user');
-            $authenticatedUser = $request->get('authenticated_user');
+            $currentUser = $request->input('current_user');
+            $authenticatedUser = $request->input('authenticated_user');
 
             $numeroDocumento = null;
 

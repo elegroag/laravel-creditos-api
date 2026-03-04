@@ -12,7 +12,6 @@ use App\Services\UserService;
 use App\Services\SolicitudDocumentoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -110,13 +109,6 @@ class SolicitudDocumentosController extends Controller
 
             return response()->download($fullPath, $documento->nombre_original ?? basename($fullPath));
         } catch (\Exception $e) {
-            Log::error('Error al descargar documento por id', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al descargar documento', [
                 'trace' => $e->getMessage()
             ])->response();
@@ -201,13 +193,6 @@ class SolicitudDocumentosController extends Controller
                 'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"'
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al previsualizar documento por id', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al previsualizar documento', [
                 'trace' => $e->getMessage()
             ])->response();
@@ -250,12 +235,6 @@ class SolicitudDocumentosController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
-            Log::info('Listando documentos requeridos', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
-
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -276,21 +255,8 @@ class SolicitudDocumentosController extends Controller
             // Definir documentos requeridos según el tipo de crédito
             $documentosRequeridos = $this->documentoService->obtenerDocumentosPorTipoCredito($detalleModalidad);
 
-            Log::info('Documentos requeridos obtenidos', [
-                'solicitud_id' => $solicitudId,
-                'tipo_credito' => $tipoCredito,
-                'detalle_modalidad' => $detalleModalidad,
-                'total_documentos' => count($documentosRequeridos)
-            ]);
-
             return ApiResource::success($documentosRequeridos, 'Documentos requeridos obtenidos exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar documentos requeridos', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar documentos requeridos', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -335,12 +301,6 @@ class SolicitudDocumentosController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
 
-            Log::info('Listando documentos de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
-
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -355,19 +315,8 @@ class SolicitudDocumentosController extends Controller
             // Obtener documentos
             $documentos = $solicitud['documentos'] ?? [];
 
-            Log::info('Documentos de solicitud obtenidos', [
-                'solicitud_id' => $solicitudId,
-                'total_documentos' => count($documentos)
-            ]);
-
             return ApiResource::success($documentos, 'Documentos obtenidos exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar documentos de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar documentos', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -484,13 +433,6 @@ class SolicitudDocumentosController extends Controller
 
             return ApiResource::success($solicitudActualizada, 'Documento agregado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al agregar documento a solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al agregar documento', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -560,20 +502,8 @@ class SolicitudDocumentosController extends Controller
                 return ErrorResource::notFound("Documento no encontrado: {$documentoId}")->response();
             }
 
-            Log::info('Documento eliminado exitosamente', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId
-            ]);
-
             return ApiResource::success($solicitudActualizada, 'Documento eliminado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar documento de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al eliminar documento', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -653,13 +583,6 @@ class SolicitudDocumentosController extends Controller
 
             return $response;
         } catch (\Exception $e) {
-            Log::error('Error al descargar documento', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al descargar documento', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -804,21 +727,12 @@ class SolicitudDocumentosController extends Controller
                 'activo' => true
             ]);
 
-            Log::info('Documento guardado en base de datos', [
-                'documento_id' => $documento->id,
-                'solicitud_id' => $solicitudId,
-                'documento_uuid' => $fileData['id']
-            ]);
-
             return [
                 'documento' => $documento->toArray(),
                 'solicitud' => $solicitud->fresh()->toArray()
             ];
         } catch (\Exception $e) {
-            Log::error('Error al agregar documento a solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage()
-            ]);
+            // Error al agregar documento a solicitud
             throw $e;
         }
     }
@@ -866,11 +780,7 @@ class SolicitudDocumentosController extends Controller
 
             return $solicitud->fresh()->toArray();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar documento de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'documento_id' => $documentoId,
-                'error' => $e->getMessage()
-            ]);
+            // Error al eliminar documento de solicitud
             throw $e;
         }
     }
@@ -901,11 +811,6 @@ class SolicitudDocumentosController extends Controller
             }
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-
-            Log::info('Obteniendo estadísticas de documentos', [
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
 
             $query = SolicitudCredito::query();
 
@@ -952,11 +857,6 @@ class SolicitudDocumentosController extends Controller
 
             return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de documentos', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

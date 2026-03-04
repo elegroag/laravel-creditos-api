@@ -21,7 +21,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -114,7 +113,7 @@ class AuthController extends Controller
     /**
      * Register a new user.
      *
-     * 
+     *
      */
     #[OA\Post(
         path: '/auth/register',
@@ -250,9 +249,8 @@ class AuthController extends Controller
             try {
                 // Enviar el correo
                 $sender->send($authResult['user']['email'], $body, null, $altBody);
-                Log::info('Correo enviado exitosamente');
             } catch (\Exception $e) {
-                Log::error('Error al enviar el correo: ' . $e->getMessage());
+                // Error al enviar el correo
             }
 
             return RegisterResource::registerResponse([
@@ -264,8 +262,6 @@ class AuthController extends Controller
                 'verification_required' => true
             ])->response()->setStatusCode(201);
         } catch (\Exception $e) {
-            Log::error('Error en registro: ' . $e->getMessage());
-
             return ErrorResource::errorResponse('Error al registrar usuario', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -278,7 +274,7 @@ class AuthController extends Controller
      * Verify JWT token and return user info.
      * Comportamiento idéntico al endpoint de Python.
      *
-     * 
+     *
      */
     #[OA\Get(
         path: '/auth/verify',
@@ -350,8 +346,6 @@ class AuthController extends Controller
 
             return VerifyResource::verifyResponse($verifyData)->response();
         } catch (\Exception $e) {
-            Log::error('Error verificando token: ' . $e->getMessage());
-
             return ErrorResource::authError('Token inválido', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -420,7 +414,7 @@ class AuthController extends Controller
                     $trabajadorData = $this->trabajadorService->obtenerDatosTrabajador($user->numero_documento);
                     $puntosAsesorias = $this->trabajadorService->obtenerPuntosAsesoresPorUsuario($user);
                 } catch (\Exception $e) {
-                    Log::warning("No se pudieron obtener datos adicionales del asesor: " . $e->getMessage());
+                    // No se pudieron obtener datos adicionales del asesor
                 }
             }
 
@@ -440,8 +434,6 @@ class AuthController extends Controller
             return ApiResource::success($authResult, 'Solicitud encontrada')
                 ->response();
         } catch (\Exception $e) {
-            Log::error('Error en login de asesor: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error de autenticación'
             ], 401);
@@ -471,8 +463,6 @@ class AuthController extends Controller
                 'message' => 'Sesión cerrada exitosamente'
             ]);
         } catch (\Exception $e) {
-            Log::error('Error en logout: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error al cerrar sesión'
             ], 500);
@@ -520,8 +510,6 @@ class AuthController extends Controller
                 'user' => $user
             ]);
         } catch (\Exception $e) {
-            Log::error('Error refrescando token: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error al refrescar token'
             ], 401);
@@ -570,8 +558,6 @@ class AuthController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            Log::error('Error obteniendo datos del usuario: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error al obtener datos del usuario'
             ], 500);
@@ -638,8 +624,6 @@ class AuthController extends Controller
                 'error' => $e->getMessage()
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Error cambiando contraseña: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error al cambiar contraseña'
             ], 500);
@@ -693,8 +677,6 @@ class AuthController extends Controller
                 'error' => $e->getMessage()
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Error actualizando perfil: ' . $e->getMessage());
-
             return response()->json([
                 'error' => 'Error al actualizar perfil'
             ], 500);

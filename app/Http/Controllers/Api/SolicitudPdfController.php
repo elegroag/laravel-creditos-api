@@ -13,7 +13,6 @@ use App\Services\TrabajadorService;
 use App\Services\PdfGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
@@ -44,7 +43,7 @@ class SolicitudPdfController extends Controller
      */
     private function getAuthenticatedUser(Request $request): array
     {
-        $authenticatedUser = $request->get('authenticated_user');
+        $authenticatedUser = $request->input('authenticated_user');
         return $authenticatedUser['user'] ?? [];
     }
 
@@ -117,26 +116,12 @@ class SolicitudPdfController extends Controller
                     'ENVIADO_VALIDACION',
                     'PDF generado exitosamente, enviado para validación de asesores'
                 );
-
-                Log::info('PDF generado y estado actualizado', [
-                    'solicitud_id' => $solicitudId,
-                    'nuevo_estado' => 'ENVIADO_VALIDACION'
-                ]);
             } catch (\Exception $e) {
-                Log::warning('No se pudo actualizar el estado de la solicitud', [
-                    'solicitud_id' => $solicitudId,
-                    'error' => $e->getMessage()
-                ]);
+                // No se pudo actualizar el estado de la solicitud
             }
 
             return ApiResource::success($resultado['data'], 'PDF generado exitosamente y solicitud enviada para validación')->response();
         } catch (\Exception $e) {
-            Log::error('Error inesperado al generar PDF', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al generar el PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -216,12 +201,6 @@ class SolicitudPdfController extends Controller
                 'Content-Length' => filesize($fullPath)
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al descargar PDF', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error al descargar el PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -323,12 +302,6 @@ class SolicitudPdfController extends Controller
 
             return ApiResource::success($estado, 'Estado del PDF obtenido exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error verificando estado del PDF', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error al verificar el estado del PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -393,7 +366,6 @@ class SolicitudPdfController extends Controller
                 $pdfPath = $pdfData['path'];
                 if (Storage::disk('public')->exists($pdfPath)) {
                     Storage::disk('public')->delete($pdfPath);
-                    Log::info('Archivo PDF eliminado', ['pdf_path' => $pdfPath]);
                 }
             }
 
@@ -406,12 +378,6 @@ class SolicitudPdfController extends Controller
 
             return ApiResource::success(null, 'PDF eliminado exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al eliminar PDF de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al eliminar PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -447,11 +413,6 @@ class SolicitudPdfController extends Controller
 
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('admin', $userRoles);
-
-            Log::info('Obteniendo estadísticas de PDFs', [
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
 
             $query = SolicitudCredito::query();
 
@@ -510,11 +471,6 @@ class SolicitudPdfController extends Controller
 
             return ApiResource::success($estadisticas, 'Estadísticas de PDFs obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de PDFs', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

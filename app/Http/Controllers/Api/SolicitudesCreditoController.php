@@ -7,15 +7,11 @@ use App\Http\Resources\ApiResource;
 use App\Http\Resources\ErrorResource;
 use App\Models\EstadoSolicitud;
 use App\Models\NumeroSolicitud;
-use App\Models\SolicitudCredito;
 use App\Services\SolicitudService;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Carbon\Carbon;
 use DebugException;
 use OpenApi\Attributes as OA;
@@ -38,108 +34,8 @@ class SolicitudesCreditoController extends Controller
      */
     private function getAuthenticatedUser(Request $request): array
     {
-        $authenticatedUser = $request->get('authenticated_user');
+        $authenticatedUser = $request->input('authenticated_user');
         return $authenticatedUser['user'] ?? [];
-    }
-
-    /**
-     * Crea una nueva solicitud de crédito con validación.
-     */
-    #[OA\Post(
-        path: '/solicitudes-credito',
-        tags: ['SolicitudesCredito'],
-        summary: 'Crear solicitud de crédito',
-        security: [['bearerAuth' => []]],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ['monto_solicitado', 'plazo_meses', 'solicitante'],
-                properties: [
-                    new OA\Property(property: 'monto_solicitado', type: 'number', format: 'float', example: 10000000),
-                    new OA\Property(property: 'plazo_meses', type: 'integer', example: 12),
-                    new OA\Property(property: 'solicitante', type: 'object')
-                ]
-            )
-        ),
-        responses: [
-            new OA\Response(response: 200, description: 'Solicitud creada exitosamente'),
-            new OA\Response(response: 422, description: 'Error de validación'),
-            new OA\Response(response: 401, description: 'No autorizado')
-        ]
-    )]
-    public function crearSolicitudCredito(Request $request): JsonResponse
-    {
-        try {
-            // Obtener datos del usuario desde el middleware JWT
-            $userData = $this->getAuthenticatedUser($request);
-            $username = $userData['username'];
-
-            // Validar datos de entrada
-            $validator = Validator::make($request->all(), [
-                'numero_solicitud' => 'sometimes|string|max:50',
-                'monto_solicitado' => 'required|numeric|min:0',
-                'plazo_meses' => 'required|integer|min:1|max:360',
-                'linea_credito' => 'sometimes|string|max:10',
-                'solicitante' => 'required|array',
-                'solicitante.tipo_identificacion' => 'required|string|max:10',
-                'solicitante.numero_identificacion' => 'required|string|max:20',
-                'solicitante.nombres_apellidos' => 'required|string|max:200',
-                'solicitante.email' => 'sometimes|email|max:255',
-                'solicitante.telefono_movil' => 'sometimes|string|max:20',
-                'solicitante.direccion' => 'sometimes|string|max:255',
-                'solicitante.ciudad' => 'sometimes|string|max:100',
-                'observaciones' => 'sometimes|string|max:500'
-            ], [
-                'monto_solicitado.required' => 'El monto solicitado es requerido',
-                'monto_solicitado.numeric' => 'El monto solicitado debe ser un número',
-                'monto_solicitado.min' => 'El monto solicitado debe ser mayor o igual a 0',
-                'plazo_meses.required' => 'El plazo en meses es requerido',
-                'plazo_meses.integer' => 'El plazo debe ser un número entero',
-                'plazo_meses.min' => 'El plazo debe ser al menos 1 mes',
-                'plazo_meses.max' => 'El plazo no puede exceder 360 meses',
-                'solicitante.required' => 'Los datos del solicitante son requeridos',
-                'solicitante.tipo_identificacion.required' => 'El tipo de identificación es requerido',
-                'solicitante.numero_identificacion.required' => 'El número de identificación es requerido',
-                'solicitante.nombres_apellidos.required' => 'Los nombres y apellidos son requeridos',
-                'solicitante.email.email' => 'El email debe ser válido'
-            ]);
-
-            if ($validator->fails()) {
-                return ErrorResource::validationError($validator->errors()->toArray(), 'Datos inválidos')
-                    ->response()
-                    ->setStatusCode(422);
-            }
-
-            $solicitudData = $validator->validated();
-
-            Log::info('Creando nueva solicitud de crédito', [
-                'username' => $username,
-                'monto_solicitado' => $solicitudData['monto_solicitado'],
-                'plazo_meses' => $solicitudData['plazo_meses']
-            ]);
-
-            // Crear solicitud mediante servicio
-            $solicitud = $this->solicitudService->create($solicitudData, $username);
-
-            Log::info('Solicitud creada exitosamente', [
-                'solicitud_id' => $solicitud['id'] ?? null,
-                'username' => $username
-            ]);
-
-            return ApiResource::success($solicitud, 'Solicitud creada exitosamente')->response();
-        } catch (\Exception $e) {
-            Log::error('Error al crear solicitud de crédito', [
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return ErrorResource::serverError('Error interno al crear solicitud', [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getMessage()
-            ])->response();
-        }
     }
 
     /**
@@ -204,13 +100,6 @@ class SolicitudesCreditoController extends Controller
             $queryParams = $validator->validated();
             $skip = $queryParams['skip'] ?? 0;
             $limit = $queryParams['limit'] ?? 20;
-
-            Log::info('Listando solicitudes de crédito', [
-                'username' => $username,
-                'is_admin' => $isAdmin,
-                'skip' => $skip,
-                'limit' => $limit
-            ]);
 
             if ($isAdmin) {
                 // Construir filtros para admin
@@ -294,12 +183,6 @@ class SolicitudesCreditoController extends Controller
                 ]
             ], 'Solicitudes obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar solicitudes de crédito', [
-                'error' => $e->getMessage(),
-                'params' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar solicitudes', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -343,11 +226,6 @@ class SolicitudesCreditoController extends Controller
 
             return ApiResource::success($solicitudes, 'Todas las solicitudes obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar todas las solicitudes de crédito', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar solicitudes', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -407,11 +285,6 @@ class SolicitudesCreditoController extends Controller
 
             return ApiResource::success($result, 'Solicitudes obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar resumen de solicitudes', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar solicitudes', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -467,12 +340,6 @@ class SolicitudesCreditoController extends Controller
 
             return ApiResource::success($solicitud, 'Solicitud obtenida exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener solicitud', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -546,13 +413,6 @@ class SolicitudesCreditoController extends Controller
 
             $updateData = $validator->validated();
 
-            Log::info('Actualizando solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin,
-                'update_fields' => array_keys($updateData)
-            ]);
-
             // Obtener solicitud para verificar permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -568,19 +428,8 @@ class SolicitudesCreditoController extends Controller
             // Actualizar solicitud
             $solicitudActualizada = $this->solicitudService->update($solicitudId, $updateData);
 
-            Log::info('Solicitud actualizada exitosamente', [
-                'solicitud_id' => $solicitudId
-            ]);
-
             return ApiResource::success($solicitudActualizada, 'Solicitud actualizada exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al actualizar solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al actualizar solicitud', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -621,12 +470,6 @@ class SolicitudesCreditoController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
-            Log::info('Eliminando solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
-
             // Obtener solicitud para verificar permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
 
@@ -643,21 +486,11 @@ class SolicitudesCreditoController extends Controller
             $eliminado = $this->solicitudService->delete($solicitudId);
 
             if ($eliminado) {
-                Log::info('Solicitud eliminada exitosamente', [
-                    'solicitud_id' => $solicitudId
-                ]);
-
                 return ApiResource::success(null, 'Solicitud eliminada exitosamente')->response();
             } else {
                 return ErrorResource::errorResponse('No se pudo eliminar la solicitud')->response()->setStatusCode(400);
             }
         } catch (\Exception $e) {
-            Log::error('Error al eliminar solicitud de crédito', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al eliminar solicitud', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -697,12 +530,6 @@ class SolicitudesCreditoController extends Controller
             $username = $userData['username'];
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
-
-            Log::info('Finalizando proceso de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
 
             // Verificar que la solicitud existe y permisos
             $solicitud = $this->solicitudService->getById($solicitudId);
@@ -761,19 +588,8 @@ class SolicitudesCreditoController extends Controller
                 return ErrorResource::errorResponse('No se pudo finalizar el proceso')->response()->setStatusCode(400);
             }
 
-            Log::info('Proceso de solicitud finalizado exitosamente', [
-                'solicitud_id' => $solicitudId,
-                'nuevo_estado' => $solicitudActualizada['estado'] ?? 'Unknown'
-            ]);
-
             return ApiResource::success($solicitudActualizada, 'Proceso finalizado exitosamente. Solicitud enviada para aprobación.')->response();
         } catch (\Exception $e) {
-            Log::error('Error al finalizar proceso de solicitud', [
-                'solicitud_id' => $solicitudId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al finalizar proceso', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -833,20 +649,10 @@ class SolicitudesCreditoController extends Controller
             $userRoles = $userData['roles'] ?? [];
             $isAdmin = in_array('administrator', $userRoles);
 
-            Log::info('Obteniendo estadísticas de solicitudes', [
-                'username' => $username,
-                'is_admin' => $isAdmin
-            ]);
-
             $estadisticas = $this->solicitudService->getEstadisticas($isAdmin ? null : $username);
 
             return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas de solicitudes', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -912,13 +718,6 @@ class SolicitudesCreditoController extends Controller
             $limit = $data['limit'] ?? 50;
             $estado = $data['estado'] ?? null;
 
-            Log::info('Buscando solicitudes', [
-                'termino' => $termino,
-                'limit' => $limit,
-                'estado' => $estado,
-                'is_admin' => $isAdmin
-            ]);
-
             $resultados = $this->solicitudService->buscar($termino, $limit, $estado, $isAdmin ? null : $username);
 
             return ApiResource::success([
@@ -928,12 +727,6 @@ class SolicitudesCreditoController extends Controller
                 'estado' => $estado
             ], 'Búsqueda completada')->response();
         } catch (\Exception $e) {
-            Log::error('Error al buscar solicitudes', [
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al buscar solicitudes', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -969,10 +762,6 @@ class SolicitudesCreditoController extends Controller
 
             $hasAccess = $isAdmin || $isAdviser;
 
-            Log::info('Contando solicitudes por estado', [
-                'has_access' => $hasAccess
-            ]);
-
             $resultados = $this->solicitudService->contarSolicitudesPorEstado($hasAccess ? null : $username);
 
             // Transformar el array de resultados a un objeto con estados como claves
@@ -983,12 +772,6 @@ class SolicitudesCreditoController extends Controller
 
             return ApiResource::success($estadosConteo, 'Conteo de solicitudes obtenido exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al contar solicitudes por estado', [
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al contar solicitudes por estado', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -1029,13 +812,6 @@ class SolicitudesCreditoController extends Controller
 
             $hasAccess = $isAdmin || $isAdviser;
 
-            Log::info('Listando solicitudes paginadas', [
-                'limit' => $limit,
-                'offset' => $offset,
-                'estado' => $estado,
-                'is_admin' => $isAdmin
-            ]);
-
             $resultados = $this->solicitudService->listarSolicitudesCreditoPaginado($limit, $offset, $estado, $hasAccess ? null : $username);
 
             return ApiResource::success([
@@ -1046,16 +822,6 @@ class SolicitudesCreditoController extends Controller
                 'estado' => $estado
             ], 'Listado completado')->response();
         } catch (\Exception $e) {
-            Log::error('Error al listar solicitudes paginadas', [
-                'error' => $e->getMessage(),
-                'data' => [
-                    'limit' => $limit,
-                    'offset' => $offset,
-                    'estado' => $estado
-                ],
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al listar solicitudes paginadas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -1144,12 +910,6 @@ class SolicitudesCreditoController extends Controller
             ], 'Solicitud guardada exitosamente')
                 ->response();
         } catch (\Exception $e) {
-            Log::error('Error interno al generar PDF de solicitud', [
-                'error' => $e->getMessage(),
-                'data' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al generar PDF', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -1224,10 +984,6 @@ class SolicitudesCreditoController extends Controller
             $out = $this->solicitudService->createSolicitudUseApi($solicitud_id);
             return ApiResource::success($out, 'Solicitud enviada exitosamente')->response();
         } catch (DebugException $e) {
-            Log::error('Error enviando solicitud', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
             return ErrorResource::errorResponse('Error enviando la soliictud', [
                 'error' => $e->getMessage()
             ])->response()->setStatusCode(500);

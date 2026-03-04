@@ -10,7 +10,6 @@ use App\Services\SolicitudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
@@ -64,8 +63,6 @@ class PerfilController extends Controller
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
 
-            Log::info('Obteniendo perfil para usuario', ['username' => $username]);
-
             // Obtener usuario completo
             $usuario = $this->userService->getByUsername($username);
 
@@ -98,15 +95,8 @@ class PerfilController extends Controller
                 'updated_at' => $usuario->updated_at?->toISOString()
             ];
 
-            Log::info('Perfil obtenido exitosamente', ['username' => $username]);
-
             return ApiResource::success($perfilData, 'Perfil obtenido exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error obteniendo perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener perfil', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -119,7 +109,7 @@ class PerfilController extends Controller
      * Actualizar perfil del usuario
      *
      * PUT /api/perfil
-     * 
+     *
      * Returns:
      *     Perfil actualizado
      */
@@ -186,11 +176,6 @@ class PerfilController extends Controller
 
             $updateData = $validator->validated();
 
-            Log::info('Actualizando perfil para usuario', [
-                'username' => $username,
-                'update_fields' => array_keys($updateData)
-            ]);
-
             $usuario = $this->userService->getByUsername($username);
 
             if (!$usuario) {
@@ -246,25 +231,12 @@ class PerfilController extends Controller
                 'updated_at' => $usuarioActualizado->updated_at?->toISOString()
             ];
 
-            Log::info('Perfil actualizado exitosamente', ['username' => $username]);
-
             return ApiResource::success($perfilData, 'Perfil actualizado exitosamente')->response();
         } catch (ValidationException $e) {
-            Log::error('Error de validación al actualizar perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
             return ErrorResource::validationError($e->errors(), 'Datos inválidos')
                 ->response()
                 ->setStatusCode(422);
         } catch (\Exception $e) {
-            Log::error('Error actualizando perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al actualizar perfil', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -277,7 +249,7 @@ class PerfilController extends Controller
      * Cambiar contraseña del usuario
      *
      * PUT /api/perfil/password
-     * 
+     *
      * Returns:
      *     Confirmación de cambio
      */
@@ -339,8 +311,6 @@ class PerfilController extends Controller
             $currentPassword = $passwordData['current_password'];
             $newPassword = $passwordData['new_password'];
 
-            Log::info('Intentando cambiar contraseña', ['username' => $username]);
-
             // Obtener usuario para verificar que existe
             $usuario = $this->userService->getByUsername($username);
 
@@ -350,8 +320,6 @@ class PerfilController extends Controller
 
             // Verificar contraseña actual
             if (!Hash::check($currentPassword, $usuario->password)) {
-                Log::warning('Contraseña actual incorrecta', ['username' => $username]);
-
                 return ErrorResource::errorResponse('La contraseña actual es incorrecta')
                     ->response()
                     ->setStatusCode(400);
@@ -361,16 +329,8 @@ class PerfilController extends Controller
             $usuario->password = Hash::make($newPassword);
             $usuario->save();
 
-            Log::info('Contraseña cambiada exitosamente', ['username' => $username]);
-
             return ApiResource::success(null, 'Contraseña cambiada exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al cambiar contraseña', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al cambiar contraseña', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -383,7 +343,7 @@ class PerfilController extends Controller
      * Obtener actividad reciente del usuario
      *
      * GET /api/perfil/actividad
-     * 
+     *
      * Returns:
      *     Actividad reciente del usuario
      */
@@ -434,13 +394,6 @@ class PerfilController extends Controller
             $skip = $queryParams['skip'] ?? 0;
             $type = $queryParams['type'] ?? 'todos';
 
-            Log::info('Obteniendo actividad del usuario', [
-                'username' => $username,
-                'limit' => $limit,
-                'skip' => $skip,
-                'type' => $type
-            ]);
-
             // Obtener solicitudes recientes del usuario
             $solicitudes = $this->solicitudService->getByOwner($username, $skip, $limit);
 
@@ -466,19 +419,8 @@ class PerfilController extends Controller
                 'type' => $type
             ];
 
-            Log::info('Actividad del usuario obtenida', [
-                'username' => $username,
-                'total' => count($actividad)
-            ]);
-
             return ApiResource::success($activityData, 'Actividad obtenida exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener actividad del usuario', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener actividad', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -511,8 +453,6 @@ class PerfilController extends Controller
             if (!$username) {
                 return ErrorResource::authError('Usuario no autenticado')->response()->setStatusCode(401);
             }
-
-            Log::info('Obteniendo estadísticas del perfil', ['username' => $username]);
 
             // Obtener estadísticas básicas
             $solicitudes = $this->solicitudService->getByOwner($username, 0, 1000);
@@ -551,19 +491,8 @@ class PerfilController extends Controller
                 ];
             }
 
-            Log::info('Estadísticas del perfil obtenidas', [
-                'username' => $username,
-                'total_solicitudes' => $estadisticas['total_solicitudes']
-            ]);
-
             return ApiResource::success($estadisticas, 'Estadísticas obtenidas exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener estadísticas del perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener estadísticas', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -634,15 +563,8 @@ class PerfilController extends Controller
                 ]
             ];
 
-            Log::info('Configuración del perfil obtenida', ['username' => $username]);
-
             return ApiResource::success($configuracion, 'Configuración obtenida exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al obtener configuración del perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
             return ErrorResource::serverError('Error interno al obtener configuración', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -703,11 +625,6 @@ class PerfilController extends Controller
 
             $configData = $validator->validated();
 
-            Log::info('Actualizando configuración del perfil', [
-                'username' => $username,
-                'config_keys' => array_keys($configData)
-            ]);
-
             // Aquí se guardaría la configuración en la base de datos
             // Por ahora, solo retornamos confirmación
 
@@ -715,12 +632,6 @@ class PerfilController extends Controller
 
             return ApiResource::success($configuracion, 'Configuración actualizada exitosamente')->response();
         } catch (\Exception $e) {
-            Log::error('Error al actualizar configuración del perfil', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             return ErrorResource::serverError('Error interno al actualizar configuración', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

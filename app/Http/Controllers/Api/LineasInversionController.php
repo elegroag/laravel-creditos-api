@@ -8,7 +8,6 @@ use App\Http\Resources\ErrorResource;
 use App\Services\ExternalApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
@@ -58,31 +57,17 @@ class LineasInversionController extends Controller
 
             // Verificar si la respuesta contiene error (para respuestas directas de API externa)
             if (isset($response['error']) && $response['error']) {
-                Log::warning('API externa retornó error - parámetros', [
-                    'error' => $response['error'] ?? 'Error desconocido',
-                    'detail' => $response['detail'] ?? null
-                ]);
-
                 return ErrorResource::errorResponse('Error al consultar las lineas de inversión', [
                     'external_error' => $response['error'] ?? 'Error desconocido',
                     'external_detail' => $response['detail'] ?? null
                 ])->response()->setStatusCode(400);
             }
 
-            Log::info('Parámetros generales obtenidos exitosamente', [
-                'data_keys' => array_keys($response['data'] ?? [])
-            ]);
-
             return ApiResource::success(
                 $response['data'] ?? [],
                 'Datos generales obtenidos exitosamente'
             )->response();
         } catch (\Exception $e) {
-            Log::error('Error al buscar líneas de inversión', [
-                'error' => $e->getMessage(),
-                'data' => $request->all()
-            ]);
-
             return ErrorResource::serverError('Error interno al buscar líneas de inversión', [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
