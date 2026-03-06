@@ -30,7 +30,6 @@ require __DIR__ . '/api/solicitud-pdf.php';
 require __DIR__ . '/api/lineas-credito.php';
 require __DIR__ . '/api/lineas-inversion.php';
 require __DIR__ . '/api/perfil.php';
-require __DIR__ . '/api/postulaciones.php';
 
 // Rutas de notificaciones
 Route::prefix('notifications')->group(function () {
